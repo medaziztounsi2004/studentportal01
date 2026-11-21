@@ -6,11 +6,11 @@ on:
       runner_os:
         description: 'macOS Runner OS'
         required: true
-        default: 'macos-15'
+        default: 'macos-14'
         type: choice
         options:
-          - 'macos-15'
           - 'macos-14'
+          - 'macos-15'
           - 'macos-latest'
 
 permissions:
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   build-ios:
-    runs-on: ${{ inputs.runner_os || 'macos-15' }}
+    runs-on: ${{ inputs.runner_os || 'macos-14' }}
     timeout-minutes: 45
 
     defaults:
@@ -43,14 +43,11 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Prepare iOS build configuration
-        run: |
-          flutter build ios --config-only --no-codesign || (cd ios && pod install --repo-update && cd .. && flutter build ios --config-only --no-codesign)
-
-      - name: Install iOS dependencies
+      - name: Install iOS dependencies (CocoaPods)
         run: |
           cd ios
-          pod install --repo-update
+          pod repo update
+          pod install
 
       - name: Build iOS app without signing
         run: flutter build ios --release --no-codesign
