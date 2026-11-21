@@ -39,6 +39,9 @@ jobs:
           flutter --version
           xcodebuild -version
 
+      - name: Disable Swift Package Manager in Flutter
+        run: flutter config --no-enable-swift-package-manager
+
       - name: Install Flutter dependencies
         run: flutter pub get
 
