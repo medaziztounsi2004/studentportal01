@@ -9,23 +9,19 @@ import 'bouncing_wrapper.dart';
 import 'ios_bounce_zoom_transition.dart';
 import 'ios_loader.dart';
 
-/// Interactive Apple-grade photo cutout and crop tool:
-/// - Lets the student position, zoom, rotate, and align their profile picture into a precise square frame.
-/// - Switchable mask preview: Rounded square (Student Card) or Circle (Avatar Profile).
-/// - Rule-of-thirds grid with viewfinder corner brackets and center crosshair.
-/// - Smooth two-finger pinch-to-zoom + single-finger panning.
-/// - Precision Zoom Slider with - / + controls.
-/// - 90-degree rotation control for camera orientation correction.
-/// - Reset & Center actions.
+/// Clean circular photo cutout and crop tool for student profile picture:
+/// - Pure circular avatar viewfinder with rule-of-thirds alignment grid.
+/// - Viewport strictly clipped so zoomed photos never overlap header buttons.
+/// - Flat, non-glowing "Valider" button.
+/// - Compact, centered bottom action controls (Rotate, Center, Reset).
 /// - Generates a crisp, high-resolution 512x512 square image output in pure Flutter via dart:ui.
 class PhotoCutoutScreen extends StatefulWidget {
   final Uint8List rawImageBytes;
-  final String initialShape; // 'card' or 'avatar'
 
   const PhotoCutoutScreen({
     super.key,
     required this.rawImageBytes,
-    this.initialShape = 'card',
+    String initialShape = 'avatar',
   });
 
   /// Opens the interactive photo cutout screen with iOS bounce zoom transition.
@@ -33,7 +29,7 @@ class PhotoCutoutScreen extends StatefulWidget {
   static Future<Uint8List?> show({
     required BuildContext context,
     required Uint8List rawImageBytes,
-    String initialShape = 'card',
+    String initialShape = 'avatar',
   }) {
     return Navigator.of(context, rootNavigator: true).push<Uint8List>(
       PageRouteBuilder(
@@ -44,7 +40,6 @@ class PhotoCutoutScreen extends StatefulWidget {
         pageBuilder: (context, animation, secondaryAnimation) {
           return PhotoCutoutScreen(
             rawImageBytes: rawImageBytes,
-            initialShape: initialShape,
           );
         },
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -72,7 +67,6 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
 
   // Viewfinder parameters
   double _cropSize = 280.0;
-  late String _currentShape;
 
   // Transformations
   double _scale = 1.0;
@@ -86,7 +80,6 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
   @override
   void initState() {
     super.initState();
-    _currentShape = widget.initialShape;
     _decodeImage();
   }
 
@@ -248,17 +241,14 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: Colors.black.withValues(alpha: 0.88),
+      backgroundColor: Colors.black.withValues(alpha: 0.92),
       body: SafeArea(
         child: Column(
           children: [
             // ── TOP APP BAR ──
             _buildTopAppBar(l10n),
 
-            // ── SHAPE TOGGLE SWITCHER (Card vs Avatar) ──
-            _buildShapeSwitcher(l10n),
-
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
 
             // ── CENTRAL INTERACTIVE VIEWFINDER ──
             Expanded(
@@ -287,7 +277,7 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
                       : _buildViewfinderArea(),
             ),
 
-            // ── BOTTOM CONTROL DECK (Zoom slider, rotate, reset) ──
+            // ── BOTTOM CONTROL DECK (Zoom slider, rotate, center, reset) ──
             _buildBottomControlDeck(l10n),
           ],
         ),
@@ -297,15 +287,15 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
 
   Widget _buildTopAppBar(AppLocalizations l10n) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
           // Cancel button
           BouncingWrapper(
             onTap: () => Navigator.of(context).pop(null),
             child: Container(
-              width: 42,
-              height: 42,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
@@ -313,13 +303,13 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
               child: const Icon(
                 Icons.close_rounded,
                 color: Colors.white,
-                size: 22,
+                size: 20,
               ),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
 
-          // Title & Subtitle
+          // Title & Short Subtitle
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,7 +319,7 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
                   l10n.translate('adjust_photo'),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.3,
                   ),
@@ -348,38 +338,27 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
             ),
           ),
 
-          // Confirm "Valider" Button
+          // Confirm "Valider" Button - Clean, flat, not glowing
           BouncingWrapper(
             onTap: _isCropping ? null : _confirmAndCrop,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF2563EB).withValues(alpha: 0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                color: const Color(0xFF2563EB),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: _isCropping
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const IosLoader(color: Colors.white, size: 16),
-                        const SizedBox(width: 8),
+                        const IosLoader(color: Colors.white, size: 14),
+                        const SizedBox(width: 6),
                         Text(
                           l10n.translate('cropping_photo'),
                           style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
                           ),
                         ),
                       ],
@@ -388,126 +367,18 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.check_rounded,
-                            color: Colors.white, size: 18),
-                        const SizedBox(width: 6),
+                            color: Colors.white, size: 16),
+                        const SizedBox(width: 5),
                         Text(
                           l10n.translate('crop_done'),
                           style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
                           ),
                         ),
                       ],
                     ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildShapeSwitcher(AppLocalizations l10n) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Student Card Option
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() => _currentShape = 'card');
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: _currentShape == 'card'
-                      ? const Color(0xFF2563EB)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.badge_rounded,
-                      size: 16,
-                      color: _currentShape == 'card'
-                          ? Colors.white
-                          : Colors.white60,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      l10n.translate('crop_card_shape'),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: _currentShape == 'card'
-                            ? FontWeight.bold
-                            : FontWeight.w500,
-                        color: _currentShape == 'card'
-                            ? Colors.white
-                            : Colors.white60,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Avatar Circle Option
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() => _currentShape = 'avatar');
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: _currentShape == 'avatar'
-                      ? const Color(0xFF2563EB)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.account_circle_rounded,
-                      size: 16,
-                      color: _currentShape == 'avatar'
-                          ? Colors.white
-                          : Colors.white60,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      l10n.translate('crop_avatar_shape'),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: _currentShape == 'avatar'
-                            ? FontWeight.bold
-                            : FontWeight.w500,
-                        color: _currentShape == 'avatar'
-                            ? Colors.white
-                            : Colors.white60,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
         ],
@@ -518,73 +389,75 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
   Widget _buildViewfinderArea() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Compute adaptive square viewfinder size
+        // Adaptive circular viewfinder size clamped within available area
         final maxDimension = math.min(
-          constraints.maxWidth - 44,
+          constraints.maxWidth - 40,
           constraints.maxHeight - 20,
         );
-        _cropSize = maxDimension.clamp(240.0, 360.0);
+        _cropSize = maxDimension.clamp(220.0, 340.0);
 
         final baseScale =
             _calculateBaseScale(_uiImage!, _cropSize, _rotationTurns);
 
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onScaleStart: (details) {
-            _startScale = _scale;
-            _lastFocalPoint = details.localFocalPoint;
-          },
-          onScaleUpdate: (details) {
-            setState(() {
-              // Zoom
-              _scale = (_startScale * details.scale).clamp(0.7, 4.0);
-
-              // Pan
-              final delta = details.localFocalPoint - _lastFocalPoint;
-              _offset += delta;
+        // ClipRect guarantees zooming image never bleeds onto header or bottom deck
+        return ClipRect(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onScaleStart: (details) {
+              _startScale = _scale;
               _lastFocalPoint = details.localFocalPoint;
+            },
+            onScaleUpdate: (details) {
+              setState(() {
+                // Zoom
+                _scale = (_startScale * details.scale).clamp(0.7, 4.0);
 
-              _clampOffset();
-            });
-          },
-          onDoubleTap: () {
-            HapticFeedback.lightImpact();
-            setState(() {
-              if (_scale > 1.2) {
-                _scale = 1.0;
-                _offset = Offset.zero;
-              } else {
-                _scale = 2.0;
-              }
-              _clampOffset();
-            });
-          },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 1. Raw photo rendered with pan/zoom/rotation
-              CustomPaint(
-                painter: _CutoutImagePainter(
-                  image: _uiImage!,
-                  scale: _scale,
-                  offset: _offset,
-                  rotationTurns: _rotationTurns,
-                  baseScale: baseScale,
-                ),
-              ),
+                // Pan
+                final delta = details.localFocalPoint - _lastFocalPoint;
+                _offset += delta;
+                _lastFocalPoint = details.localFocalPoint;
 
-              // 2. Viewfinder dark mask, border, rule-of-thirds grid & corner brackets
-              IgnorePointer(
-                child: CustomPaint(
-                  painter: _ViewfinderOverlayPainter(
-                    cropSize: _cropSize,
-                    shape: _currentShape,
-                    maskColor: Colors.black.withValues(alpha: 0.72),
-                    borderColor: const Color(0xFF60A5FA),
+                _clampOffset();
+              });
+            },
+            onDoubleTap: () {
+              HapticFeedback.lightImpact();
+              setState(() {
+                if (_scale > 1.2) {
+                  _scale = 1.0;
+                  _offset = Offset.zero;
+                } else {
+                  _scale = 2.0;
+                }
+                _clampOffset();
+              });
+            },
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // 1. Raw photo rendered with pan/zoom/rotation
+                CustomPaint(
+                  painter: _CutoutImagePainter(
+                    image: _uiImage!,
+                    scale: _scale,
+                    offset: _offset,
+                    rotationTurns: _rotationTurns,
+                    baseScale: baseScale,
                   ),
                 ),
-              ),
-            ],
+
+                // 2. Viewfinder dark mask, circular border & grid
+                IgnorePointer(
+                  child: CustomPaint(
+                    painter: _ViewfinderOverlayPainter(
+                      cropSize: _cropSize,
+                      maskColor: Colors.black.withValues(alpha: 0.72),
+                      borderColor: const Color(0xFF60A5FA),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -593,13 +466,13 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
 
   Widget _buildBottomControlDeck(AppLocalizations l10n) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF111827).withValues(alpha: 0.95),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         border: Border(
           top: BorderSide(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: Colors.white.withValues(alpha: 0.08),
             width: 1,
           ),
         ),
@@ -611,8 +484,11 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
           Row(
             children: [
               IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 icon: const Icon(Icons.remove_circle_outline_rounded,
-                    color: Colors.white70, size: 22),
+                    color: Colors.white70, size: 20),
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   setState(() {
@@ -628,10 +504,10 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
                     inactiveTrackColor: Colors.white.withValues(alpha: 0.2),
                     thumbColor: Colors.white,
                     thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 9),
+                        const RoundSliderThumbShape(enabledThumbRadius: 7),
                     overlayColor:
-                        const Color(0xFF3B82F6).withValues(alpha: 0.2),
-                    trackHeight: 4,
+                        const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                    trackHeight: 3,
                   ),
                   child: Slider(
                     value: _scale.clamp(0.7, 4.0),
@@ -647,8 +523,11 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
                 ),
               ),
               IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 icon: const Icon(Icons.add_circle_outline_rounded,
-                    color: Colors.white70, size: 22),
+                    color: Colors.white70, size: 20),
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   setState(() {
@@ -662,9 +541,9 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
 
           const SizedBox(height: 6),
 
-          // ── ACTIONS TOOLBAR: Rotate & Reset & Center ──
+          // ── ACTIONS TOOLBAR: Rotate, Center, Reset (Smaller & Centered) ──
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Rotate 90 degrees
               _buildActionButton(
@@ -672,6 +551,8 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
                 label: l10n.translate('crop_rotate'),
                 onTap: _rotate90,
               ),
+
+              const SizedBox(width: 8),
 
               // Center
               _buildActionButton(
@@ -686,6 +567,8 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
                 },
               ),
 
+              const SizedBox(width: 8),
+
               // Reset to default
               _buildActionButton(
                 icon: Icons.restart_alt_rounded,
@@ -694,6 +577,7 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 4),
         ],
       ),
     );
@@ -707,10 +591,10 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
     return BouncingWrapper(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.1),
             width: 1,
@@ -719,13 +603,13 @@ class _PhotoCutoutScreenState extends State<PhotoCutoutScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 18),
-            const SizedBox(width: 6),
+            Icon(icon, color: Colors.white, size: 15),
+            const SizedBox(width: 5),
             Text(
               label,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -760,16 +644,23 @@ class _CutoutImagePainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
 
     canvas.save();
+
+    // 1. Center of viewport
     canvas.translate(center.dx, center.dy);
+
+    // 2. Pan offset
     canvas.translate(offset.dx, offset.dy);
 
+    // 3. Rotation (0, 90, 180, 270 deg)
     if (rotationTurns != 0) {
       canvas.rotate(rotationTurns * math.pi / 2);
     }
 
+    // 4. Zoom scale
     final effectiveScale = baseScale * scale;
     canvas.scale(effectiveScale, effectiveScale);
 
+    // 5. Draw image centered
     canvas.drawImage(
       image,
       Offset(-image.width / 2, -image.height / 2),
@@ -789,18 +680,16 @@ class _CutoutImagePainter extends CustomPainter {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// CUSTOM PAINTER: Viewfinder overlay (mask, grid, brackets, aperture)
+// CUSTOM PAINTER: Circular Viewfinder overlay (mask, grid, circle border)
 // ═══════════════════════════════════════════════════════════════════
 
 class _ViewfinderOverlayPainter extends CustomPainter {
   final double cropSize;
-  final String shape; // 'card' or 'avatar'
   final Color maskColor;
   final Color borderColor;
 
   _ViewfinderOverlayPainter({
     required this.cropSize,
-    required this.shape,
     required this.maskColor,
     required this.borderColor,
   });
@@ -814,37 +703,24 @@ class _ViewfinderOverlayPainter extends CustomPainter {
       height: cropSize,
     );
 
-    // 1. Dark mask with cutout hole
+    // 1. Dark mask with circular cutout hole
     final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final Path maskPath = Path()..addRect(fullRect);
 
-    final Path holePath = Path();
-    if (shape == 'avatar') {
-      holePath.addOval(cropRect);
-    } else {
-      holePath.addRRect(
-        RRect.fromRectAndRadius(cropRect, const Radius.circular(26)),
-      );
-    }
+    final Path holePath = Path()..addOval(cropRect);
 
     final combinedMask =
         Path.combine(PathOperation.difference, maskPath, holePath);
     canvas.drawPath(combinedMask, Paint()..color = maskColor);
 
-    // 2. Rule of thirds grid lines inside the hole
+    // 2. Rule of thirds grid lines inside the circular hole
     final gridPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.22)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
     canvas.save();
-    if (shape == 'avatar') {
-      canvas.clipPath(Path()..addOval(cropRect));
-    } else {
-      canvas.clipRRect(
-        RRect.fromRectAndRadius(cropRect, const Radius.circular(26)),
-      );
-    }
+    canvas.clipPath(Path()..addOval(cropRect));
 
     final third = cropSize / 3.0;
     // Vertical grid lines
@@ -876,64 +752,19 @@ class _ViewfinderOverlayPainter extends CustomPainter {
 
     canvas.restore();
 
-    // 3. Viewfinder Outer Border
+    // 3. Circular Viewfinder Outer Border
     final borderPaint = Paint()
       ..color = borderColor.withValues(alpha: 0.85)
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
-    if (shape == 'avatar') {
-      canvas.drawOval(cropRect, borderPaint);
-    } else {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(cropRect, const Radius.circular(26)),
-        borderPaint,
-      );
-    }
-
-    // 4. Viewfinder Corner L-Brackets (Corner Marks)
-    if (shape == 'card') {
-      final cornerPaint = Paint()
-        ..color = Colors.white
-        ..strokeWidth = 3.5
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke;
-
-      const double arm = 22.0;
-      const double pad = 3.0;
-      final left = cropRect.left - pad;
-      final right = cropRect.right + pad;
-      final top = cropRect.top - pad;
-      final bottom = cropRect.bottom + pad;
-
-      // Top-Left
-      canvas.drawLine(Offset(left, top + arm), Offset(left, top), cornerPaint);
-      canvas.drawLine(Offset(left, top), Offset(left + arm, top), cornerPaint);
-
-      // Top-Right
-      canvas.drawLine(
-          Offset(right - arm, top), Offset(right, top), cornerPaint);
-      canvas.drawLine(
-          Offset(right, top), Offset(right, top + arm), cornerPaint);
-
-      // Bottom-Left
-      canvas.drawLine(
-          Offset(left, bottom - arm), Offset(left, bottom), cornerPaint);
-      canvas.drawLine(
-          Offset(left, bottom), Offset(left + arm, bottom), cornerPaint);
-
-      // Bottom-Right
-      canvas.drawLine(
-          Offset(right - arm, bottom), Offset(right, bottom), cornerPaint);
-      canvas.drawLine(
-          Offset(right, bottom), Offset(right, bottom - arm), cornerPaint);
-    }
+    canvas.drawOval(cropRect, borderPaint);
   }
 
   @override
   bool shouldRepaint(covariant _ViewfinderOverlayPainter oldDelegate) {
     return oldDelegate.cropSize != cropSize ||
-        oldDelegate.shape != shape ||
+        oldDelegate.maskColor != maskColor ||
         oldDelegate.borderColor != borderColor;
   }
 }

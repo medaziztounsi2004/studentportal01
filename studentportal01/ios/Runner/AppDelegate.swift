@@ -4,6 +4,8 @@ import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+  private var wasDeviceLocked = false
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -13,6 +15,30 @@ import UserNotifications
     }
 
     GeneratedPluginRegistrant.register(with: self)
+
+    // Listen for device lock (screen lock with passcode / Face ID)
+    NotificationCenter.default.addObserver(
+      forName: UIApplication.protectedDataWillBecomeUnavailableNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      self?.wasDeviceLocked = true
+    }
+
+    // Method channel to check if device was locked while app was in background
+    if let controller = window?.rootViewController as? FlutterViewController {
+      let channel = FlutterMethodChannel(name: "com.studentportal.device_lock", binaryMessenger: controller.binaryMessenger)
+      channel.setMethodCallHandler { [weak self] (call, result) in
+        if call.method == "checkAndResetDeviceLocked" {
+          let isProtectedUnavailable = !UIApplication.shared.isProtectedDataAvailable
+          let locked = self?.wasDeviceLocked ?? false || isProtectedUnavailable
+          self?.wasDeviceLocked = false
+          result(locked)
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
 
     // Request APNs remote notification registration
     application.registerForRemoteNotifications()

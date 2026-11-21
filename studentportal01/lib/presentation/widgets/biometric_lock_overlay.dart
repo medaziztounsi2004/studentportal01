@@ -16,6 +16,7 @@ class _BiometricLockOverlayState extends State<BiometricLockOverlay>
     with WidgetsBindingObserver {
   bool _isLocked = false;
   bool _isAuthenticating = false;
+  bool _hasUnlockedOnce = false;
 
   @override
   void initState() {
@@ -33,10 +34,11 @@ class _BiometricLockOverlayState extends State<BiometricLockOverlay>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkLockOnResume();
+      _handleAppResumed();
     }
   }
 
+  /// Initial cold-start check: if biometric lock is enabled, lock and prompt once.
   Future<void> _checkInitialLock() async {
     final enabled = await BiometricService.instance.isBiometricLockEnabled();
     if (enabled && mounted) {
@@ -45,10 +47,24 @@ class _BiometricLockOverlayState extends State<BiometricLockOverlay>
     }
   }
 
-  Future<void> _checkLockOnResume() async {
+  /// App resume handler:
+  /// - If authentication dialog is currently showing, ignore.
+  /// - Only re-lock if the device itself was locked while backgrounded,
+  ///   or if the app was never unlocked in this session.
+  /// - If the app was just backgrounded without locking the phone, DO NOT prompt.
+  Future<void> _handleAppResumed() async {
+    if (_isAuthenticating) return;
+
     final enabled = await BiometricService.instance.isBiometricLockEnabled();
-    if (enabled && mounted && !_isLocked) {
-      setState(() => _isLocked = true);
+    if (!enabled || !mounted) return;
+
+    final wasDeviceLocked =
+        await BiometricService.instance.checkAndResetDeviceLocked();
+
+    if (wasDeviceLocked || !_hasUnlockedOnce) {
+      if (!_isLocked && mounted) {
+        setState(() => _isLocked = true);
+      }
       _triggerBiometricAuth();
     }
   }
@@ -56,13 +72,18 @@ class _BiometricLockOverlayState extends State<BiometricLockOverlay>
   Future<void> _triggerBiometricAuth() async {
     if (_isAuthenticating) return;
     _isAuthenticating = true;
-    final success = await BiometricService.instance.authenticate(
-      reason: 'Déverrouillez pour accéder à votre espace élève',
-    );
-    _isAuthenticating = false;
 
-    if (success && mounted) {
-      setState(() => _isLocked = false);
+    try {
+      final success = await BiometricService.instance.authenticate(
+        reason: 'Déverrouillez pour accéder à votre espace élève',
+      );
+
+      if (success && mounted) {
+        _hasUnlockedOnce = true;
+        setState(() => _isLocked = false);
+      }
+    } finally {
+      _isAuthenticating = false;
     }
   }
 
@@ -78,7 +99,7 @@ class _BiometricLockOverlayState extends State<BiometricLockOverlay>
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                 child: Container(
-                  color: Colors.white.withValues(alpha: 0.92),
+                  color: Colors.white.withValues(alpha: 0.95),
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Center(
                     child: Column(
@@ -96,8 +117,8 @@ class _BiometricLockOverlayState extends State<BiometricLockOverlay>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF6366F1).withValues(alpha: 0.35),
-                                blurRadius: 24,
+                                color: const Color(0xFF6366F1).withValues(alpha: 0.25),
+                                blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
                             ],
@@ -141,13 +162,6 @@ class _BiometricLockOverlayState extends State<BiometricLockOverlay>
                             decoration: BoxDecoration(
                               color: const Color(0xFF6366F1),
                               borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
