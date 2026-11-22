@@ -527,53 +527,58 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   Widget _buildNotFound() {
     return Center(
       child: Container(
-        padding: const EdgeInsets.all(48),
+        padding: const EdgeInsets.all(40),
         decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: AppShadows.card,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [AppColors.slate300, AppColors.slate400]),
-                shape: BoxShape.circle,
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.person_off_rounded, size: 48, color: AppColors.textOnPrimary),
+              child: const Icon(Icons.person_off_rounded, size: 28, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Utilisateur non trouvé',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "L'utilisateur demandé n'existe pas ou a été supprimé.",
+              style: TextStyle(fontSize: 13.5, color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 24),
-            Text('Utilisateur non trouvé',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.slate700)),
-            const SizedBox(height: 8),
-            Text("L'utilisateur demandé n'existe pas ou a été supprimé.",
-                style: TextStyle(color: AppColors.slate500)),
-            const SizedBox(height: 24),
-            Container(
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => Navigator.pop(context),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.arrow_back_rounded, color: AppColors.textOnPrimary),
-                        SizedBox(width: 8),
-                        Text('Retour', style: TextStyle(color: AppColors.textOnPrimary, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ),
+            ElevatedButton.icon(
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/users');
+                }
+              },
+              icon: const Icon(Icons.arrow_back_rounded, size: 16),
+              label: const Text('Retour aux utilisateurs'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6D4CF6),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ],

@@ -68,9 +68,7 @@ class AdminApp extends ConsumerWidget {
         // When school is suspended by the super admin:
         // The entire admin dashboard is completely gone and replaced by the centered suspension screen
         if (authState.isSchoolSuspended && authState.user?.role != 'super_admin') {
-          return _AdminSchoolSuspendedScreen(
-            onRefresh: () => ref.read(authProvider.notifier).checkSchoolStatus(),
-          );
+          return const _AdminSchoolSuspendedScreen();
         }
 
         // First-login forced permanent password setup
@@ -307,55 +305,8 @@ class _ForcedPasswordChangeScreenState
   }
 }
 
-class _AdminSchoolSuspendedScreen extends StatefulWidget {
-  final Future<bool> Function() onRefresh;
-
-  const _AdminSchoolSuspendedScreen({required this.onRefresh});
-
-  @override
-  State<_AdminSchoolSuspendedScreen> createState() =>
-      _AdminSchoolSuspendedScreenState();
-}
-
-class _AdminSchoolSuspendedScreenState
-    extends State<_AdminSchoolSuspendedScreen> {
-  bool _isChecking = false;
-  String? _feedbackMessage;
-  bool _isError = false;
-
-  Future<void> _handleRefresh() async {
-    if (_isChecking) return;
-    setState(() {
-      _isChecking = true;
-      _feedbackMessage = null;
-    });
-
-    try {
-      final isUnlocked = await widget.onRefresh();
-      if (mounted) {
-        if (!isUnlocked) {
-          setState(() {
-            _isChecking = false;
-            _isError = true;
-            _feedbackMessage =
-                'L\'accès de votre établissement est toujours suspendu par la plateforme.';
-          });
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isChecking = false;
-          _isError = true;
-          _feedbackMessage = 'Connexion impossible. Vérifiez votre réseau.';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isChecking = false);
-      }
-    }
-  }
+class _AdminSchoolSuspendedScreen extends StatelessWidget {
+  const _AdminSchoolSuspendedScreen();
 
   @override
   Widget build(BuildContext context) {
@@ -364,136 +315,105 @@ class _AdminSchoolSuspendedScreenState
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 68,
-                      height: 68,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        Icons.domain_disabled_rounded,
-                        size: 34,
-                        color: Color(0xFFDC2626),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Établissement temporairement suspendu',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'L\'accès au tableau de bord d\'administration de votre établissement a été suspendu par l\'administration de la plateforme.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(height: 26),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _isChecking ? null : _handleRefresh,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6D4CF6),
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: const Color(0xFF8B5CF6),
-                          disabledForegroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_isChecking) ...[
-                              const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              const Text(
-                                'Vérification en cours...',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ] else ...[
-                              const Icon(Icons.refresh_rounded,
-                                  size: 18, color: Colors.white),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Vérifier l\'accès',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (_feedbackMessage != null) ...[
-                      const SizedBox(height: 14),
-                      Text(
-                        _feedbackMessage!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _isError
-                              ? const Color(0xFFDC2626)
-                              : const Color(0xFF16A34A),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: const _SuspendedSchoolCard(),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SuspendedSchoolCard extends StatelessWidget {
+  const _SuspendedSchoolCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Flat soft red icon container (no gradients)
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.shield_outlined,
+              size: 28,
+              color: Color(0xFFDC2626),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Établissement suspendu',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'L\'accès à la plateforme pour cet établissement est actuellement suspendu par l\'administration centrale. Pour toute information ou réactivation, veuillez contacter le support de la plateforme.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.5,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Clean status indicator (no action button)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFFEE2E2)),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 13,
+                  color: Color(0xFFDC2626),
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'Accès restreint',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

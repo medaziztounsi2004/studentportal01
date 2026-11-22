@@ -524,7 +524,12 @@ class PaymentPlanInfo {
       category: json['category'],
       academicYear: json['academic_year'],
       payments: (json['payments'] as List?)
-          ?.map((e) => PaymentInfo.fromJson(e as Map<String, dynamic>))
+          ?.map((e) {
+            final m = Map<String, dynamic>.from(e as Map<String, dynamic>);
+            m['category'] ??= json['category'];
+            m['description'] ??= json['description'];
+            return PaymentInfo.fromJson(m);
+          })
           .toList() ?? [],
       totalPaid: (json['total_paid'] as num?)?.toDouble() ?? 0,
       remaining: (json['remaining'] as num?)?.toDouble() ?? 0,
@@ -558,6 +563,8 @@ class PaymentInfo {
   final String status;
   final String? reference;
   final String? notes;
+  final String? category;
+  final String? description;
 
   PaymentInfo({
     required this.id,
@@ -568,6 +575,8 @@ class PaymentInfo {
     required this.status,
     this.reference,
     this.notes,
+    this.category,
+    this.description,
   });
 
   factory PaymentInfo.fromJson(Map<String, dynamic> json) {
@@ -580,6 +589,8 @@ class PaymentInfo {
       status: json['status'] ?? 'pending',
       reference: json['reference'],
       notes: json['notes'],
+      category: json['category']?.toString(),
+      description: json['description']?.toString(),
     );
   }
 
@@ -593,6 +604,8 @@ class PaymentInfo {
       'status': status,
       'reference': reference,
       'notes': notes,
+      'category': category,
+      'description': description,
     };
   }
 
@@ -1107,9 +1120,12 @@ class CoreDataService {
 
         final list = (plansResp as List).map((p) {
           final paymentsRaw = (p['payments'] as List?) ?? [];
-          final paymentsList = paymentsRaw
-              .map((e) => PaymentInfo.fromJson(e as Map<String, dynamic>))
-              .toList();
+          final paymentsList = paymentsRaw.map((e) {
+            final m = Map<String, dynamic>.from(e as Map<String, dynamic>);
+            m['category'] ??= p['category'];
+            m['description'] ??= p['description'];
+            return PaymentInfo.fromJson(m);
+          }).toList();
 
           final totalPaid = paymentsList
               .where((item) =>

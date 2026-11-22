@@ -75,7 +75,7 @@ class PaymentCategoryData {
   double get progressPercent => amount > 0 ? (paid / amount) * 100 : 0;
 }
 
-// Payment categories breakdown provider - always returns all 7 categories
+// Payment categories breakdown provider - returns all categories with active plans or pricing
 final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
   final plansAsync = ref.watch(paymentsDataProvider);
   final plans = plansAsync.asData?.value ?? [];
@@ -86,15 +86,34 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
   final Map<PaymentCategory, double> paid = {};
 
   for (final plan in plans) {
-    final category = _mapCategory(
+    final planCat = _mapCategory(
       plan.category,
-      '${plan.planType} ${plan.description ?? ''}',
+      plan.description ?? plan.planType,
     );
-    amounts[category] = (amounts[category] ?? 0) + plan.amountTotal;
-    paid[category] = (paid[category] ?? 0) + plan.totalPaid;
+
+    // If individual payments have their own specific categories
+    final paymentsWithCat = plan.payments.where((p) =>
+        (p.category != null && p.category!.isNotEmpty) ||
+        (p.description != null && p.description!.isNotEmpty)).toList();
+
+    if (paymentsWithCat.isNotEmpty) {
+      for (final payment in plan.payments) {
+        final pCat = _mapCategory(
+          payment.category ?? plan.category,
+          payment.description ?? payment.notes ?? plan.description,
+        );
+        amounts[pCat] = (amounts[pCat] ?? 0) + payment.amount;
+        if (payment.isPaid || payment.status.toLowerCase() == 'paid' || payment.paidAt != null) {
+          paid[pCat] = (paid[pCat] ?? 0) + payment.amount;
+        }
+      }
+    } else {
+      amounts[planCat] = (amounts[planCat] ?? 0) + plan.amountTotal;
+      paid[planCat] = (paid[planCat] ?? 0) + plan.totalPaid;
+    }
   }
 
-  // Fill in pricing fallback for categories with 0 amount
+  // Fill in pricing fallback for categories with 0 configured amount
   for (final entry in pricing.entries) {
     final cat = _mapCategory(entry.key);
     if ((amounts[cat] ?? 0) == 0 && entry.value > 0) {
@@ -106,10 +125,12 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
   return PaymentCategory.values
       .where((cat) => (amounts[cat] ?? 0) > 0 || (paid[cat] ?? 0) > 0)
       .map((cat) {
+    final configuredAmount = amounts[cat] ?? 0;
+    final totalPaid = paid[cat] ?? 0;
     return PaymentCategoryData(
       category: cat,
-      amount: amounts[cat] ?? 0,
-      paid: paid[cat] ?? 0,
+      amount: configuredAmount > totalPaid ? configuredAmount : totalPaid,
+      paid: totalPaid,
     );
   }).toList();
 });
@@ -175,66 +196,33 @@ final pricingFallbackProvider = FutureProvider<Map<String, double>>((
   ref,
 ) async {
   const cacheKey = 'cached_payment_pricing';
+  final cached = OfflineCacheService.instance.getMap(cacheKey);
+  final cachedPricing = cached != null
+      ? cached.map((k, v) => MapEntry(k, (v as num).toDouble()))
+      : <String, double>{};
+
   if (ConnectivityService.instance.isOffline) {
-    final cached = OfflineCacheService.instance.getMap(cacheKey);
-    if (cached != null) {
-      return cached.map((k, v) => MapEntry(k, (v as num).toDouble()));
-    }
-    return {};
+    return cachedPricing;
   }
   try {
     final context = await ref.watch(studentContextProvider.future);
     if (context == null) {
-      final cached = OfflineCacheService.instance.getMap(cacheKey);
-      if (cached != null) {
-        return cached.map((k, v) => MapEntry(k, (v as num).toDouble()));
-      }
-      return {};
+      return cachedPricing;
     }
     final supabase = Supabase.instance.client;
+    final Map<String, double> pricing = Map.from(cachedPricing);
 
-    final categories = [
-      'scolarite',
-      'transport',
-      'inscription',
-      'uniforme',
-      'cantine',
-      'activites',
-      'autres',
-    ];
-    final Map<String, double> pricing = {};
-
-    if (context.enrollmentId != null && context.enrollmentId!.isNotEmpty) {
-      for (final cat in categories) {
-        try {
-          final result = await supabase.rpc(
-            'get_payment_pricing_for_enrollment',
-            params: {
-              'p_enrollment_id': context.enrollmentId!,
-              'p_category': cat,
-            },
-          );
-          if (result != null && (result as List).isNotEmpty) {
-            final amount = (result.first['amount'] as num?)?.toDouble();
-            if (amount != null && amount > 0) {
-              pricing[cat] = amount;
-            }
-          }
-        } catch (_) {}
-      }
-    }
-
-    // Direct fallback from payment_pricing table if available
+    // Fast direct query on payment_pricing table (single query for all categories)
     try {
-      var query = supabase.from('payment_pricing').select('category, amount, section_id');
+      var query = supabase.from('payment_pricing').select('category, amount, section_id, niveau_id');
       if (context.schoolId.isNotEmpty) {
         query = query.eq('school_id', context.schoolId);
       }
       if (context.niveauId != null && context.niveauId!.isNotEmpty) {
         query = query.eq('niveau_id', context.niveauId!);
       }
-      final pricingResp = await query;
-      for (final row in pricingResp as List) {
+      final pricingResp = await query.timeout(const Duration(seconds: 4));
+      for (final row in (pricingResp as List)) {
         final cat = row['category']?.toString();
         final amount = (row['amount'] as num?)?.toDouble();
         final secId = row['section_id']?.toString();
@@ -248,21 +236,81 @@ final pricingFallbackProvider = FutureProvider<Map<String, double>>((
       }
     } catch (_) {}
 
+    // Fallback: school-wide pricing if no niveau-specific pricing found
+    if (pricing.isEmpty && context.schoolId.isNotEmpty) {
+      try {
+        final fallbackResp = await supabase
+            .from('payment_pricing')
+            .select('category, amount')
+            .eq('school_id', context.schoolId)
+            .timeout(const Duration(seconds: 4));
+        for (final row in (fallbackResp as List)) {
+          final cat = row['category']?.toString();
+          final amount = (row['amount'] as num?)?.toDouble();
+          if (cat != null && amount != null && amount > 0 && !pricing.containsKey(cat)) {
+            pricing[cat] = amount;
+          }
+        }
+      } catch (_) {}
+    }
+
     if (pricing.isNotEmpty) {
       OfflineCacheService.instance.setJson(cacheKey, pricing);
     }
     return pricing;
   } catch (e) {
-    final cached = OfflineCacheService.instance.getMap(cacheKey);
-    if (cached != null) {
-      return cached.map((k, v) => MapEntry(k, (v as num).toDouble()));
-    }
-    return {};
+    return cachedPricing;
   }
 });
 
 PaymentCategory _mapCategory(String? category, [String? description]) {
-  final combined = '${category ?? ''} ${description ?? ''}'.toLowerCase();
+  final cat = (category ?? '').trim().toLowerCase();
+
+  // 1. Direct match on canonical category name
+  if (cat == 'inscription' || cat == 'inscript' || cat == 'registration') {
+    return PaymentCategory.inscription;
+  }
+  if (cat == 'autres' || cat == 'autre' || cat == 'other' || cat == 'others') {
+    return PaymentCategory.autres;
+  }
+  if (cat == 'uniforme' || cat == 'uniform' || cat == 'tenue') {
+    return PaymentCategory.uniforme;
+  }
+  if (cat == 'cantine' || cat == 'canteen' || cat == 'repas') {
+    return PaymentCategory.cantine;
+  }
+  if (cat == 'transport' || cat == 'bus') {
+    return PaymentCategory.transport;
+  }
+  if (cat == 'activites' || cat == 'activite' || cat == 'activities' || cat == 'activity' || cat == 'sport') {
+    return PaymentCategory.activites;
+  }
+  if (cat == 'scolarite' || cat == 'tuition') {
+    return PaymentCategory.scolarite;
+  }
+
+  // 2. Keyword matching on description or combined text (specific non-tuition categories first)
+  final desc = (description ?? '').trim().toLowerCase();
+  final combined = '$cat $desc';
+
+  if (combined.contains('inscript') || combined.contains('regist')) {
+    return PaymentCategory.inscription;
+  }
+  if (combined.contains('unif') || combined.contains('tenue') || combined.contains('cloth')) {
+    return PaymentCategory.uniforme;
+  }
+  if (combined.contains('cantin') || combined.contains('repas') || combined.contains('food') || combined.contains('restau')) {
+    return PaymentCategory.cantine;
+  }
+  if (combined.contains('transp') || combined.contains('bus')) {
+    return PaymentCategory.transport;
+  }
+  if (combined.contains('activ') || combined.contains('sport') || combined.contains('club')) {
+    return PaymentCategory.activites;
+  }
+  if (combined.contains('autre') || combined.contains('other')) {
+    return PaymentCategory.autres;
+  }
   if (combined.contains('scolar') ||
       combined.contains('tuition') ||
       combined.contains('annual') ||
@@ -271,28 +319,7 @@ PaymentCategory _mapCategory(String? category, [String? description]) {
       combined.contains('trimestr')) {
     return PaymentCategory.scolarite;
   }
-  if (combined.contains('transp') || combined.contains('bus')) {
-    return PaymentCategory.transport;
-  }
-  if (combined.contains('inscript') || combined.contains('regist')) {
-    return PaymentCategory.inscription;
-  }
-  if (combined.contains('unif') ||
-      combined.contains('tenue') ||
-      combined.contains('cloth')) {
-    return PaymentCategory.uniforme;
-  }
-  if (combined.contains('cantin') ||
-      combined.contains('repas') ||
-      combined.contains('food') ||
-      combined.contains('restau')) {
-    return PaymentCategory.cantine;
-  }
-  if (combined.contains('activ') ||
-      combined.contains('sport') ||
-      combined.contains('club')) {
-    return PaymentCategory.activites;
-  }
+
   return PaymentCategory.autres;
 }
 
@@ -342,8 +369,10 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
                 ref.invalidate(studentContextProvider);
                 ref.invalidate(semestersProvider);
                 ref.invalidate(monSoldeSemestersProvider);
-                // ignore: unused_result
-                await ref.refresh(paymentsDataProvider.future);
+                await Future.wait([
+                  ref.refresh(paymentsDataProvider.future),
+                  ref.refresh(pricingFallbackProvider.future),
+                ]);
               } finally {
                 ref.read(soldeRefreshingProvider.notifier).state = false;
               }
@@ -362,7 +391,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
               ),
 
               // Content
-              if (isRefreshing)
+              if (isRefreshing || (pricingAsync.isLoading && !pricingAsync.hasValue))
                 const MonSoldeSkeleton()
               else
               paymentDataAsync.when(
@@ -518,7 +547,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
 
     final latestPlansByCategory = <String, PaymentPlanInfo>{};
     for (final p in sortedPlans) {
-      final cat = _mapCategory(p.category, '${p.planType} ${p.description ?? ''}').name;
+      final cat = _mapCategory(p.category, p.description ?? p.planType).name;
       latestPlansByCategory.putIfAbsent(cat, () => p);
     }
     final dedupedPlans = latestPlansByCategory.values.toList();
@@ -538,7 +567,7 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
 
     // Schedule uses scolarite only
     final scolaritePlans = dedupedPlans
-        .where((p) => _mapCategory(p.category, '${p.planType} ${p.description ?? ''}') == PaymentCategory.scolarite)
+        .where((p) => _mapCategory(p.category, p.description ?? p.planType) == PaymentCategory.scolarite)
         .toList();
     final scolaritePricing = pricing['scolarite'] ?? 0.0;
     final scheduleTotal = scolaritePlans.fold<double>(
