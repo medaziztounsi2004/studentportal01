@@ -101,7 +101,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           .from('users')
           .select('id, full_name, email, role, created_at, photo_url')
           .eq('school_id', schoolId)
-          .inFilter('role', ['owner', 'admin', 'staff', 'manager'])
+          .inFilter('role', ['owner', 'admin', 'staff'])
           .order('created_at', ascending: true);
       if (mounted) {
         setState(() {
