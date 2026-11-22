@@ -1067,13 +1067,13 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
 
     if (sortedSemesters.isEmpty) return;
 
-    final gaps = <({DateTime start, DateTime end})>[];
+    final gaps = <({DateTime start, DateTime end, String name})>[];
 
     // Gap before first semester
     if (sortedSemesters.first.start.isAfter(yearStart)) {
       final gapEnd = sortedSemesters.first.start.subtract(const Duration(days: 1));
       if (!gapEnd.isBefore(yearStart)) {
-        gaps.add((start: yearStart, end: gapEnd));
+        gaps.add((start: yearStart, end: gapEnd, name: 'Vacances'));
       }
     }
 
@@ -1085,15 +1085,21 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
         gaps.add((
           start: prevEnd.add(const Duration(days: 1)),
           end: nextStart.subtract(const Duration(days: 1)),
+          name: 'Vacances',
         ));
       }
     }
 
-    // Gap after last semester
+    // Gap after last semester (e.g. Summer Vacation)
     if (sortedSemesters.last.end.isBefore(yearEnd)) {
       final gapStart = sortedSemesters.last.end.add(const Duration(days: 1));
       if (!gapStart.isAfter(yearEnd)) {
-        gaps.add((start: gapStart, end: yearEnd));
+        final isSummer = gapStart.month >= 6 || gapStart.month <= 8;
+        gaps.add((
+          start: gapStart,
+          end: yearEnd,
+          name: isSummer ? "Vacances d'été" : 'Vacances',
+        ));
       }
     }
 
@@ -1102,7 +1108,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
     final vacationRows = gaps.map((g) => {
       'school_id': schoolId,
       'academic_year_id': yearId,
-      'name': 'Vacances',
+      'name': g.name,
       'start_date': g.start.toIso8601String().split('T')[0],
       'end_date': g.end.toIso8601String().split('T')[0],
       'type': 'auto_gap',

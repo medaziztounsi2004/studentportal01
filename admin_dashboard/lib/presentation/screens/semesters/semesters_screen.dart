@@ -312,10 +312,10 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: s.isCurrent ? _brand : _brandLight,
+                    color: _brandLight,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.calendar_month_rounded, color: s.isCurrent ? Colors.white : _brand, size: 22),
+                  child: Icon(Icons.calendar_month_rounded, color: _brand, size: 22),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -711,19 +711,26 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     final nameCtrl = TextEditingController(text: autoName);
     int semesterNumber = autoNumber;
 
-    final minStartDate = state.minStartDateForNewSemester;
-    DateTime startDate = semester?.startDate ?? minStartDate ?? DateTime.now();
-
-    // Auto-calculate duration based on type
-    int durationDays = chosenType == 'trimestre' ? 92 : 183;
-    DateTime endDate =
-        semester?.endDate ?? startDate.add(Duration(days: durationDays));
-
     String? selectedYearId = semester?.academicYearId ??
         state.selectedAcademicYearId ??
         state.selectedAcademicYear?.id ??
         state.currentAcademicYear?.id ??
         state.academicYears.firstOrNull?.id;
+    final selectedYear = state.academicYears.where((y) => y.id == selectedYearId).firstOrNull;
+
+    final minStartDate = state.minStartDateForNewSemester;
+    DateTime startDate = semester?.startDate ?? minStartDate ?? selectedYear?.startDate ?? DateTime.now();
+    if (selectedYear != null && startDate.isBefore(selectedYear.startDate)) {
+      startDate = selectedYear.startDate;
+    }
+
+    // Auto-calculate duration based on type
+    int durationDays = chosenType == 'trimestre' ? 92 : 183;
+    DateTime calculatedEnd = startDate.add(Duration(days: durationDays));
+    if (selectedYear != null && calculatedEnd.isAfter(selectedYear.endDate)) {
+      calculatedEnd = selectedYear.endDate;
+    }
+    DateTime endDate = semester?.endDate ?? calculatedEnd;
     String? errorMessage;
 
     showDialog(
@@ -1441,22 +1448,29 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     if (existingSemesters.isNotEmpty) {
       initialStart = existingSemesters.last.endDate.add(const Duration(days: 1));
     } else {
-      final now = DateTime.now();
-      initialStart = (now.isAfter(year.startDate) && now.isBefore(year.endDate))
-          ? now
-          : year.startDate;
+      initialStart = year.startDate;
     }
+
+    // The teaching/instructional period ends on June 30 before summer vacation (July-August)
+    DateTime getTeachingEnd() {
+      if (year.endDate.month >= 7 && year.endDate.year >= year.startDate.year) {
+        return DateTime(year.endDate.year, 6, 30);
+      }
+      return year.endDate;
+    }
+
+    final teachingEnd = getTeachingEnd();
 
     var selectedType = existingSemesters.isEmpty ? 'semestre' : 'single';
 
     final defaultDurationDays = state.periodTypeDuration;
     DateTime calculateDefaultEnd(DateTime start) {
       final calculated = start.add(Duration(days: defaultDurationDays));
-      return calculated.isAfter(year.endDate) ? year.endDate : calculated;
+      return calculated.isAfter(teachingEnd) ? teachingEnd : calculated;
     }
 
     var ranges = existingSemesters.isEmpty
-        ? _splitYear(initialStart, year.endDate, 2)
+        ? _splitYear(initialStart, teachingEnd, 2)
         : [(start: initialStart, end: calculateDefaultEnd(initialStart))];
     var manualVacations = <({DateTime start, DateTime end})>[];
     var examPeriods = <({DateTime start, DateTime end})>[];
@@ -1583,7 +1597,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
             } else {
               ranges = _splitYear(
                 initialStart,
-                year.endDate,
+                teachingEnd,
                 type == 'semestre' ? 2 : 3,
               );
             }
@@ -2035,7 +2049,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                           SizedBox(
                             height: 40,
                             child: ElevatedButton(
-                              onPressed: isSubmitting || errorMessage != null
+                              onPressed: errorMessage != null
                                   ? null
                                   : () {
                                       Navigator.pop(ctx);
@@ -2095,22 +2109,13 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                 ),
                                 elevation: 2,
                               ),
-                              child: isSubmitting
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Créer',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
+                              child: const Text(
+                                'Créer',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -2648,15 +2653,15 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
 
           const SizedBox(height: 12),
 
-          // Proportional segmented bar of blocks
+          // Proportional segmented bar of blocks - compact, clean pill design
           if (items.isNotEmpty)
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(100),
               child: Container(
-                height: 32,
+                height: 22,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(100),
                 ),
                 child: Row(
                   children: segments.map((seg) {
@@ -2666,10 +2671,10 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                         child: Tooltip(
                           message: '${shortDateFormat.format(seg.start)} → ${shortDateFormat.format(seg.end)} (${seg.days} j)\nNon configuré',
                           child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 0.5),
+                            margin: const EdgeInsets.symmetric(horizontal: 0.75),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(4),
+                              color: const Color(0xFFE2E8F0),
+                              borderRadius: BorderRadius.circular(100),
                             ),
                           ),
                         ),
@@ -2680,10 +2685,10 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                       child: Tooltip(
                         message: '${seg.item!.name}\n${shortDateFormat.format(seg.start)} → ${shortDateFormat.format(seg.end)} (${seg.days} j)',
                         child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 0.5),
+                          margin: const EdgeInsets.symmetric(horizontal: 0.75),
                           decoration: BoxDecoration(
                             color: seg.item!.color,
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(100),
                           ),
                           alignment: Alignment.center,
                           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -2692,9 +2697,10 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w700,
                               color: Colors.white,
+                              letterSpacing: 0.2,
                             ),
                           ),
                         ),
