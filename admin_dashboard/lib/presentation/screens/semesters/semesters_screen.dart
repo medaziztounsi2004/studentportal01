@@ -2512,9 +2512,9 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     }
 
     // 2. Collect period partition items
-    final yearSemesters = state.filteredSemesters;
-    final yearVacations = state.filteredVacations;
-    final yearExams = state.filteredExamPeriods;
+    final yearSemesters = state.semesters.where((s) => s.academicYearId == year.id).toList();
+    final yearVacations = state.filteredVacations(year.id);
+    final yearExams = state.filteredExams(year.id);
 
     final List<_PartitionItem> items = [];
     for (final s in yearSemesters) {
@@ -2532,7 +2532,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     for (final v in yearVacations) {
       items.add(_PartitionItem(
         id: v.id,
-        name: v.name,
+        name: v.name ?? 'Vacances',
         start: v.startDate,
         end: v.endDate,
         type: 'vacation',
@@ -2608,7 +2608,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                     return Expanded(
                       flex: flex,
                       child: Tooltip(
-                        message: '${item.name}\n${shortDateFormat.format(item.start)} → ${shortDateFormat.format(item.end)} (${days} jours)',
+                        message: '${item.name}\n${shortDateFormat.format(item.start)} → ${shortDateFormat.format(item.end)} ($days jours)',
                         child: Container(
                           margin: const EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(

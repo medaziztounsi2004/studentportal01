@@ -699,9 +699,17 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
     _isMutating = true;
     final previousState = state.value;
     try {
-      final schoolId = await _getSchoolId();
-      if (schoolId == null) throw Exception('Établissement introuvable');
       final admin = SupabaseConfig.adminClient;
+      final user = SupabaseConfig.client.auth.currentUser;
+      if (user == null) throw Exception('Non connecté');
+
+      final profile = await admin
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .single();
+      final schoolId = profile['school_id'];
+      if (schoolId == null) throw Exception('Établissement introuvable');
 
       final year = previousState?.academicYears.where((y) => y.id == id).firstOrNull;
       if (year?.isCurrent == true) {
