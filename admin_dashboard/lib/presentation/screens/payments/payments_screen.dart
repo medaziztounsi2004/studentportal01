@@ -585,6 +585,14 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
             onPressed: () => setState(() => _showFilters = !_showFilters),
           ),
 
+          UndoRedoToolbarButtons(
+            scope: 'payments',
+            onUndo: _handleUndo,
+            onRedo: _handleRedo,
+          ),
+
+          const SizedBox(width: 8),
+
           // Default payment plan settings button
           SizedBox(
             height: 40,
@@ -602,14 +610,6 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
             ),
           ),
 
-          const SizedBox(width: 8),
-
-          UndoRedoToolbarButtons(
-            scope: 'payments',
-            onUndo: _handleUndo,
-            onRedo: _handleRedo,
-          ),
-
           const SizedBox(width: 12),
 
           SizedBox(
@@ -624,7 +624,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                 elevation: 2,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                shadowColor: const Color(0xFF6D4CF6).withOpacity(0.3),
+                shadowColor: const Color(0xFF6D4CF6).withValues(alpha: 0.3),
               ),
             ),
           ),

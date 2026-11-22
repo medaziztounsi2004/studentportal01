@@ -15,6 +15,9 @@ class AdminAuthState {
   final String? schoolSubscriptionStatus;
   final bool schoolIsActive;
 
+  bool get isSchoolSuspended =>
+      !schoolIsActive || schoolSubscriptionStatus == 'suspended';
+
   AdminAuthState({
     this.isLoading = false,
     this.isAuthenticated = false,
@@ -55,14 +58,63 @@ class AuthNotifier extends Notifier<AdminAuthState> {
   }
 
   SupabaseClient get _supabase => Supabase.instance.client;
+  RealtimeChannel? _schoolChannel;
+  RealtimeChannel? _subChannel;
 
   void _init() {
     _supabase.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedIn) {
         _loadUserData();
-      } else if (data.event == AuthChangeEvent.signedOut) state = AdminAuthState();
+      } else if (data.event == AuthChangeEvent.signedOut) {
+        _schoolChannel?.unsubscribe();
+        _subChannel?.unsubscribe();
+        state = AdminAuthState();
+      }
     });
     if (_supabase.auth.currentSession != null) _loadUserData();
+  }
+
+  void _subscribeToSchoolChanges(String schoolId) {
+    _schoolChannel?.unsubscribe();
+    _subChannel?.unsubscribe();
+
+    _schoolChannel = _supabase
+        .channel('admin_school_changes_$schoolId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'schools',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: schoolId,
+          ),
+          callback: (payload) {
+            final newSchool = payload.newRecord;
+            final bool isActive = (newSchool['is_active'] as bool?) ?? true;
+            state = state.copyWith(schoolIsActive: isActive);
+          },
+        )
+        .subscribe();
+
+    _subChannel = _supabase
+        .channel('admin_school_sub_changes_$schoolId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'school_subscriptions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'school_id',
+            value: schoolId,
+          ),
+          callback: (payload) {
+            final newSub = payload.newRecord;
+            final status = newSub['status']?.toString() ?? 'active';
+            state = state.copyWith(schoolSubscriptionStatus: status);
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadUserData() async {
@@ -83,6 +135,7 @@ class AuthNotifier extends Notifier<AdminAuthState> {
       String? subStatus = 'active';
       bool schoolIsActive = true;
       if (user.schoolId != null) {
+        _subscribeToSchoolChanges(user.schoolId!);
         try {
           final schoolRow = await _supabase
               .from('schools')
@@ -97,18 +150,6 @@ class AuthNotifier extends Notifier<AdminAuthState> {
             }
           }
         } catch (_) {}
-      }
-
-      if (!schoolIsActive || subStatus == 'suspended') {
-        await _supabase.auth.signOut(scope: SignOutScope.local);
-        state = AdminAuthState(
-          accessDenied: true,
-          schoolSubscriptionStatus: subStatus ?? 'suspended',
-          schoolIsActive: false,
-          errorMessage:
-              'L\'abonnement de votre établissement est suspendu. Veuillez contacter l\'administrateur de la plateforme.',
-        );
-        return;
       }
 
       state = state.copyWith(
@@ -128,6 +169,37 @@ class AuthNotifier extends Notifier<AdminAuthState> {
           fallback: 'Unable to load your account right now. Please try again.',
         ),
       );
+    }
+  }
+
+  Future<bool> checkSchoolStatus() async {
+    final schoolId = state.user?.schoolId;
+    if (schoolId == null) return true;
+
+    try {
+      final schoolRow = await _supabase
+          .from('schools')
+          .select('is_active, school_subscriptions(status)')
+          .eq('id', schoolId)
+          .maybeSingle();
+
+      if (schoolRow != null) {
+        final isActive = schoolRow['is_active'] as bool? ?? true;
+        String? subStatus = 'active';
+        final subs = schoolRow['school_subscriptions'] as List?;
+        if (subs != null && subs.isNotEmpty) {
+          subStatus = (subs.first as Map)['status']?.toString();
+        }
+        final isSuspended = !isActive || subStatus == 'suspended';
+        state = state.copyWith(
+          schoolIsActive: isActive,
+          schoolSubscriptionStatus: subStatus,
+        );
+        return !isSuspended;
+      }
+      return true;
+    } catch (_) {
+      return !state.isSchoolSuspended;
     }
   }
 
@@ -183,6 +255,8 @@ class AuthNotifier extends Notifier<AdminAuthState> {
   }
 
   Future<void> signOut({bool global = false}) async {
+    _schoolChannel?.unsubscribe();
+    _subChannel?.unsubscribe();
     try {
       await _supabase.auth.signOut(
         scope: global ? SignOutScope.global : SignOutScope.local,

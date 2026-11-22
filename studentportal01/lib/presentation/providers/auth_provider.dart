@@ -69,6 +69,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final _supabase = Supabase.instance.client;
   RealtimeChannel? _userChannel;
   RealtimeChannel? _schoolChannel;
+  RealtimeChannel? _schoolSubChannel;
 
   void _init() {
     debugPrint('AuthNotifier: Initializing...');
@@ -240,6 +241,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
               },
             )
             .subscribe();
+
+        _schoolSubChannel = _supabase
+            .channel('school_sub_changes_$schoolId')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'school_subscriptions',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'school_id',
+                value: schoolId,
+              ),
+              callback: (payload) {
+                final newSub = payload.newRecord;
+                final status = newSub['status']?.toString();
+                final bool isSuspended = status == 'suspended';
+                debugPrint('AuthNotifier: Realtime school_subscription update: status=$status');
+                state = state.copyWith(schoolSuspended: isSuspended);
+                OfflineCacheService.instance.setBool('cached_school_suspended', isSuspended);
+              },
+            )
+            .subscribe();
       }
     } catch (e) {
       debugPrint('AuthNotifier: Error setting up realtime subscription: $e');
@@ -257,6 +280,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       debugPrint('AuthNotifier: Unsubscribing from real-time school updates');
       _supabase.removeChannel(_schoolChannel!);
       _schoolChannel = null;
+    }
+    if (_schoolSubChannel != null) {
+      debugPrint('AuthNotifier: Unsubscribing from real-time school subscription updates');
+      _supabase.removeChannel(_schoolSubChannel!);
+      _schoolSubChannel = null;
     }
   }
 
@@ -497,6 +525,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       bool schoolSuspended = false;
       if (user.schoolId != null) {
         try {
+          try {
+            final accessCheck = await _supabase.rpc('check_user_access_status');
+            if (accessCheck != null && accessCheck is Map) {
+              final isLocked = accessCheck['is_locked'] == true;
+              final reason = accessCheck['reason']?.toString();
+              if (isLocked && reason == 'school_suspended') {
+                schoolSuspended = true;
+              }
+            }
+          } catch (_) {}
+
           final schoolResp = await _supabase
               .from('schools')
               .select('id, name, logo_url, address, phone, email, code, primary_color, secondary_color, is_active, created_at, school_subscriptions(status)')
@@ -508,7 +547,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             final subStatus = (subs != null && subs.isNotEmpty)
                 ? (subs.first as Map)['status']?.toString()
                 : null;
-            schoolSuspended = !isActiveSchool || subStatus == 'suspended';
+            schoolSuspended = schoolSuspended || !isActiveSchool || subStatus == 'suspended';
             school = SchoolModel.fromJson({
               ...schoolResp,
               'is_active': isActiveSchool,

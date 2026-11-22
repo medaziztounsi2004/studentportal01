@@ -65,6 +65,14 @@ class AdminApp extends ConsumerWidget {
         final content = child ?? const SizedBox.shrink();
         if (!authState.isAuthenticated) return content;
 
+        // When school is suspended by the super admin:
+        // The entire admin dashboard is completely gone and replaced by the centered suspension screen
+        if (authState.isSchoolSuspended && authState.user?.role != 'super_admin') {
+          return _AdminSchoolSuspendedScreen(
+            onRefresh: () => ref.read(authProvider.notifier).checkSchoolStatus(),
+          );
+        }
+
         // First-login forced permanent password setup
         if (authState.user?.forcePasswordChange == true) {
           return _ForcedPasswordChangeScreen(
@@ -298,3 +306,196 @@ class _ForcedPasswordChangeScreenState
     );
   }
 }
+
+class _AdminSchoolSuspendedScreen extends StatefulWidget {
+  final Future<bool> Function() onRefresh;
+
+  const _AdminSchoolSuspendedScreen({required this.onRefresh});
+
+  @override
+  State<_AdminSchoolSuspendedScreen> createState() =>
+      _AdminSchoolSuspendedScreenState();
+}
+
+class _AdminSchoolSuspendedScreenState
+    extends State<_AdminSchoolSuspendedScreen> {
+  bool _isChecking = false;
+  String? _feedbackMessage;
+  bool _isError = false;
+
+  Future<void> _handleRefresh() async {
+    if (_isChecking) return;
+    setState(() {
+      _isChecking = true;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final isUnlocked = await widget.onRefresh();
+      if (mounted) {
+        if (!isUnlocked) {
+          setState(() {
+            _isChecking = false;
+            _isError = true;
+            _feedbackMessage =
+                'L\'accès de votre établissement est toujours suspendu par la plateforme.';
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isChecking = false;
+          _isError = true;
+          _feedbackMessage = 'Connexion impossible. Vérifiez votre réseau.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isChecking = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Icon(
+                        Icons.domain_disabled_rounded,
+                        size: 34,
+                        color: Color(0xFFDC2626),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Établissement temporairement suspendu',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'L\'accès au tableau de bord d\'administration de votre établissement a été suspendu par l\'administration de la plateforme.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 26),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _isChecking ? null : _handleRefresh,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6D4CF6),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFF8B5CF6),
+                          disabledForegroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_isChecking) ...[
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Vérification en cours...',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ] else ...[
+                              const Icon(Icons.refresh_rounded,
+                                  size: 18, color: Colors.white),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Vérifier l\'accès',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_feedbackMessage != null) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        _feedbackMessage!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: _isError
+                              ? const Color(0xFFDC2626)
+                              : const Color(0xFF16A34A),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

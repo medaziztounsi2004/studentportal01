@@ -271,7 +271,7 @@ class _AccessLockedScreenState extends State<_AccessLockedScreen> {
             _isChecking = false;
             _isError = true;
             _feedbackMessage = widget.isSchoolSuspended
-                ? 'L\'accès de l\'établissement est toujours suspendu.'
+                ? 'L\'application est toujours hors service pour votre établissement.'
                 : 'Votre compte est toujours suspendu par l\'administration.';
           });
         }
@@ -323,16 +323,18 @@ class _AccessLockedScreenState extends State<_AccessLockedScreen> {
                       color: const Color(0xFFFEF2F2),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(
-                      Icons.lock_person_rounded,
+                    child: Icon(
+                      widget.isSchoolSuspended
+                          ? Icons.domain_disabled_rounded
+                          : Icons.lock_person_rounded,
                       size: 32,
-                      color: Color(0xFFDC2626),
+                      color: const Color(0xFFDC2626),
                     ),
                   ),
                   const SizedBox(height: 18),
                   Text(
                     widget.isSchoolSuspended
-                        ? 'Accès établissement suspendu'
+                        ? 'Application hors service'
                         : 'Accès temporairement suspendu',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
@@ -344,7 +346,7 @@ class _AccessLockedScreenState extends State<_AccessLockedScreen> {
                   const SizedBox(height: 10),
                   Text(
                     widget.isSchoolSuspended
-                        ? 'L\'accès de votre établissement est suspendu. Veuillez contacter la direction.'
+                        ? 'L\'application est actuellement hors service pour votre établissement. Veuillez contacter la direction de votre école.'
                         : 'Votre compte est temporairement suspendu. Veuillez contacter l\'administration.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
