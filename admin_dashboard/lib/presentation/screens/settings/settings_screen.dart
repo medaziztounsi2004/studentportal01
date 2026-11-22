@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../../core/utils/error_messages.dart';
@@ -16,6 +17,8 @@ import '../../widgets/admin_sidebar.dart';
 import '../../widgets/modern_animated_switch.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../../../data/services/backup_service.dart';
+import '../../providers/backup_provider.dart';
 import 'password_reset_requests_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -53,7 +56,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadUserPreferences();
   }
 
@@ -188,6 +191,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                                             return _buildNotificationsTab(
                                                 context);
                                           case 3:
+                                            return _buildBackupTab(
+                                                context, authState);
+                                          case 4:
                                           default:
                                             return _buildSystemTab(
                                                 context, authState);
@@ -469,6 +475,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       (icon: Icons.admin_panel_settings_outlined, label: 'Équipe & Établissement'),
       (icon: Icons.shield_outlined, label: 'Sécurité & Accès'),
       (icon: Icons.notifications_none_rounded, label: 'Notifications'),
+      (icon: Icons.cloud_sync_outlined, label: 'Sauvegardes & Données'),
       (icon: Icons.settings_suggest_outlined, label: 'Système'),
     ];
 
@@ -1096,7 +1103,459 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   // ─────────────────────────────────────────────────────────────
-  // TAB 3: SYSTÈME & SESSION
+  // TAB 4: SAUVEGARDES & DONNÉES
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildBackupTab(BuildContext context, AdminAuthState authState) {
+    final backupState = ref.watch(backupProvider);
+    final backupNotifier = ref.read(backupProvider.notifier);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Top Overview Banner
+        _buildBackupOverviewCard(backupState),
+        const SizedBox(height: 18),
+
+        // Card 1: Configuration du cycle automatique
+        _buildCardContainer(
+          title: 'Cycle de sauvegarde automatique',
+          subtitle: 'Planifiez des instantanés réguliers stockés directement sur Supabase Storage',
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: backupState.config.autoEnabled ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(100),
+            ),
+            child: Text(
+              backupState.config.autoEnabled ? 'Actif' : 'Inactif',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: backupState.config.autoEnabled ? const Color(0xFF059669) : const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Sauvegarde automatique régulière',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1E293B)),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Effectue automatiquement une copie complète de la base de données et des applications',
+                              style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ModernAnimatedSwitch(
+                        value: backupState.config.autoEnabled,
+                        onChanged: (val) => backupNotifier.toggleAutoBackup(val),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Fréquence du cycle de sauvegarde',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1E293B)),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Sélectionnez l\'intervalle entre chaque capture complète',
+                              style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: backupState.config.cycle,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: Color(0xFF64748B)),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+                            items: const [
+                              DropdownMenuItem(value: 'daily', child: Text('Quotidienne (Chaque jour)')),
+                              DropdownMenuItem(value: 'weekly', child: Text('Hebdomadaire (Chaque semaine)')),
+                              DropdownMenuItem(value: 'monthly', child: Text('Mensuelle (Chaque mois)')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) backupNotifier.updateCycle(val);
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        // Card 2: Sauvegarde manuelle immédiate
+        _buildCardContainer(
+          title: 'Sauvegarde manuelle immédiate',
+          subtitle: 'Déclenchez instantanément une sauvegarde complète de toutes les données',
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F3FF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFDDD6FE)),
+                        ),
+                        child: const Icon(Icons.cloud_upload_rounded, color: Color(0xFF6D4CF6), size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Instant Snapshot complet',
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1E293B)),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Exporte tous les élèves, professeurs, classes, notes, paiements et présences dans un fichier JSON vérifié.',
+                              style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        onPressed: backupState.isCreatingBackup
+                            ? null
+                            : () async {
+                                final ok = await backupNotifier.triggerManualBackup();
+                                if (ok && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: const Row(
+                                        children: [
+                                          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                          SizedBox(width: 10),
+                                          Text('Sauvegarde complète créée et archivée sur Supabase !'),
+                                        ],
+                                      ),
+                                      backgroundColor: const Color(0xFF059669),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: backupState.isCreatingBackup
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.backup_rounded, size: 18),
+                        label: Text(
+                          backupState.isCreatingBackup ? 'Sauvegarde en cours...' : 'Sauvegarder maintenant',
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6D4CF6),
+                          foregroundColor: Colors.white,
+                          elevation: 2,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (backupState.successMessage != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              backupState.successMessage!,
+                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF065F46), fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (backupState.errorMessage != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              backupState.errorMessage!,
+                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF991B1B), fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        // Card 3: Historique et téléchargement des sauvegardes
+        _buildCardContainer(
+          title: 'Historique des sauvegardes',
+          subtitle: 'Liste des instantanés conservés sur Supabase avec possibilité de téléchargement local',
+          trailing: Text(
+            '${backupState.backups.length} sauvegarde(s)',
+            style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+          ),
+          children: [
+            if (backupState.isLoading)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (backupState.backups.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(36),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.cloud_off_rounded, color: Color(0xFF94A3B8), size: 28),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Aucune sauvegarde enregistrée',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF334155)),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Cliquez sur "Sauvegarder maintenant" pour créer votre premier instantané.',
+                        style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: backupState.backups.length,
+                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                itemBuilder: (context, index) {
+                  final bkp = backupState.backups[index];
+                  return _buildBackupRow(context, bkp, backupNotifier);
+                },
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBackupOverviewCard(BackupState state) {
+    final lastDate = state.config.lastBackupAt != null
+        ? DateFormat('dd/MM/yyyy HH:mm', 'fr_FR').format(state.config.lastBackupAt!)
+        : (state.backups.isNotEmpty ? state.backups.first.formattedDate : 'Jamais');
+
+    final cycleLabel = state.config.cycle == 'daily'
+        ? 'Quotidienne'
+        : (state.config.cycle == 'weekly' ? 'Hebdomadaire' : 'Mensuelle');
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6D4CF6), Color(0xFF5B3EE0)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6D4CF6).withOpacity(0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.security_rounded, color: Colors.white, size: 26),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Protection & Sauvegarde des Données',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Dernière sauvegarde : $lastDate • Cycle : $cycleLabel • ${state.backups.length} instantanés',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackupRow(BuildContext context, BackupItem bkp, BackupNotifier notifier) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.insert_drive_file_outlined, color: Color(0xFF64748B), size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        bkp.filename,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: Color(0xFF1E293B)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Réussie',
+                        style: TextStyle(color: Color(0xFF059669), fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${bkp.formattedDate} • Taille : ${bkp.formattedSize}',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          ElevatedButton.icon(
+            onPressed: () => notifier.download(bkp),
+            icon: const Icon(Icons.download_rounded, size: 16),
+            label: const Text('Télécharger', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF8FAFC),
+              foregroundColor: const Color(0xFF1E293B),
+              elevation: 0,
+              side: const BorderSide(color: Color(0xFFE2E8F0)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // TAB 5: SYSTÈME & SESSION
   // ─────────────────────────────────────────────────────────────
   Widget _buildSystemTab(BuildContext context, AdminAuthState authState) {
     return Column(

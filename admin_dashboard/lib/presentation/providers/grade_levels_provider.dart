@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/supabase_config.dart';
 import '../../data/models/academic_models.dart';
+import '../../data/services/school_data_seeder.dart';
+import 'auth_provider.dart';
 
 // ==================== STATE ====================
 class GradeLevelsState {
@@ -110,8 +112,35 @@ class GradeLevelsNotifier extends AsyncNotifier<GradeLevelsState> {
   @override
   Future<GradeLevelsState> build() async => _load();
 
+  Future<String?> _getSchoolId(dynamic supabase) async {
+    final authUser = ref.read(authProvider).user;
+    if (authUser?.schoolId != null) return authUser!.schoolId;
+    final userId = SupabaseConfig.client.auth.currentUser?.id;
+    if (userId == null) return null;
+    try {
+      final userResp = await supabase
+          .from('users')
+          .select('school_id')
+          .eq('id', userId)
+          .maybeSingle();
+      return userResp?['school_id'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<GradeLevelsState> _load() async {
     final supabase = SupabaseConfig.adminClient;
+    final schoolId = await _getSchoolId(supabase);
+
+    // Auto-seed default Tunisian Collège/Lycée data if school is clean
+    if (schoolId != null) {
+      try {
+        await SchoolDataSeeder.seedSchool(client: supabase, schoolId: schoolId);
+      } catch (e) {
+        debugPrint('GradeLevels: Auto-seeding check failed: $e');
+      }
+    }
 
     // Load niveaux (grade levels) with their sections via niveau_sections
     final gradesResp = await supabase
@@ -120,13 +149,35 @@ class GradeLevelsNotifier extends AsyncNotifier<GradeLevelsState> {
           *,
           niveau_sections(
             sections(*)
-          ),
-          classes(id, name, section_id, sections(name))
+          )
         ''')
         .eq('is_active', true)
         .order('display_order');
     
     debugPrint('GradeLevels: Loaded ${(gradesResp as List).length} niveaux');
+
+    // ── Load classes strictly for the current school ──
+    List<Map<String, dynamic>> schoolClasses = [];
+    if (schoolId != null) {
+      try {
+        final classesResp = await supabase
+            .from('classes')
+            .select('id, name, section_id, niveau_id, sections(name)')
+            .eq('school_id', schoolId)
+            .eq('is_active', true);
+        schoolClasses = (classesResp as List)
+            .map((c) => Map<String, dynamic>.from(c as Map))
+            .toList();
+      } catch (e) {
+        debugPrint('GradeLevels: Failed to load school classes: $e');
+      }
+    }
+
+    // Group classes into each niveau
+    for (final g in (gradesResp as List)) {
+      final nid = g['id'] as String;
+      g['classes'] = schoolClasses.where((c) => c['niveau_id'] == nid).toList();
+    }
 
     // ── Fetch student counts per class via enrollments ──
     final allClassIds = <String>[];
@@ -376,13 +427,8 @@ class GradeLevelsNotifier extends AsyncNotifier<GradeLevelsState> {
     String? sectionId,
   }) async {
     final supabase = SupabaseConfig.adminClient;
-    final userId = supabase.auth.currentUser?.id;
-    final userResp = await supabase
-        .from('users')
-        .select('school_id')
-        .eq('id', userId!)
-        .single();
-    final schoolId = userResp['school_id'];
+    final schoolId = await _getSchoolId(supabase);
+    if (schoolId == null) throw Exception('Établissement introuvable');
 
     await supabase.from('classes').insert({
       'school_id': schoolId,

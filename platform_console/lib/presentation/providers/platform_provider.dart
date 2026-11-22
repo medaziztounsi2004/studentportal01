@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/services/user_management_service.dart';
+import '../../data/services/school_data_seeder.dart';
 
 final platformProvider =
     NotifierProvider<PlatformNotifier, PlatformState>(PlatformNotifier.new);
@@ -582,6 +583,12 @@ class PlatformNotifier extends Notifier<PlatformState> {
       if (userResult['success'] != true) {
         throw Exception(userResult['error'] ?? 'Échec création directeur');
       }
+
+      // Pre-seed default educational data (Collège/Lycée system, without partitions, empty classes)
+      await SchoolDataSeeder.seedSchool(
+        client: _supabase,
+        schoolId: schoolId,
+      );
 
       await loadAll();
       return true;

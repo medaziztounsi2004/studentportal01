@@ -10,6 +10,8 @@ import '../../../core/utils/error_messages.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
 import '../../providers/curriculum_provider.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../../core/config/supabase_config.dart';
 import '../../widgets/admin_sidebar.dart';
 import 'user_form_dialog.dart';
 import 'user_profile_screen.dart';
@@ -89,13 +91,94 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     super.dispose();
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo) return;
+    try {
+      final desc = await notifier.undo();
+      if (mounted && desc != null) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.undo_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Action annulée : $desc')),
+              ],
+            ),
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFF1E293B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'annulation : $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo) return;
+    try {
+      final desc = await notifier.redo();
+      if (mounted && desc != null) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.redo_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Action rétablie : $desc')),
+              ],
+            ),
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFF1E293B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du rétablissement : $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final usersAsync = ref.watch(usersProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          body: Stack(
         children: [
           Row(
             children: [
@@ -209,13 +292,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
       ),
       // Filter drawer overlay — full-app blur
       if (_showFilterDrawer) _buildFilterDrawerOverlay(context),
-    ],
+        ],
+      ),
+    ),
     ),
     );
   }
 
   // ====================== HEADER ======================
   Widget _buildHeader(BuildContext context, AsyncValue<UsersState> usersAsync) {
+    final undoState = ref.watch(undoRedoProvider);
     final userCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role != 'super_admin').length) ?? 0;
     final studentCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role == 'student').length) ?? 0;
     final staffCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role != 'student' && u.role != 'super_admin').length) ?? 0;
@@ -332,6 +418,22 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             isActive: _showFilterDrawer || _hasActiveFilters,
             badgeCount: _activeFilterCount,
             onPressed: () => setState(() => _showFilterDrawer = !_showFilterDrawer),
+          ),
+          const SizedBox(width: 6),
+          // Undo action button
+          _HeaderIconButton(
+            icon: Icons.undo_rounded,
+            tooltip: undoState.undoTooltip,
+            isEnabled: undoState.canUndo,
+            onPressed: undoState.canUndo ? () => _handleUndo() : null,
+          ),
+          const SizedBox(width: 4),
+          // Redo action button
+          _HeaderIconButton(
+            icon: Icons.redo_rounded,
+            tooltip: undoState.redoTooltip,
+            isEnabled: undoState.canRedo,
+            onPressed: undoState.canRedo ? () => _handleRedo() : null,
           ),
           // Vertical divider
           Padding(
@@ -1876,7 +1978,23 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 child: ElevatedButton.icon(
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    await ref.read(usersProvider.notifier).toggleUserArchive(u.id, !willSuspend);
+                    final userId = u.id;
+                    final userName = u.fullName;
+                    await ref.read(usersProvider.notifier).toggleUserArchive(userId, !willSuspend);
+                    ref.read(undoRedoProvider.notifier).recordAction(
+                      AppAction(
+                        title: willSuspend ? 'Suspension compte' : 'Activation compte',
+                        description: willSuspend
+                            ? 'Suspension du compte de $userName'
+                            : 'Activation du compte de $userName',
+                        undo: () async {
+                          await ref.read(usersProvider.notifier).toggleUserArchive(userId, willSuspend);
+                        },
+                        redo: () async {
+                          await ref.read(usersProvider.notifier).toggleUserArchive(userId, !willSuspend);
+                        },
+                      ),
+                    );
                   },
                   icon: Icon(willSuspend ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded, size: 16),
                   label: Text(willSuspend ? 'Suspendre' : 'Activer', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -1955,8 +2073,23 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   onPressed: () async {
                     Navigator.pop(ctx);
                     final ids = _selectedUserIds.toList();
+                    final count = ids.length;
                     await ref.read(usersProvider.notifier).bulkToggleArchive(ids, activate);
                     setState(() => _selectedUserIds.clear());
+                    ref.read(undoRedoProvider.notifier).recordAction(
+                      AppAction(
+                        title: activate ? 'Activation en masse' : 'Suspension en masse',
+                        description: activate
+                            ? 'Activation de $count compte(s)'
+                            : 'Suspension de $count compte(s)',
+                        undo: () async {
+                          await ref.read(usersProvider.notifier).bulkToggleArchive(ids, !activate);
+                        },
+                        redo: () async {
+                          await ref.read(usersProvider.notifier).bulkToggleArchive(ids, activate);
+                        },
+                      ),
+                    );
                   },
                   icon: Icon(activate ? Icons.check_circle_outline_rounded : Icons.pause_circle_outline_rounded, size: 16),
                   label: Text(activate ? 'Activer' : 'Suspendre', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -2041,8 +2174,36 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                  ref.read(usersProvider.notifier).deleteUser(u.id);
+                  final userSnapshot = u;
+                  final userId = u.id;
+                  final userName = u.fullName;
+                  ref.read(usersProvider.notifier).deleteUser(userId);
                   Navigator.pop(ctx);
+                  ref.read(undoRedoProvider.notifier).recordAction(
+                    AppAction(
+                      title: 'Suppression utilisateur',
+                      description: 'Suppression de $userName',
+                      undo: () async {
+                        await SupabaseConfig.adminClient.from('users').upsert({
+                          'id': userSnapshot.id,
+                          'school_id': userSnapshot.schoolId,
+                          'role': userSnapshot.role,
+                          'full_name': userSnapshot.fullName,
+                          'email': userSnapshot.email,
+                          'phone': userSnapshot.phone,
+                          'photo_url': userSnapshot.photoUrl,
+                          'student_code': userSnapshot.studentCode,
+                          'gender': userSnapshot.gender,
+                          'nationality': userSnapshot.nationality,
+                          'is_active': userSnapshot.isActive,
+                        });
+                        await ref.read(usersProvider.notifier).refresh(showLoading: false);
+                      },
+                      redo: () async {
+                        await ref.read(usersProvider.notifier).deleteUser(userId);
+                      },
+                    ),
+                  );
                 },
                 borderRadius: BorderRadius.circular(AppRadius.xs),
                 child: const Padding(
@@ -2132,10 +2293,14 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 ),
               );
 
+              final idsToDelete = _selectedUserIds.toList();
+              final allUsers = ref.read(usersProvider).value?.users ?? [];
+              final snapshots = allUsers.where((u) => idsToDelete.contains(u.id)).toList();
+
               // Use bulk delete method - much faster!
               final notifier = ref.read(usersProvider.notifier);
               final result = await notifier.bulkDeleteUsers(
-                _selectedUserIds.toList(),
+                idsToDelete,
               );
               final deleted = result['deleted'] ?? 0;
               final failed = result['failed'] ?? 0;
@@ -2143,6 +2308,36 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               setState(() {
                 _selectedUserIds.clear();
               });
+
+              if (deleted > 0) {
+                ref.read(undoRedoProvider.notifier).recordAction(
+                  AppAction(
+                    title: 'Suppression en masse',
+                    description: 'Suppression de $deleted utilisateur(s)',
+                    undo: () async {
+                      for (final u in snapshots) {
+                        await SupabaseConfig.adminClient.from('users').upsert({
+                          'id': u.id,
+                          'school_id': u.schoolId,
+                          'role': u.role,
+                          'full_name': u.fullName,
+                          'email': u.email,
+                          'phone': u.phone,
+                          'photo_url': u.photoUrl,
+                          'student_code': u.studentCode,
+                          'gender': u.gender,
+                          'nationality': u.nationality,
+                          'is_active': u.isActive,
+                        });
+                      }
+                      await ref.read(usersProvider.notifier).refresh(showLoading: false);
+                    },
+                    redo: () async {
+                      await ref.read(usersProvider.notifier).bulkDeleteUsers(idsToDelete);
+                    },
+                  ),
+                );
+              }
 
               if (mounted) {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -2834,16 +3029,18 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 class _HeaderIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool isActive;
   final int badgeCount;
+  final bool isEnabled;
 
   const _HeaderIconButton({
     required this.icon,
     required this.tooltip,
-    required this.onPressed,
+    this.onPressed,
     this.isActive = false,
     this.badgeCount = 0,
+    this.isEnabled = true,
   });
 
   @override
@@ -2854,7 +3051,7 @@ class _HeaderIconButton extends StatelessWidget {
         color: isActive ? AppColors.primarySoft : Colors.transparent,
         borderRadius: BorderRadius.circular(AppRadius.xs),
         child: InkWell(
-          onTap: onPressed,
+          onTap: isEnabled ? onPressed : null,
           borderRadius: BorderRadius.circular(AppRadius.xs),
           child: Container(
             width: 36,
@@ -2862,13 +3059,21 @@ class _HeaderIconButton extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.xs),
               border: Border.all(
-                color: isActive ? AppColors.primary.withOpacity(0.3) : AppColors.border.withOpacity(0.5),
+                color: isActive
+                    ? AppColors.primary.withOpacity(0.3)
+                    : AppColors.border.withOpacity(isEnabled ? 0.5 : 0.2),
               ),
             ),
             child: Stack(
               alignment: Alignment.center,
               children: [
-                Icon(icon, size: 18, color: isActive ? AppColors.primary : AppColors.textSecondary),
+                Icon(
+                  icon,
+                  size: 18,
+                  color: isEnabled
+                      ? (isActive ? AppColors.primary : AppColors.textSecondary)
+                      : AppColors.textTertiary.withOpacity(0.35),
+                ),
                 if (badgeCount > 0)
                   Positioned(
                     top: 4,

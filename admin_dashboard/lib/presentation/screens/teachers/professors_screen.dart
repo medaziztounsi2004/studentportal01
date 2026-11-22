@@ -15,6 +15,7 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/admin_sort_dropdown.dart';
+import '../../providers/undo_redo_provider.dart';
 
 
 // ── Speciality Color Helper ───────────────────────────────────────────────
@@ -54,7 +55,7 @@ class ProfessorsNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
   Future<List<Map<String, dynamic>>> _load() async {
     final response = await Supabase.instance.client
         .from('users')
-        .select('id, full_name, email, phone, photo_url, role, is_active, created_at, gender')
+        .select('id, full_name, email, phone, photo_url, role, is_active, created_at, gender, school_id')
         .eq('role', 'teacher')
         .order('full_name', ascending: true);
 
@@ -246,6 +247,76 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     super.dispose();
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo) return;
+    try {
+      final desc = await notifier.undo();
+      if (mounted && desc != null) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.undo_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Action annulée : $desc')),
+              ],
+            ),
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFF1E293B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de l\'annulation : $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo) return;
+    try {
+      final desc = await notifier.redo();
+      if (mounted && desc != null) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.redo_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Action rétablie : $desc')),
+              ],
+            ),
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFF1E293B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du rétablissement : $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   List<Map<String, dynamic>> _applyFilters(List<Map<String, dynamic>> professors) {
     final filtered = professors.where((p) {
       final name = (p['full_name'] as String? ?? '').toLowerCase();
@@ -314,9 +385,20 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
   Widget build(BuildContext context) {
     final professorsAsync = ref.watch(professorsProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          body: Stack(
         children: [
           Row(
             children: [
@@ -427,12 +509,15 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
           ],
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   // ── Header (matching users page layout) ─────────────────────────────────
 
   Widget _buildHeader(BuildContext context, AsyncValue<List<Map<String, dynamic>>> professorsAsync) {
+    final undoState = ref.watch(undoRedoProvider);
     final total = professorsAsync.whenOrNull(data: (p) => p.length) ?? 0;
     final activeCount = professorsAsync.whenOrNull(data: (p) => p.where((u) => u['is_active'] == true).length) ?? 0;
 
@@ -554,6 +639,23 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 side: BorderSide(color: (_showFilterDrawer || _hasActiveFilters) ? AppColors.primary.withOpacity(0.2) : Colors.transparent),
               ),
             ),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          ),
+          const SizedBox(width: 8),
+          // Undo action button
+          IconButton(
+            icon: const Icon(Icons.undo_rounded, size: 20),
+            tooltip: undoState.undoTooltip,
+            onPressed: undoState.canUndo ? () => _handleUndo() : null,
+            color: undoState.canUndo ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.35),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          ),
+          // Redo action button
+          IconButton(
+            icon: const Icon(Icons.redo_rounded, size: 20),
+            tooltip: undoState.redoTooltip,
+            onPressed: undoState.canRedo ? () => _handleRedo() : null,
+            color: undoState.canRedo ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.35),
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           const SizedBox(width: 16),
@@ -952,6 +1054,18 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     onPressed: () {
                       Navigator.pop(ctx);
                       ref.read(professorsProvider.notifier).toggleArchive([id], false);
+                      ref.read(undoRedoProvider.notifier).recordAction(
+                        AppAction(
+                          title: 'Archivage professeur',
+                          description: 'Archivage de $name',
+                          undo: () async {
+                            await ref.read(professorsProvider.notifier).toggleArchive([id], true);
+                          },
+                          redo: () async {
+                            await ref.read(professorsProvider.notifier).toggleArchive([id], false);
+                          },
+                        ),
+                      );
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" archivé'), backgroundColor: AppColors.warning));
                     },
                     icon: const Icon(Icons.archive_outlined, size: 16),
@@ -1019,6 +1133,18 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     onPressed: () {
                       Navigator.pop(ctx);
                       ref.read(professorsProvider.notifier).toggleArchive([id], true);
+                      ref.read(undoRedoProvider.notifier).recordAction(
+                        AppAction(
+                          title: 'Désarchivage professeur',
+                          description: 'Désarchivage de $name',
+                          undo: () async {
+                            await ref.read(professorsProvider.notifier).toggleArchive([id], false);
+                          },
+                          redo: () async {
+                            await ref.read(professorsProvider.notifier).toggleArchive([id], true);
+                          },
+                        ),
+                      );
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désarchivé'), backgroundColor: AppColors.success));
                     },
                     icon: const Icon(Icons.unarchive_outlined, size: 16),
@@ -1098,8 +1224,33 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
+                    final profSnapshot = Map<String, dynamic>.from(prof);
                     Navigator.pop(ctx);
                     ref.read(professorsProvider.notifier).delete(id);
+                    ref.read(undoRedoProvider.notifier).recordAction(
+                      AppAction(
+                        title: 'Suppression professeur',
+                        description: 'Suppression de $name',
+                        undo: () async {
+                          final schoolId = ref.read(authProvider).user?.schoolId ?? profSnapshot['school_id'];
+                          await SupabaseConfig.adminClient.from('users').upsert({
+                            'id': profSnapshot['id'],
+                            'school_id': schoolId,
+                            'role': profSnapshot['role'] ?? 'teacher',
+                            'full_name': profSnapshot['full_name'],
+                            'email': profSnapshot['email'],
+                            'phone': profSnapshot['phone'],
+                            'photo_url': profSnapshot['photo_url'],
+                            'gender': profSnapshot['gender'],
+                            'is_active': profSnapshot['is_active'] ?? true,
+                          });
+                          await ref.read(professorsProvider.notifier).refresh(showLoading: false);
+                        },
+                        redo: () async {
+                          await ref.read(professorsProvider.notifier).delete(id);
+                        },
+                      ),
+                    );
                     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" supprimé'), backgroundColor: AppColors.error));
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
@@ -1342,6 +1493,18 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       setState(() => _selectedProfIds.clear());
                       Navigator.pop(ctx);
                       ref.read(professorsProvider.notifier).toggleArchive(ids, false);
+                      ref.read(undoRedoProvider.notifier).recordAction(
+                        AppAction(
+                          title: 'Archivage en masse',
+                          description: 'Archivage de ${ids.length} professeur(s)',
+                          undo: () async {
+                            await ref.read(professorsProvider.notifier).toggleArchive(ids, true);
+                          },
+                          redo: () async {
+                            await ref.read(professorsProvider.notifier).toggleArchive(ids, false);
+                          },
+                        ),
+                      );
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('$count professeur${count > 1 ? 's archivés' : ' archivé'}'), backgroundColor: AppColors.warning),
@@ -1479,6 +1642,18 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       setState(() => _selectedProfIds.clear());
                       Navigator.pop(ctx);
                       ref.read(professorsProvider.notifier).toggleArchive(ids, true);
+                      ref.read(undoRedoProvider.notifier).recordAction(
+                        AppAction(
+                          title: 'Désarchivage en masse',
+                          description: 'Désarchivage de ${ids.length} professeur(s)',
+                          undo: () async {
+                            await ref.read(professorsProvider.notifier).toggleArchive(ids, false);
+                          },
+                          redo: () async {
+                            await ref.read(professorsProvider.notifier).toggleArchive(ids, true);
+                          },
+                        ),
+                      );
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('$count professeur${count > 1 ? 's désarchivés' : ' désarchivé'}'), backgroundColor: AppColors.success),
@@ -1542,9 +1717,38 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 ElevatedButton.icon(
                   onPressed: () {
                     final ids = _selectedProfIds.toList();
+                    final profsAsync = ref.read(professorsProvider);
+                    final allProfs = profsAsync.value ?? [];
+                    final snapshots = allProfs.where((p) => ids.contains(p['id'])).map((p) => Map<String, dynamic>.from(p)).toList();
                     setState(() => _selectedProfIds.clear());
                     Navigator.pop(ctx);
                     ref.read(professorsProvider.notifier).bulkDelete(ids);
+                    ref.read(undoRedoProvider.notifier).recordAction(
+                      AppAction(
+                        title: 'Suppression en masse',
+                        description: 'Suppression de ${ids.length} professeur(s)',
+                        undo: () async {
+                          final schoolId = ref.read(authProvider).user?.schoolId;
+                          for (final p in snapshots) {
+                            await SupabaseConfig.adminClient.from('users').upsert({
+                              'id': p['id'],
+                              'school_id': schoolId ?? p['school_id'],
+                              'role': p['role'] ?? 'teacher',
+                              'full_name': p['full_name'],
+                              'email': p['email'],
+                              'phone': p['phone'],
+                              'photo_url': p['photo_url'],
+                              'gender': p['gender'],
+                              'is_active': p['is_active'] ?? true,
+                            });
+                          }
+                          await ref.read(professorsProvider.notifier).refresh(showLoading: false);
+                        },
+                        redo: () async {
+                          await ref.read(professorsProvider.notifier).bulkDelete(ids);
+                        },
+                      ),
+                    );
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('$count professeur${count > 1 ? 's supprimés' : ' supprimé'}'), backgroundColor: AppColors.error),
