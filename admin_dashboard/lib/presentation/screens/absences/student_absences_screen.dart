@@ -163,6 +163,12 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
         final bJust = b.justified ? 1 : 0;
         comparison = aJust.compareTo(bJust);
       }
+      if (comparison == 0) {
+        comparison = a.createdAt.compareTo(b.createdAt);
+      }
+      if (comparison == 0) {
+        comparison = a.id.compareTo(b.id);
+      }
       return _sortAscending ? comparison : -comparison;
     });
 
@@ -865,7 +871,13 @@ const SizedBox.shrink(),
 
   // ==================== ABSENCE LIST SECTION ====================
   Widget _buildAbsenceListSection(List<AbsenceModel> absences) {
-    final sorted = [...absences]..sort((a, b) => b.date.compareTo(a.date));
+    final sorted = [...absences]..sort((a, b) {
+      final cmp = b.date.compareTo(a.date);
+      if (cmp != 0) return cmp;
+      final cCmp = b.createdAt.compareTo(a.createdAt);
+      if (cCmp != 0) return cCmp;
+      return a.id.compareTo(b.id);
+    });
     final totalPages = _perPage > 0 ? (sorted.length / _perPage).ceil() : 1;
     final clampedPage =
         _page.clamp(0, totalPages == 0 ? 0 : totalPages - 1);

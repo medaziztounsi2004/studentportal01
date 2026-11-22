@@ -1010,35 +1010,79 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
     final absences = List<AbsenceModel>.from(rawAbsences);
     switch (_sortKey) {
       case 'date_asc':
-        absences.sort((a, b) => a.date.compareTo(b.date));
+        absences.sort((a, b) {
+          final cmp = a.date.compareTo(b.date);
+          if (cmp != 0) return cmp;
+          final cCmp = a.createdAt.compareTo(b.createdAt);
+          if (cCmp != 0) return cCmp;
+          return a.id.compareTo(b.id);
+        });
         break;
       case 'student_asc':
-        absences.sort((a, b) => a.studentName.toLowerCase().compareTo(b.studentName.toLowerCase()));
+        absences.sort((a, b) {
+          final cmp = a.studentName.toLowerCase().compareTo(b.studentName.toLowerCase());
+          if (cmp != 0) return cmp;
+          final dCmp = b.date.compareTo(a.date);
+          if (dCmp != 0) return dCmp;
+          return a.id.compareTo(b.id);
+        });
         break;
       case 'student_desc':
-        absences.sort((a, b) => b.studentName.toLowerCase().compareTo(a.studentName.toLowerCase()));
+        absences.sort((a, b) {
+          final cmp = b.studentName.toLowerCase().compareTo(a.studentName.toLowerCase());
+          if (cmp != 0) return cmp;
+          final dCmp = b.date.compareTo(a.date);
+          if (dCmp != 0) return dCmp;
+          return a.id.compareTo(b.id);
+        });
         break;
       case 'class_asc':
-        absences.sort((a, b) => (a.className ?? '').toLowerCase().compareTo((b.className ?? '').toLowerCase()));
+        absences.sort((a, b) {
+          final cmp = (a.className ?? '').toLowerCase().compareTo((b.className ?? '').toLowerCase());
+          if (cmp != 0) return cmp;
+          final dCmp = b.date.compareTo(a.date);
+          if (dCmp != 0) return dCmp;
+          return a.id.compareTo(b.id);
+        });
         break;
       case 'unjustified_first':
         absences.sort((a, b) {
-          if (a.justified == b.justified) return b.date.compareTo(a.date);
-          return a.justified ? 1 : -1;
+          if (a.justified != b.justified) return a.justified ? 1 : -1;
+          final dCmp = b.date.compareTo(a.date);
+          if (dCmp != 0) return dCmp;
+          final cCmp = b.createdAt.compareTo(a.createdAt);
+          if (cCmp != 0) return cCmp;
+          return a.id.compareTo(b.id);
         });
         break;
       case 'justified_first':
         absences.sort((a, b) {
-          if (a.justified == b.justified) return b.date.compareTo(a.date);
-          return a.justified ? -1 : 1;
+          if (a.justified != b.justified) return a.justified ? -1 : 1;
+          final dCmp = b.date.compareTo(a.date);
+          if (dCmp != 0) return dCmp;
+          final cCmp = b.createdAt.compareTo(a.createdAt);
+          if (cCmp != 0) return cCmp;
+          return a.id.compareTo(b.id);
         });
         break;
       case 'hours_desc':
-        absences.sort((a, b) => b.hoursAbsent.compareTo(a.hoursAbsent));
+        absences.sort((a, b) {
+          final cmp = b.hoursAbsent.compareTo(a.hoursAbsent);
+          if (cmp != 0) return cmp;
+          final dCmp = b.date.compareTo(a.date);
+          if (dCmp != 0) return dCmp;
+          return a.id.compareTo(b.id);
+        });
         break;
       case 'date_desc':
       default:
-        absences.sort((a, b) => b.date.compareTo(a.date));
+        absences.sort((a, b) {
+          final cmp = b.date.compareTo(a.date);
+          if (cmp != 0) return cmp;
+          final cCmp = b.createdAt.compareTo(a.createdAt);
+          if (cCmp != 0) return cCmp;
+          return a.id.compareTo(b.id);
+        });
         break;
     }
     final dateFormat = DateFormat('d MMM yyyy', 'fr_FR');
@@ -1247,11 +1291,17 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                         child: _JustifiedBadge(
                           justified: a.justified,
                           onTap: () async {
-                            setState(() => _isPerformingAction = true);
                             try {
                               await ref.read(absencesProvider.notifier).toggleJustified(a.id, a.justified);
-                            } finally {
-                              if (mounted) setState(() => _isPerformingAction = false);
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(UserFriendlyError.format(e)),
+                                    backgroundColor: AppColors.error,
+                                  ),
+                                );
+                              }
                             }
                           },
                         ),

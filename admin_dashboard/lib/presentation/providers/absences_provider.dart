@@ -535,6 +535,8 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
           )
         ''')
         .order('date', ascending: false)
+        .order('created_at', ascending: false)
+        .order('id', ascending: false)
         .limit(500);
 
     // Fetch classes for this school with niveau and section info
@@ -804,11 +806,35 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
 
   /// Toggle justified status
   Future<void> toggleJustified(String id, bool current) async {
-    await SupabaseConfig.client
-        .from('absence_records')
-        .update({'justified': !current})
-        .eq('id', id);
-    ref.invalidateSelf();
+    // Optimistically update local state in-place so list order never shifts or jumps
+    state.whenData((s) {
+      final updatedList = s.absences.map((a) {
+        if (a.id == id) {
+          return a.copyWith(justified: !current);
+        }
+        return a;
+      }).toList();
+      state = AsyncData(s.copyWith(absences: updatedList));
+    });
+
+    try {
+      await SupabaseConfig.client
+          .from('absence_records')
+          .update({'justified': !current})
+          .eq('id', id);
+    } catch (e) {
+      // Revert in-place on error
+      state.whenData((s) {
+        final revertedList = s.absences.map((a) {
+          if (a.id == id) {
+            return a.copyWith(justified: current);
+          }
+          return a;
+        }).toList();
+        state = AsyncData(s.copyWith(absences: revertedList));
+      });
+      rethrow;
+    }
   }
 
   /// Bulk toggle justified for selected absences
@@ -819,12 +845,27 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
     final supabase = SupabaseConfig.client;
     final ids = currentState.selectedIds.toList();
 
-    await supabase
-        .from('absence_records')
-        .update({'justified': justified})
-        .inFilter('id', ids);
+    // Optimistically update local state in-place
+    state.whenData((s) {
+      final updatedList = s.absences.map((a) {
+        if (ids.contains(a.id)) {
+          return a.copyWith(justified: justified);
+        }
+        return a;
+      }).toList();
+      state = AsyncData(s.copyWith(absences: updatedList, selectedIds: {}));
+    });
 
-    ref.invalidateSelf();
+    try {
+      await supabase
+          .from('absence_records')
+          .update({'justified': justified})
+          .inFilter('id', ids);
+    } catch (e) {
+      ref.invalidateSelf();
+      rethrow;
+    }
+
     return ids.length;
   }
 
@@ -1106,7 +1147,9 @@ final studentAbsencesProvider = FutureProvider.family<StudentAbsencesData, Strin
         )
       ''')
       .eq('student_id', studentId)
-      .order('date', ascending: false);
+      .order('date', ascending: false)
+      .order('created_at', ascending: false)
+      .order('id', ascending: false);
 
   final absences = (absencesResp as List)
       .map((json) => AbsenceModel.fromJson(json))
