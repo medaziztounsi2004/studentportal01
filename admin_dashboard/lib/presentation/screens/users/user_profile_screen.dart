@@ -17,6 +17,7 @@ import '../../widgets/skeleton_loader.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
 import '../../widgets/avatar_cropper_dialog.dart';
+import '../../widgets/feedback_pill.dart';
 import 'user_form_dialog.dart';
 
 // ==================== USER PROFILE DATA MODEL ====================
@@ -594,11 +595,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   // ==================== HEADER ====================
   Widget _buildHeader(String fullName, Map<String, dynamic> user) {
     final isStudent = user['role'] == 'student';
-    final bool rawActive = user['is_active'] != false;
-    final String rawStatus = (user['account_status'] as String? ?? 'active').toLowerCase();
-    final bool isSuspended = _optimisticAccountStatus != null
-        ? (_optimisticAccountStatus == 'paused_unpaid')
-        : (!rawActive || rawStatus == 'paused_unpaid');
 
     return Container(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
@@ -621,26 +617,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(fullName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.3)),
-                    if (isSuspended) ...[
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF2F2),
-                          borderRadius: BorderRadius.circular(100),
-                          border: Border.all(color: const Color(0xFFFECACA)),
-                        ),
-                        child: const Text(
-                          'Suspendu',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFDC2626)),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                Text(fullName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.3)),
                 Text(
                   isStudent ? 'Profil étudiant' : 'Profil utilisateur',
                   style: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
@@ -700,8 +677,20 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: isPaused ? const Color(0xFFFEF2F2) : const Color(0xFFF1F5F9),
+        color: isPaused ? const Color(0xFFFEF2F2) : Colors.white,
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isPaused
+              ? const Color(0xFFFECACA).withValues(alpha: 0.8)
+              : AppColors.border.withValues(alpha: 0.6),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -805,20 +794,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                   });
 
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          nextStatus == 'paused_unpaid'
-                              ? 'Accès élève suspendu.'
-                              : 'Accès élève réactivé.',
-                        ),
-                        backgroundColor: nextStatus == 'paused_unpaid'
-                            ? AppColors.warning
-                            : AppColors.success,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                        duration: const Duration(seconds: 2),
-                      ),
+                    FeedbackPill.showSuccess(
+                      context,
+                      nextStatus == 'paused_unpaid'
+                          ? 'Accès élève suspendu.'
+                          : 'Accès élève réactivé.',
                     );
                   }
 
@@ -839,14 +819,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                         user['is_active'] = !nextActive;
                         user['account_status'] = isPaused ? 'paused_unpaid' : 'active';
                       });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Impossible de modifier le statut d\'accès.'),
-                          backgroundColor: AppColors.error,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                        ),
-                      );
+                      FeedbackPill.showError(context, 'Impossible de modifier le statut d\'accès.');
                     } else {
                       ref.invalidate(userProfileDataProvider(widget.userId));
                       ref.read(usersProvider.notifier).refresh(showLoading: false);
@@ -864,7 +837,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                   }
                 },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1203,9 +1176,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           GestureDetector(
             onTap: () {
               Clipboard.setData(ClipboardData(text: fullName));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Nom copié!'), duration: Duration(seconds: 1), behavior: SnackBarBehavior.floating),
-              );
+              FeedbackPill.showSuccess(context, 'Nom copié !');
             },
             child: Text(fullName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate800), textAlign: TextAlign.center),
           ),
@@ -1216,7 +1187,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFFFEF2F2),
                 borderRadius: BorderRadius.circular(100),
-                border: Border.all(color: const Color(0xFFFECACA)),
               ),
               child: const Text(
                 'Suspendu',
@@ -1240,9 +1210,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: studentCode));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('ID copié!'), duration: Duration(seconds: 1), behavior: SnackBarBehavior.floating),
-                );
+                FeedbackPill.showSuccess(context, 'ID copié !');
               },
               child: Text(studentCode, style: TextStyle(color: AppColors.slate400, fontSize: 12, fontWeight: FontWeight.w500)),
             ),
