@@ -605,7 +605,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               children: [
                 _buildStatusChip('Tous', totalCount, _statusFilter == null, () => setState(() { _statusFilter = null; _currentPage = 1; }), isLoading: isLoading),
                 _buildStatusChip('Actifs', activeCount, _statusFilter == 'active', () => setState(() { _statusFilter = 'active'; _currentPage = 1; }), isLoading: isLoading),
-                _buildStatusChip('Archivés', archivedCount, _statusFilter == 'archived', () => setState(() { _statusFilter = 'archived'; _currentPage = 1; }), isLoading: isLoading),
               ],
             ),
           ),
@@ -1117,6 +1116,10 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
 
   Widget _buildFloatingSelectionBar(BuildContext context) {
     final count = _selectedProfIds.length;
+    final profsAsync = ref.read(professorsProvider);
+    final allProfs = profsAsync.value ?? [];
+    final selectedProfs = allProfs.where((p) => _selectedProfIds.contains(p['id'])).toList();
+    final allInactive = selectedProfs.isNotEmpty && selectedProfs.every((p) => p['is_active'] != true);
 
     return Material(
       elevation: 12,
@@ -1152,7 +1155,10 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               ),
             ),
             // Actions
-            _buildSelectionAction(Icons.archive_outlined, 'Archiver', Colors.white70, () => _bulkArchive(context)),
+            if (allInactive)
+              _buildSelectionAction(Icons.unarchive_outlined, 'Désarchiver', Colors.white, () => _bulkUnarchive(context))
+            else
+              _buildSelectionAction(Icons.archive_outlined, 'Archiver', Colors.white70, () => _bulkArchive(context)),
             _buildSelectionAction(Icons.delete_outline, 'Supprimer', const Color(0xFFFCA5A5), () => _bulkDelete(context)),
             // Close button
             Container(
@@ -1307,6 +1313,135 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                   label: const Text('Archiver', style: TextStyle(fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.warning, foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _bulkUnarchive(BuildContext context) {
+    final count = _selectedProfIds.length;
+    final profsAsync = ref.read(professorsProvider);
+    final allProfs = profsAsync.value ?? [];
+    final selectedProfs = allProfs.where((p) => _selectedProfIds.contains(p['id'])).toList();
+    final singleProf = selectedProfs.length == 1 ? selectedProfs.first : null;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.unarchive_outlined, color: AppColors.primary, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                count == 1 && singleProf != null
+                    ? 'Désarchiver ce professeur ?'
+                    : 'Désarchiver $count professeur${count > 1 ? 's' : ''} ?',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ],
+          ),
+          content: count == 1 && singleProf != null
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          UserAvatar(
+                            name: singleProf['full_name'] as String? ?? 'Professeur',
+                            photoUrl: singleProf['photo_url'] as String?,
+                            radius: 18,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  singleProf['full_name'] as String? ?? 'Professeur',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  (singleProf['speciality'] as String?) ?? 'Enseignant',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.slate500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Ce professeur sera désarchivé et réactivé.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                  ],
+                )
+              : Text('$count professeur${count > 1 ? 's seront désarchivés' : ' sera désarchivé'} et réactivé${count > 1 ? 's' : ''}.'),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    final ids = _selectedProfIds.toList();
+                    setState(() => _selectedProfIds.clear());
+                    Navigator.pop(ctx);
+                    ref.read(professorsProvider.notifier).toggleArchive(ids, true);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$count professeur${count > 1 ? 's désarchivés' : ' désarchivé'}'), backgroundColor: AppColors.success),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.unarchive_outlined, size: 16),
+                  label: const Text('Désarchiver', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary, foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

@@ -655,6 +655,8 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       throw Exception('Une création de période est déjà en cours. Veuillez patienter.');
     }
     _isMutating = true;
+    final previousState = state.asData?.value;
+    state = const AsyncLoading();
     try {
       final admin = SupabaseConfig.adminClient;
       final user = SupabaseConfig.client.auth.currentUser;
@@ -822,6 +824,11 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       await _refreshCurrentSemester(schoolId);
       final fresh = await _load();
       state = AsyncData(fresh);
+    } catch (e) {
+      if (previousState != null) {
+        state = AsyncData(previousState);
+      }
+      rethrow;
     } finally {
       _isMutating = false;
     }
@@ -920,6 +927,8 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       throw Exception('Une opération est déjà en cours. Veuillez patienter.');
     }
     _isMutating = true;
+    final previousState = state.asData?.value;
+    state = const AsyncLoading();
     try {
       final admin = SupabaseConfig.adminClient;
       final user = SupabaseConfig.client.auth.currentUser;
@@ -991,6 +1000,11 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       await _refreshCurrentSemester(schoolId);
       final fresh = await _load();
       state = AsyncData(fresh);
+    } catch (e) {
+      if (previousState != null) {
+        state = AsyncData(previousState);
+      }
+      rethrow;
     } finally {
       _isMutating = false;
     }

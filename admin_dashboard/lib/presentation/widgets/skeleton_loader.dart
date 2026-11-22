@@ -2121,7 +2121,8 @@ class SingleStudentGradeEntrySkeletonLoader extends StatelessWidget {
 
 /// Skeleton loader precisely matching the Historique d'absences screen (Image 3)
 class StudentAbsencesSkeletonLoader extends StatelessWidget {
-  const StudentAbsencesSkeletonLoader({super.key});
+  final bool showHeader;
+  const StudentAbsencesSkeletonLoader({super.key, this.showHeader = true});
 
   @override
   Widget build(BuildContext context) {
@@ -2134,24 +2135,26 @@ class StudentAbsencesSkeletonLoader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── TOP BAR: BACK ARROW + TITLE + VOIR LE PROFIL ──
-              Row(
-                children: const [
-                  SkeletonBox(width: 40, height: 40, borderRadius: 10),
-                  SizedBox(width: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SkeletonBox(width: 200, height: 22),
-                      SizedBox(height: 4),
-                      SkeletonBox(width: 130, height: 13),
-                    ],
-                  ),
-                  Spacer(),
-                  SkeletonBox(width: 110, height: 38, borderRadius: 10),
-                ],
-              ),
-              const SizedBox(height: 24),
+              if (showHeader) ...[
+                // ── TOP BAR: BACK ARROW + TITLE + VOIR LE PROFIL ──
+                Row(
+                  children: const [
+                    SkeletonBox(width: 40, height: 40, borderRadius: 10),
+                    SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SkeletonBox(width: 200, height: 22),
+                        SizedBox(height: 4),
+                        SkeletonBox(width: 130, height: 13),
+                      ],
+                    ),
+                    Spacer(),
+                    SkeletonBox(width: 110, height: 38, borderRadius: 10),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ],
 
               // ── PROFILE SUMMARY CARD ──
               Container(

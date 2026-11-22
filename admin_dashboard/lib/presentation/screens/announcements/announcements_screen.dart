@@ -3620,7 +3620,7 @@ class _AnnouncementComposerDialogState
               ),
               error: (_, __) => const SizedBox.shrink(),
               data: (state) {
-                final teachers = state.teachers;
+                final teachers = state.teachers.where((t) => t.isActive).toList();
                 // Score and filter
                 final scored = teachers
                     .map((t) {

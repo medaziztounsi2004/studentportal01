@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../../core/config/supabase_config.dart';
 import '../../data/models/class_model.dart';
 
@@ -52,6 +53,56 @@ class AbsenceModel {
     required this.createdAt,
   });
 
+  AbsenceModel copyWith({
+    String? id,
+    String? enrollmentId,
+    String? subjectOfferingId,
+    String? studentId,
+    String? studentName,
+    String? studentPhotoUrl,
+    String? studentEmail,
+    String? studentPhone,
+    String? studentCode,
+    String? niveauName,
+    String? className,
+    String? classId,
+    String? subjectName,
+    String? subjectCode,
+    String? teacherName,
+    String? teacherPhotoUrl,
+    DateTime? date,
+    double? hoursAbsent,
+    String? sessionType,
+    String? reason,
+    bool? justified,
+    DateTime? createdAt,
+  }) {
+    return AbsenceModel(
+      id: id ?? this.id,
+      enrollmentId: enrollmentId ?? this.enrollmentId,
+      subjectOfferingId: subjectOfferingId ?? this.subjectOfferingId,
+      studentId: studentId ?? this.studentId,
+      studentName: studentName ?? this.studentName,
+      studentPhotoUrl: studentPhotoUrl ?? this.studentPhotoUrl,
+      studentEmail: studentEmail ?? this.studentEmail,
+      studentPhone: studentPhone ?? this.studentPhone,
+      studentCode: studentCode ?? this.studentCode,
+      niveauName: niveauName ?? this.niveauName,
+      className: className ?? this.className,
+      classId: classId ?? this.classId,
+      subjectName: subjectName ?? this.subjectName,
+      subjectCode: subjectCode ?? this.subjectCode,
+      teacherName: teacherName ?? this.teacherName,
+      teacherPhotoUrl: teacherPhotoUrl ?? this.teacherPhotoUrl,
+      date: date ?? this.date,
+      hoursAbsent: hoursAbsent ?? this.hoursAbsent,
+      sessionType: sessionType ?? this.sessionType,
+      reason: reason ?? this.reason,
+      justified: justified ?? this.justified,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   factory AbsenceModel.fromJson(Map<String, dynamic> json) {
     final enrollments = json['enrollments'] as Map<String, dynamic>?;
     final users = enrollments?['users'] as Map<String, dynamic>?;
@@ -86,41 +137,6 @@ class AbsenceModel {
       createdAt: DateTime.parse(
         json['created_at'] as String? ?? DateTime.now().toIso8601String(),
       ),
-    );
-  }
-
-  AbsenceModel copyWith({
-    String? reason,
-    bool? justified,
-    double? hoursAbsent,
-    String? sessionType,
-    String? teacherName,
-    String? teacherPhotoUrl,
-    String? studentPhotoUrl,
-  }) {
-    return AbsenceModel(
-      id: id,
-      enrollmentId: enrollmentId,
-      subjectOfferingId: subjectOfferingId,
-      studentId: studentId,
-      studentName: studentName,
-      studentPhotoUrl: studentPhotoUrl ?? this.studentPhotoUrl,
-      studentEmail: studentEmail,
-      studentPhone: studentPhone,
-      studentCode: studentCode,
-      niveauName: niveauName,
-      className: className,
-      classId: classId,
-      subjectName: subjectName,
-      subjectCode: subjectCode,
-      teacherName: teacherName ?? this.teacherName,
-      teacherPhotoUrl: teacherPhotoUrl ?? this.teacherPhotoUrl,
-      date: date,
-      hoursAbsent: hoursAbsent ?? this.hoursAbsent,
-      sessionType: sessionType ?? this.sessionType,
-      reason: reason ?? this.reason,
-      justified: justified ?? this.justified,
-      createdAt: createdAt,
     );
   }
 }
@@ -1128,62 +1144,163 @@ class StudentAbsencesData {
     required this.unjustifiedCount,
     required this.totalHours,
   });
+
+  StudentAbsencesData copyWith({
+    Map<String, dynamic>? user,
+    List<AbsenceModel>? absences,
+    int? totalAbsences,
+    int? justifiedCount,
+    int? unjustifiedCount,
+    double? totalHours,
+  }) {
+    return StudentAbsencesData(
+      user: user ?? this.user,
+      absences: absences ?? this.absences,
+      totalAbsences: totalAbsences ?? this.totalAbsences,
+      justifiedCount: justifiedCount ?? this.justifiedCount,
+      unjustifiedCount: unjustifiedCount ?? this.unjustifiedCount,
+      totalHours: totalHours ?? this.totalHours,
+    );
+  }
 }
 
-/// Loads a single student's profile info and absence history
-final studentAbsencesProvider = FutureProvider.family<StudentAbsencesData, String>((ref, studentId) async {
-  final supabase = SupabaseConfig.adminClient;
+class StudentAbsencesNotifier extends StateNotifier<AsyncValue<StudentAbsencesData>> {
+  final String studentId;
+  StudentAbsencesNotifier(this.studentId) : super(const AsyncValue.loading()) {
+    load();
+  }
 
-  // Load user basic info
-  final userResp = await supabase
-      .from('users')
-      .select('''
-        id, full_name, email, phone, photo_url, student_code, gender,
-        date_of_birth, nationality, address,
-        enrollments(
-          id,
-          classes(id, name, niveaux(id, name, code))
-        )
-      ''')
-      .eq('id', studentId)
-      .maybeSingle();
+  Future<void> load() async {
+    try {
+      final data = await _fetchData(studentId);
+      state = AsyncValue.data(data);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
 
-  final user = userResp ?? <String, dynamic>{};
+  static Future<StudentAbsencesData> _fetchData(String studentId) async {
+    final supabase = SupabaseConfig.adminClient;
 
-  // Load absence records for this student
-  final absencesResp = await supabase
-      .from('absence_records')
-      .select('''
-        *,
-        enrollments(
-          id,
-          users(id, full_name, email, phone, student_code),
-          classes(id, name, niveaux(id, name, code))
-        ),
-        subject_offerings(
-          id,
-          subjects(id, name, code),
-          users!teacher_id(id, full_name, photo_url)
-        )
-      ''')
-      .eq('student_id', studentId)
-      .order('date', ascending: false)
-      .order('created_at', ascending: false)
-      .order('id', ascending: false);
+    final userResp = await supabase
+        .from('users')
+        .select('''
+          id, full_name, email, phone, photo_url, student_code, gender,
+          date_of_birth, nationality, address,
+          enrollments(
+            id,
+            classes(id, name, niveaux(id, name, code))
+          )
+        ''')
+        .eq('id', studentId)
+        .maybeSingle();
 
-  final absences = (absencesResp as List)
-      .map((json) => AbsenceModel.fromJson(json))
-      .toList();
+    final user = userResp ?? <String, dynamic>{};
 
-  final justifiedCount = absences.where((a) => a.justified).length;
-  final totalHours = absences.fold<double>(0, (sum, a) => sum + a.hoursAbsent);
+    final absencesResp = await supabase
+        .from('absence_records')
+        .select('''
+          *,
+          enrollments(
+            id,
+            users(id, full_name, email, phone, student_code),
+            classes(id, name, niveaux(id, name, code))
+          ),
+          subject_offerings(
+            id,
+            subjects(id, name, code),
+            users!teacher_id(id, full_name, photo_url)
+          )
+        ''')
+        .eq('student_id', studentId)
+        .order('date', ascending: false)
+        .order('created_at', ascending: false)
+        .order('id', ascending: false);
 
-  return StudentAbsencesData(
-    user: user,
-    absences: absences,
-    totalAbsences: absences.length,
-    justifiedCount: justifiedCount,
-    unjustifiedCount: absences.length - justifiedCount,
-    totalHours: totalHours,
-  );
+    final absences = (absencesResp as List)
+        .map((json) => AbsenceModel.fromJson(json))
+        .toList();
+
+    final justifiedCount = absences.where((a) => a.justified).length;
+    final totalHours = absences.fold<double>(0, (sum, a) => sum + a.hoursAbsent);
+
+    return StudentAbsencesData(
+      user: user,
+      absences: absences,
+      totalAbsences: absences.length,
+      justifiedCount: justifiedCount,
+      unjustifiedCount: absences.length - justifiedCount,
+      totalHours: totalHours,
+    );
+  }
+
+  void toggleJustified(String absenceId, bool newJustified) {
+    final current = state.value;
+    if (current == null) return;
+    final updated = current.absences.map((a) {
+      if (a.id == absenceId) {
+        return a.copyWith(justified: newJustified);
+      }
+      return a;
+    }).toList();
+    final justifiedCount = updated.where((a) => a.justified).length;
+    state = AsyncValue.data(current.copyWith(
+      absences: updated,
+      justifiedCount: justifiedCount,
+      unjustifiedCount: updated.length - justifiedCount,
+    ));
+  }
+
+  void removeAbsence(String absenceId) {
+    final current = state.value;
+    if (current == null) return;
+    final updated = current.absences.where((a) => a.id != absenceId).toList();
+    final justifiedCount = updated.where((a) => a.justified).length;
+    final totalHours = updated.fold<double>(0, (sum, a) => sum + a.hoursAbsent);
+    state = AsyncValue.data(current.copyWith(
+      absences: updated,
+      totalAbsences: updated.length,
+      justifiedCount: justifiedCount,
+      unjustifiedCount: updated.length - justifiedCount,
+      totalHours: totalHours,
+    ));
+  }
+
+  void bulkToggleJustified(List<String> ids, bool newJustified) {
+    final current = state.value;
+    if (current == null) return;
+    final idSet = ids.toSet();
+    final updated = current.absences.map((a) {
+      if (idSet.contains(a.id)) {
+        return a.copyWith(justified: newJustified);
+      }
+      return a;
+    }).toList();
+    final justifiedCount = updated.where((a) => a.justified).length;
+    state = AsyncValue.data(current.copyWith(
+      absences: updated,
+      justifiedCount: justifiedCount,
+      unjustifiedCount: updated.length - justifiedCount,
+    ));
+  }
+
+  void bulkRemove(List<String> ids) {
+    final current = state.value;
+    if (current == null) return;
+    final idSet = ids.toSet();
+    final updated = current.absences.where((a) => !idSet.contains(a.id)).toList();
+    final justifiedCount = updated.where((a) => a.justified).length;
+    final totalHours = updated.fold<double>(0, (sum, a) => sum + a.hoursAbsent);
+    state = AsyncValue.data(current.copyWith(
+      absences: updated,
+      totalAbsences: updated.length,
+      justifiedCount: justifiedCount,
+      unjustifiedCount: updated.length - justifiedCount,
+      totalHours: totalHours,
+    ));
+  }
+}
+
+final studentAbsencesProvider = StateNotifierProvider.family<StudentAbsencesNotifier, AsyncValue<StudentAbsencesData>, String>((ref, studentId) {
+  return StudentAbsencesNotifier(studentId);
 });

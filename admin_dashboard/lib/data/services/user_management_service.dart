@@ -236,6 +236,11 @@ class UserManagementService {
           'is_active': isActive,
         }).inFilter('user_id', userIds);
       } catch (_) {}
+      try {
+        await _client.from('teacher_assignments').update({
+          'is_active': isActive,
+        }).inFilter('teacher_id', userIds);
+      } catch (_) {}
       return true;
     } catch (e) {
       debugPrint('UserManagementService.toggleArchive table update error: $e');

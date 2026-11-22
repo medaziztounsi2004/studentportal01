@@ -1113,40 +1113,76 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                       selectedYearId == null
                                   ? null
                                   : () async {
+                                      if (isNew) {
+                                        Navigator.pop(ctx);
+                                        final notifier = ref.read(
+                                          semestersProvider.notifier,
+                                        );
+                                        notifier.create(
+                                          name: nameCtrl.text.trim(),
+                                          number: semesterNumber,
+                                          startDate: startDate,
+                                          endDate: endDate,
+                                          academicYearId: selectedYearId,
+                                        ).then((_) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                                    SizedBox(width: 8),
+                                                    Text('Période créée avec succès'),
+                                                  ],
+                                                ),
+                                                backgroundColor: Color(0xFF10B981),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
+                                          }
+                                        }).catchError((e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Row(
+                                                  children: [
+                                                    const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(child: Text(UserFriendlyError.format(e, fallback: 'Unable to save this academic period right now. Please check your dates and try again.'))),
+                                                  ],
+                                                ),
+                                                backgroundColor: const Color(0xFFEF4444),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
+                                          }
+                                        });
+                                        return;
+                                      }
                                       setDialogState(() => isSubmitting = true);
                                       try {
                                         final notifier = ref.read(
                                           semestersProvider.notifier,
                                         );
-                                        if (isNew) {
-                                          await notifier.create(
-                                            name: nameCtrl.text.trim(),
-                                            number: semesterNumber,
-                                            startDate: startDate,
-                                            endDate: endDate,
-                                            academicYearId: selectedYearId,
-                                          );
-                                        } else {
-                                          await notifier.updateSemester(
-                                            id: semester.id,
-                                            name: nameCtrl.text.trim(),
-                                            number: semesterNumber,
-                                            startDate: startDate,
-                                            endDate: endDate,
-                                          );
-                                        }
+                                        await notifier.updateSemester(
+                                          id: semester.id,
+                                          name: nameCtrl.text.trim(),
+                                          number: semesterNumber,
+                                          startDate: startDate,
+                                          endDate: endDate,
+                                        );
                                         if (ctx.mounted) Navigator.pop(ctx);
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
+                                            const SnackBar(
                                               content: Row(
                                                 children: [
-                                                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                                                  const SizedBox(width: 8),
-                                                  Text(isNew ? 'Période créée avec succès' : 'Période mise à jour avec succès'),
+                                                  Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                                  SizedBox(width: 8),
+                                                  Text('Période mise à jour avec succès'),
                                                 ],
                                               ),
-                                              backgroundColor: const Color(0xFF10B981),
+                                              backgroundColor: Color(0xFF10B981),
                                               behavior: SnackBarBehavior.floating,
                                             ),
                                           );
@@ -1970,19 +2006,17 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             child: ElevatedButton(
                               onPressed: isSubmitting || errorMessage != null
                                   ? null
-                                  : () async {
-                                      setDialogState(() => isSubmitting = true);
-                                      try {
-                                        final notifier = ref.read(
-                                          semestersProvider.notifier,
-                                        );
-                                        await notifier.createPeriods(
-                                          type: selectedType,
-                                          ranges: ranges,
-                                          manualVacations: manualVacations,
-                                          examPeriods: examPeriods,
-                                        );
-                                        if (ctx.mounted) Navigator.pop(ctx);
+                                  : () {
+                                      Navigator.pop(ctx);
+                                      final notifier = ref.read(
+                                        semestersProvider.notifier,
+                                      );
+                                      notifier.createPeriods(
+                                        type: selectedType,
+                                        ranges: ranges,
+                                        manualVacations: manualVacations,
+                                        examPeriods: examPeriods,
+                                      ).then((_) {
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(
@@ -1998,8 +2032,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                             ),
                                           );
                                         }
-                                      } catch (e) {
-                                        setDialogState(() => isSubmitting = false);
+                                      }).catchError((e) {
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
@@ -2015,7 +2048,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                                             ),
                                           );
                                         }
-                                      }
+                                      });
                                     },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: _brand,

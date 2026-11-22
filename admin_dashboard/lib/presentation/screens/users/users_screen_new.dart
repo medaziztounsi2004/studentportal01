@@ -517,16 +517,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     _currentPage = 1;
                   }),
                 ),
-                const SizedBox(width: 2),
-                _StatusPill(
-                  label: 'Archivés',
-                  count: archivedCount,
-                  isActive: _statusFilter == 'archived',
-                  onTap: () => setState(() {
-                    _statusFilter = 'archived';
-                    _currentPage = 1;
-                  }),
-                ),
               ],
             ),
           ),
@@ -730,6 +720,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   // ====================== FLOATING SELECTION BAR ======================
   Widget _buildFloatingSelectionBar(BuildContext context, AsyncValue<UsersState> usersAsync) {
     final count = _selectedUserIds.length;
+    final allUsers = usersAsync.value?.users ?? [];
+    final selectedUsers = allUsers.where((u) => _selectedUserIds.contains(u.id)).toList();
+    final allInactive = selectedUsers.isNotEmpty && selectedUsers.every((u) => !u.isActive);
 
     return Center(
       child: Container(
@@ -766,14 +759,29 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               onTap: () => _bulkExport(),
             ),
             const SizedBox(width: 8),
-            // Archive
-            _FloatingBarButton(
-              icon: Icons.archive_outlined,
-              label: 'Archiver',
-              onTap: () {
-                // Placeholder for archive functionality
-              },
-            ),
+            // Activer / Suspendre
+            if (allInactive)
+              _FloatingBarButton(
+                icon: Icons.check_circle_outline_rounded,
+                label: 'Activer',
+                color: AppColors.success,
+                onTap: () {
+                  final ids = _selectedUserIds.toList();
+                  ref.read(usersProvider.notifier).bulkToggleArchive(ids, true);
+                  setState(() => _selectedUserIds.clear());
+                },
+              )
+            else
+              _FloatingBarButton(
+                icon: Icons.pause_circle_outline_rounded,
+                label: 'Suspendre',
+                color: AppColors.warning,
+                onTap: () {
+                  final ids = _selectedUserIds.toList();
+                  ref.read(usersProvider.notifier).bulkToggleArchive(ids, false);
+                  setState(() => _selectedUserIds.clear());
+                },
+              ),
             const SizedBox(width: 8),
             // Change class
             _FloatingBarButton(
@@ -1168,6 +1176,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             const DataColumn(label: Text('CLASSE')),
             const DataColumn(label: Text('CODE ÉTUDIANT')),
             const DataColumn(label: Text('TÉLÉPHONE')),
+            const DataColumn(label: Text('STATUT')),
             const DataColumn(label: Text('CRÉÉ LE')),
             const DataColumn(label: Text('')),
           ],
@@ -1341,6 +1350,38 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     toastMessage: 'Téléphone copié!',
                   ),
                 ),
+                // Statut (borderless pill)
+                DataCell(
+                  Builder(
+                    builder: (context) {
+                      final isAct = u.isActive;
+                      final isPaused = u.accountStatus == 'paused_unpaid';
+                      final label = !isAct ? 'Inactif' : (isPaused ? 'Suspendu' : 'Actif');
+                      final bg = !isAct
+                          ? const Color(0xFFFEF2F2)
+                          : (isPaused ? const Color(0xFFFFFBEB) : const Color(0xFFECFDF5));
+                      final fg = !isAct
+                          ? const Color(0xFFDC2626)
+                          : (isPaused ? const Color(0xFFD97706) : const Color(0xFF059669));
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: fg,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
                 // Créé le
                 DataCell(
                   Text(
@@ -1407,6 +1448,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             const DataColumn(label: Text('NOM COMPLET / EMAIL')),
             const DataColumn(label: Text('RÔLE')),
             const DataColumn(label: Text('TÉLÉPHONE')),
+            const DataColumn(label: Text('STATUT')),
             const DataColumn(label: Text('CRÉÉ LE')),
             const DataColumn(label: Text('')),
           ],
@@ -1478,6 +1520,33 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       color: u.phone != null ? AppColors.textSecondary : AppColors.textTertiary,
                     ),
                     toastMessage: 'Téléphone copié!',
+                  ),
+                ),
+                // Statut (borderless pill)
+                DataCell(
+                  Builder(
+                    builder: (context) {
+                      final isAct = u.isActive;
+                      final label = isAct ? 'Actif' : 'Inactif';
+                      final bg = !isAct ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5);
+                      final fg = !isAct ? const Color(0xFFDC2626) : const Color(0xFF059669);
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: fg,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 // Créé le
@@ -1575,8 +1644,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           case 'reset_password':
             // Password reset placeholder
             break;
-          case 'archive':
-            // Archive placeholder
+          case 'toggle_status':
+            final newActive = !u.isActive;
+            ref.read(usersProvider.notifier).toggleUserArchive(u.id, newActive);
             break;
           case 'delete':
             _confirmDelete(context, u);
@@ -1614,16 +1684,31 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             ],
           ),
         ),
-        PopupMenuItem(
-          value: 'archive',
-          child: Row(
-            children: [
-              Icon(Icons.archive_outlined, size: 18, color: AppColors.textSecondary),
-              const SizedBox(width: 10),
-              const Text('Archiver', style: TextStyle(fontSize: 13)),
-            ],
+        if (u.isActive)
+          PopupMenuItem(
+            value: 'toggle_status',
+            child: Row(
+              children: [
+                const Icon(Icons.pause_circle_outline_rounded, size: 18, color: AppColors.warning),
+                const SizedBox(width: 10),
+                Text(
+                  u.role == 'student' ? 'Suspendre' : 'Désactiver',
+                  style: const TextStyle(fontSize: 13, color: AppColors.warning),
+                ),
+              ],
+            ),
+          )
+        else
+          PopupMenuItem(
+            value: 'toggle_status',
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline_rounded, size: 18, color: AppColors.success),
+                const SizedBox(width: 10),
+                const Text('Activer', style: TextStyle(fontSize: 13, color: AppColors.success)),
+              ],
+            ),
           ),
-        ),
         const PopupMenuDivider(),
         PopupMenuItem(
           value: 'delete',

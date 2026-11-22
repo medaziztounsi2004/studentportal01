@@ -4079,7 +4079,7 @@ class _SubjectsManagementScreenState
             final gradeLevels = stateAsync.value?.gradeLevels ?? [];
             final allTeachersUnfiltered =
                 stateAsync.value?.teachers
-                    .where((t) => t.role == 'teacher')
+                    .where((t) => t.role == 'teacher' && t.isActive)
                     .toList() ??
                 [];
             final teacherAssignments = stateAsync.value?.teacherAssignments ?? [];
@@ -7096,6 +7096,7 @@ class _SubjectsManagementScreenState
                               dropdownColor: Colors.white,
                               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFF1A1A2E)),
                               items: state.teachers
+                                  .where((t) => t.isActive || t.id == editTeacherId)
                                   .map(
                                     (t) => DropdownMenuItem(
                                       value: t.id,

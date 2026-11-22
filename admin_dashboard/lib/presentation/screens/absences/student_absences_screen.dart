@@ -34,7 +34,6 @@ class StudentAbsencesScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
-  bool _isActionInProgress = false;
   String _searchQuery = '';
   String _sortField = 'date'; // 'date', 'matiere', 'status'
   bool _sortAscending = false;
@@ -50,21 +49,25 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
     VoidCallback? onPressed,
     bool isActive = false,
   }) {
-    return IconButton(
-      icon: Icon(icon, size: 20),
-      tooltip: tooltip,
-      onPressed: onPressed,
-      color: isActive ? const Color(0xFF655DD5) : AppColors.textTertiary,
-      style: IconButton.styleFrom(
-        backgroundColor: isActive ? const Color(0xFFF5F3FF) : Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(
-            color: isActive ? const Color(0xFF655DD5).withOpacity(0.2) : Colors.transparent,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: IconButton(
+        icon: Icon(icon, size: 20),
+        tooltip: tooltip,
+        onPressed: onPressed,
+        mouseCursor: SystemMouseCursors.click,
+        color: isActive ? const Color(0xFF655DD5) : AppColors.textTertiary,
+        style: IconButton.styleFrom(
+          backgroundColor: isActive ? const Color(0xFFF5F3FF) : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(
+              color: isActive ? const Color(0xFF655DD5).withOpacity(0.2) : Colors.transparent,
+            ),
           ),
         ),
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
       ),
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
     );
   }
 
@@ -83,6 +86,12 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
   @override
   Widget build(BuildContext context) {
     final asyncData = ref.watch(studentAbsencesProvider(widget.studentId));
+    final user = asyncData.value?.user;
+    final fullName = user?['full_name'] as String? ?? 'Étudiant';
+    final enrollments = (user?['enrollments'] as List?) ?? const [];
+    final className = enrollments.isNotEmpty
+        ? (enrollments.first as Map<String, dynamic>?)?['classes']?['name'] as String?
+        : null;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -90,10 +99,19 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
         children: [
           const AdminSidebar(currentRoute: '/absences'),
           Expanded(
-            child: _isActionInProgress
-                ? const StudentAbsencesSkeletonLoader()
-                : asyncData.when(
-                    loading: () => const StudentAbsencesSkeletonLoader(),
+            child: asyncData.when(
+              loading: () => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 32, 32, 0),
+                    child: _buildHeader(fullName, className),
+                  ),
+                  const Expanded(
+                    child: StudentAbsencesSkeletonLoader(showHeader: false),
+                  ),
+                ],
+              ),
               error: (e, _) => Center(
                 child: Container(
                   padding: const EdgeInsets.all(32),
@@ -1680,38 +1698,38 @@ const SizedBox.shrink(),
 
   // ==================== ACTIONS ====================
   Future<void> _toggleJustified(AbsenceModel absence) async {
-    setState(() => _isActionInProgress = true);
+    final nextJustified = !absence.justified;
+    ref.read(studentAbsencesProvider(widget.studentId).notifier).toggleJustified(absence.id, nextJustified);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            nextJustified ? 'Absence marquée justifiée' : 'Absence marquée non justifiée',
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
     try {
       await SupabaseConfig.adminClient
           .from('absence_records')
-          .update({'justified': !absence.justified})
+          .update({'justified': nextJustified})
           .eq('id', absence.id);
-      ref.invalidate(studentAbsencesProvider(widget.studentId));
-      await ref.read(studentAbsencesProvider(widget.studentId).future);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              absence.justified
-                  ? 'Absence marquée non justifiée'
-                  : 'Absence marquée justifiée',
-            ),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } catch (e) {
+      ref.read(studentAbsencesProvider(widget.studentId).notifier).toggleJustified(absence.id, absence.justified);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(UserFriendlyError.format(e)),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 
@@ -1789,34 +1807,36 @@ const SizedBox.shrink(),
 
     if (confirmed != true) return;
 
-    setState(() => _isActionInProgress = true);
+    ref.read(studentAbsencesProvider(widget.studentId).notifier).removeAbsence(absence.id);
+    setState(() => _selectedAbsences.remove(absence.id));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Absence supprimée'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
     try {
       await SupabaseConfig.adminClient
           .from('absence_records')
           .delete()
           .eq('id', absence.id);
-      ref.invalidate(studentAbsencesProvider(widget.studentId));
-      await ref.read(studentAbsencesProvider(widget.studentId).future);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Absence supprimée'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } catch (e) {
+      ref.read(studentAbsencesProvider(widget.studentId).notifier).load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(UserFriendlyError.format(e)),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 
@@ -1824,38 +1844,40 @@ const SizedBox.shrink(),
   Future<void> _bulkToggleJustified(bool justified) async {
     if (_selectedAbsences.isEmpty) return;
     final ids = _selectedAbsences.toList();
-    setState(() => _isActionInProgress = true);
+    ref.read(studentAbsencesProvider(widget.studentId).notifier).bulkToggleJustified(ids, justified);
+    setState(() => _selectedAbsences.clear());
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            justified
+                ? '${ids.length} absence(s) marquée(s) justifiée(s)'
+                : '${ids.length} absence(s) marquée(s) non justifiée(s)',
+          ),
+          backgroundColor: justified ? AppColors.success : AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
     try {
       await SupabaseConfig.adminClient
           .from('absence_records')
           .update({'justified': justified})
           .inFilter('id', ids);
-      ref.invalidate(studentAbsencesProvider(widget.studentId));
-      await ref.read(studentAbsencesProvider(widget.studentId).future);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              justified
-                  ? '${ids.length} absence(s) marquée(s) justifiée(s)'
-                  : '${ids.length} absence(s) marquée(s) non justifiée(s)',
-            ),
-            backgroundColor: justified ? AppColors.success : AppColors.warning,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } catch (e) {
+      ref.read(studentAbsencesProvider(widget.studentId).notifier).load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(UserFriendlyError.format(e)),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 
@@ -1936,35 +1958,36 @@ const SizedBox.shrink(),
     if (confirmed != true) return;
 
     final ids = _selectedAbsences.toList();
-    setState(() => _isActionInProgress = true);
+    ref.read(studentAbsencesProvider(widget.studentId).notifier).bulkRemove(ids);
+    setState(() => _selectedAbsences.clear());
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$count absence(s) supprimée(s)'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
     try {
       await SupabaseConfig.adminClient
           .from('absence_records')
           .delete()
           .inFilter('id', ids);
-      ref.invalidate(studentAbsencesProvider(widget.studentId));
-      await ref.read(studentAbsencesProvider(widget.studentId).future);
-      if (mounted) {
-        setState(() => _selectedAbsences.clear());
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$count absence(s) supprimée(s)'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } catch (e) {
+      ref.read(studentAbsencesProvider(widget.studentId).notifier).load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(UserFriendlyError.format(e)),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 

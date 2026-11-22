@@ -559,6 +559,10 @@ final classAllTeachersProvider =
         debugPrint('classAllTeachersProvider: users is null for row, skipping');
         continue;
       }
+      if (u['is_active'] != true) {
+        debugPrint('classAllTeachersProvider: teacher ${u['full_name']} is inactive, skipping');
+        continue;
+      }
       final tid = u['id']?.toString() ?? '';
       final subjectName = s?['name']?.toString();
       final key = '$tid|$subjectName';
@@ -586,7 +590,7 @@ final classAllTeachersProvider =
   try {
     final offerings = await supabase
         .from('subject_offerings')
-        .select('teacher_id, subjects(name, code), users(id, full_name, email, photo_url)')
+        .select('teacher_id, subjects(name, code), users(id, full_name, email, photo_url, is_active)')
         .eq('class_id', classId)
         .not('teacher_id', 'is', null);
 
@@ -596,6 +600,7 @@ final classAllTeachersProvider =
       final u = o['users'] as Map<String, dynamic>?;
       final s = o['subjects'] as Map<String, dynamic>?;
       if (u == null) continue;
+      if (u['is_active'] != true) continue;
       final tid = u['id']?.toString() ?? '';
       final subjectName = s?['name']?.toString();
       final key = '$tid|$subjectName';

@@ -686,6 +686,68 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           onTap: _isTogglingAccountStatus
               ? null
               : () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    barrierColor: Colors.black.withOpacity(0.08),
+                    builder: (dCtx) => BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                      child: AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: isPaused ? AppColors.successSoft : AppColors.warningSoft,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                isPaused ? Icons.check_circle_outline_rounded : Icons.pause_circle_outline_rounded,
+                                color: isPaused ? AppColors.success : AppColors.warning,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                isPaused ? 'Activer le compte ?' : 'Suspendre le compte ?',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                              ),
+                            ),
+                          ],
+                        ),
+                        content: Text(
+                          isPaused
+                              ? 'Voulez-vous vraiment réactiver l\'accès à la plateforme pour cet élève ?'
+                              : 'Voulez-vous vraiment suspendre l\'accès à la plateforme pour cet élève ?',
+                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dCtx, false),
+                            child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textTertiary)),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(dCtx, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isPaused ? AppColors.success : AppColors.warning,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              isPaused ? 'Activer' : 'Suspendre',
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                  if (confirm != true) return;
+
                   final nextStatus = isPaused ? 'active' : 'paused_unpaid';
                   // Instant optimistic UI update
                   setState(() {
