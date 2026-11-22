@@ -45,8 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Cette application utilise l'appareil photo pour vous permettre de prendre une photo de profil et d'ajouter des pièces jointes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to your photo library to select a profile picture.</string>
+	<string>Cette application a besoin d'accéder à votre galerie pour choisir votre photo de profil et vos documents.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Cette application a besoin d'enregistrer des photos dans votre galerie.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cette application nécessite l'accès au micro lors de l'utilisation de l'appareil photo si nécessaire.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Authentification biométrique pour sécuriser votre espace élève.</string>
 	<key>LSApplicationQueriesSchemes</key>
