@@ -14,7 +14,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/l10n/app_localizations.dart';
-import '../../../core/services/biometric_service.dart';
+import '../../../core/services/camera_photo_service.dart';
 import '../../../core/theme/arabic_typography.dart';
 import '../../../data/services/ai_data_provider.dart';
 import '../../../data/services/ai_service.dart';
@@ -925,35 +925,23 @@ I have **complete** access to your academic data — grades, timetable, absences
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    BiometricService.instance.setExternalIntentActive(true);
     try {
-      final picker = ImagePicker();
-      var image = await picker.pickImage(
+      final image = await CameraPhotoService.pickPhoto(
+        context: context,
         source: source,
         maxWidth: 1024,
         maxHeight: 1024,
       );
-      if (image == null && defaultTargetPlatform == TargetPlatform.android) {
-        final lost = await picker.retrieveLostData();
-        if (lost.file != null) {
-          image = lost.file;
-        }
-      }
       if (image != null && mounted) {
         // Convert image to text description for the AI
         setState(() {
           _pendingImage = image;
-          _pendingFileName = image!.name;
+          _pendingFileName = image.name;
           _pendingFileText =
               '[Image attached: ${image.name}] — The student has attached an image. Please ask them to describe it if you need to analyze its content, as image vision is not available in this mode.';
         });
       }
-    } catch (_) {
-    } finally {
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        BiometricService.instance.setExternalIntentActive(false);
-      });
-    }
+    } catch (_) {}
   }
 
   void _clearAttachment() {

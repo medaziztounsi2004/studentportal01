@@ -10,7 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/config/supabase_config.dart';
-import '../../../core/services/biometric_service.dart';
+import '../../../core/services/camera_photo_service.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/enrollment_model.dart';
@@ -44,31 +44,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _pickAndUploadPhoto(ImageSource source) async {
     if (_isUploadingPhoto) return;
 
-    BiometricService.instance.setExternalIntentActive(true);
-    XFile? image;
-    try {
-      final picker = ImagePicker();
-      image = await picker.pickImage(
-        source: source,
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 88,
-      );
-
-      // Support Android lost data recovery if camera caused activity recreation
-      if (image == null && defaultTargetPlatform == TargetPlatform.android) {
-        final lost = await picker.retrieveLostData();
-        if (lost.file != null) {
-          image = lost.file;
-        }
-      }
-    } catch (e) {
-      debugPrint('[ProfileScreen] Error picking photo: $e');
-    } finally {
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        BiometricService.instance.setExternalIntentActive(false);
-      });
-    }
+    final image = await CameraPhotoService.pickPhoto(
+      context: context,
+      source: source,
+      maxWidth: 1200,
+      maxHeight: 1200,
+      imageQuality: 88,
+    );
 
     if (image == null) return;
 
@@ -183,15 +165,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: _FloatingPhotoPickerCard(
                   onPickCamera: () {
                     Navigator.of(ctx).pop();
-                    Future.delayed(const Duration(milliseconds: 200), () {
-                      if (mounted) _pickAndUploadPhoto(ImageSource.camera);
-                    });
+                    _pickAndUploadPhoto(ImageSource.camera);
                   },
                   onPickGallery: () {
                     Navigator.of(ctx).pop();
-                    Future.delayed(const Duration(milliseconds: 200), () {
-                      if (mounted) _pickAndUploadPhoto(ImageSource.gallery);
-                    });
+                    _pickAndUploadPhoto(ImageSource.gallery);
                   },
                   onClose: () => Navigator.of(ctx).pop(),
                 ),
