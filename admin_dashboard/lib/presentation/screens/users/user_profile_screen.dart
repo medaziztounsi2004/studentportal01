@@ -16,6 +16,7 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
+import '../../widgets/avatar_cropper_dialog.dart';
 import 'user_form_dialog.dart';
 
 // ==================== USER PROFILE DATA MODEL ====================
@@ -360,6 +361,8 @@ class UserProfileScreen extends ConsumerStatefulWidget {
 
 class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   bool _isUploadingPhoto = false;
+  Uint8List? _optimisticPhotoBytes;
+  String? _optimisticPhotoUrl;
   bool _showPassword = false;
   bool _isResettingPassword = false;
   bool _isTogglingAccountStatus = false;
@@ -1122,14 +1125,53 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           Stack(
             alignment: Alignment.bottomRight,
             children: [
-              UserAvatar(
-                name: fullName,
-                photoUrl: photoUrl,
-                radius: 50,
-                gender: data.user['gender'] as String?,
-              ),
+              if (_isUploadingPhoto)
+                ShimmerLoading(
+                  isLoading: true,
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFE2E8F0),
+                      border: Border.all(
+                        color: const Color(0xFF6D4CF6).withOpacity(0.4),
+                        width: 2,
+                      ),
+                    ),
+                    child: _optimisticPhotoBytes != null
+                        ? ClipOval(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.memory(
+                                  _optimisticPhotoBytes!,
+                                  fit: BoxFit.cover,
+                                ),
+                                Container(
+                                  color: Colors.black.withOpacity(0.35),
+                                ),
+                                const Center(
+                                  child: IosLoader(color: Colors.white, size: 28),
+                                ),
+                              ],
+                            ),
+                          )
+                        : const Center(
+                            child: IosLoader(color: Color(0xFF6D4CF6), size: 28),
+                          ),
+                  ),
+                )
+              else
+                UserAvatar(
+                  name: fullName,
+                  photoUrl: _optimisticPhotoUrl ?? photoUrl,
+                  imageBytes: _optimisticPhotoBytes,
+                  radius: 50,
+                  gender: data.user['gender'] as String?,
+                ),
               GestureDetector(
-                onTap: _pickAndUploadPhoto,
+                onTap: _isUploadingPhoto ? null : _pickAndUploadPhoto,
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
@@ -2258,20 +2300,31 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     );
     if (result == null || result.files.isEmpty) return;
 
-    setState(() => _isUploadingPhoto = true);
-    try {
-      final file = result.files.first;
-      if (file.bytes == null) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
 
-      final ext = file.extension ?? 'jpg';
-      final path = 'avatars/${widget.userId}.$ext';
+    // Show cropper dialog to position and frame the avatar perfectly
+    final croppedBytes = await AvatarCropperDialog.show(
+      context: context,
+      rawImageBytes: file.bytes!,
+    );
+    if (croppedBytes == null) return; // User cancelled
+
+    setState(() {
+      _optimisticPhotoBytes = croppedBytes;
+      _isUploadingPhoto = true;
+    });
+
+    try {
+      final ext = 'png';
+      final path = 'avatars/${widget.userId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
       final supabase = Supabase.instance.client;
 
       await supabase.storage.from('avatars').uploadBinary(
         path,
-        file.bytes!,
-        fileOptions: const FileOptions(upsert: true),
+        croppedBytes,
+        fileOptions: const FileOptions(upsert: true, contentType: 'image/png'),
       );
 
       final publicUrl = supabase.storage.from('avatars').getPublicUrl(path);
@@ -2280,15 +2333,25 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           .from('users')
           .update({'photo_url': publicUrl}).eq('id', widget.userId);
 
+      if (mounted) {
+        setState(() {
+          _optimisticPhotoUrl = publicUrl;
+        });
+      }
+
       ref.invalidate(userProfileDataProvider(widget.userId));
+      ref.invalidate(usersProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo mise à jour !'), backgroundColor: AppColors.success),
+          const SnackBar(content: Text('Photo de profil mise à jour avec succès !'), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _optimisticPhotoBytes = null;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
         );

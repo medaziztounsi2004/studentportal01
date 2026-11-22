@@ -216,9 +216,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
   // ====================== HEADER ======================
   Widget _buildHeader(BuildContext context, AsyncValue<UsersState> usersAsync) {
-    final userCount = usersAsync.whenOrNull(data: (s) => s.users.length) ?? 0;
+    final userCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role != 'super_admin').length) ?? 0;
     final studentCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role == 'student').length) ?? 0;
-    final staffCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role != 'student').length) ?? 0;
+    final staffCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role != 'student' && u.role != 'super_admin').length) ?? 0;
 
     return Container(
       height: 80,
@@ -402,7 +402,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   // ====================== TABS ======================
   Widget _buildTabBar(BuildContext context, AsyncValue<UsersState> usersAsync) {
     final studentCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role == 'student').length) ?? 0;
-    final staffCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role != 'student').length) ?? 0;
+    final staffCount = usersAsync.whenOrNull(data: (s) => s.users.where((u) => u.role != 'student' && u.role != 'super_admin').length) ?? 0;
 
     return Container(
       decoration: BoxDecoration(
@@ -476,7 +476,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     final isStudentTab = _tabController.index == 0;
     final tabUsers = isStudentTab
         ? allUsers.where((u) => u.role == 'student').toList()
-        : allUsers.where((u) => u.role != 'student').toList();
+        : allUsers.where((u) => u.role != 'student' && u.role != 'super_admin').toList();
     final allCount = tabUsers.length;
     final activeCount = tabUsers.where((u) => u.isActive).length;
     final archivedCount = tabUsers.where((u) => !u.isActive).length;
@@ -866,7 +866,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
   // ====================== STAFF LIST ======================
   Widget _buildStaffList(BuildContext context, UsersState state) {
-    var users = state.users.where((u) => u.role != 'student').toList();
+    var users = state.users.where((u) => u.role != 'student' && u.role != 'super_admin').toList();
     users = _filterAndSort(users);
 
     final totalItems = users.length;

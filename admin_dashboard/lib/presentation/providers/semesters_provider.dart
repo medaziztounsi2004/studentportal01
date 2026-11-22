@@ -695,6 +695,37 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
     }
   }
 
+  Future<void> deleteAcademicYear(String id) async {
+    _isMutating = true;
+    final previousState = state.value;
+    try {
+      final schoolId = await _getSchoolId();
+      if (schoolId == null) throw Exception('Établissement introuvable');
+      final admin = SupabaseConfig.adminClient;
+
+      final year = previousState?.academicYears.where((y) => y.id == id).firstOrNull;
+      if (year?.isCurrent == true) {
+        throw Exception('Impossible de supprimer l\'année scolaire actuelle.');
+      }
+
+      // Clean up linked periods for this academic year first
+      await admin.from('exam_periods').delete().eq('academic_year_id', id).eq('school_id', schoolId);
+      await admin.from('vacation_periods').delete().eq('academic_year_id', id).eq('school_id', schoolId);
+      await admin.from('semesters').delete().eq('academic_year_id', id).eq('school_id', schoolId);
+      await admin.from('academic_years').delete().eq('id', id).eq('school_id', schoolId);
+
+      final fresh = await _load();
+      state = AsyncData(fresh);
+    } catch (e) {
+      if (previousState != null) {
+        state = AsyncData(previousState);
+      }
+      rethrow;
+    } finally {
+      _isMutating = false;
+    }
+  }
+
   Future<void> _refreshCurrentSemester(String schoolId) async {
     final admin = SupabaseConfig.adminClient;
     final now = DateTime.now();

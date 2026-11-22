@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import '../../../core/utils/error_messages.dart';
 import '../../providers/semesters_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/ios_loader.dart';
 
 const _brand = Color(0xFF7C3AED);
 const _brandLight = Color(0xFFF3E8FF);
@@ -127,7 +129,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                 final year = state?.selectedAcademicYear ?? state?.currentAcademicYear;
                 _showAcademicYearConfigDialog(context, year);
               },
-              icon: const Icon(Icons.calendar_month_outlined, size: 18),
+              icon: const Icon(Icons.school_rounded, size: 18),
               label: const Text(
                 'Année scolaire',
                 style: TextStyle(
@@ -2387,80 +2389,423 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
         ],
       ),
       padding: const EdgeInsets.all(20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3E8FF),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.calendar_today_rounded, color: _brand, size: 22),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _brandLight,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.school_rounded, color: _brand, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Année scolaire ${year.name}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    if (year.isCurrent) ...[
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCFCE7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'Actuelle',
-                          style: TextStyle(
-                            fontSize: 11,
+                    Row(
+                      children: [
+                        Text(
+                          'Année scolaire ${year.name}',
+                          style: const TextStyle(
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF15803D),
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        if (year.isCurrent) ...[
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _brandLight,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Actuelle',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: _brand,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${shortDateFormat.format(year.startDate)} → ${shortDateFormat.format(year.endDate)}',
+                      style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                    ),
+                  ],
+                ),
+              ),
+              // Action buttons: Edit pencil, and delete trash if non-current
+              _gradeActionButton(
+                Icons.edit,
+                () => _showAcademicYearConfigDialog(context, year),
+              ),
+              if (!year.isCurrent) ...[
+                const SizedBox(width: 4),
+                _gradeActionButton(
+                  Icons.delete_outline,
+                  () => _confirmDeleteAcademicYear(context, year),
+                  isDelete: true,
+                ),
+              ],
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Duration in a purple pill with icon (matching the period cards)
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _brandLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.timeline_rounded, color: _brand, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$months mois · $duration jours',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _brand),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Visual Partition Graph ──
+          _buildYearPartitionGraph(context, state, year),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildYearPartitionGraph(BuildContext context, SemestersState state, AcademicYearModel year) {
+    final now = DateTime.now();
+    final monthsFr = ['JANV.', 'FÉVR.', 'MARS', 'AVR.', 'MAI', 'JUIN', 'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.'];
+    final shortDateFormat = DateFormat('d MMM', 'fr');
+
+    // 1. Month list for timeline markings
+    final List<DateTime> yearMonths = [];
+    DateTime mCursor = DateTime(year.startDate.year, year.startDate.month);
+    final endMonth = DateTime(year.endDate.year, year.endDate.month);
+    while (!mCursor.isAfter(endMonth)) {
+      yearMonths.add(mCursor);
+      mCursor = DateTime(mCursor.year, mCursor.month + 1);
+    }
+
+    // 2. Collect period partition items
+    final yearSemesters = state.filteredSemesters;
+    final yearVacations = state.filteredVacations;
+    final yearExams = state.filteredExamPeriods;
+
+    final List<_PartitionItem> items = [];
+    for (final s in yearSemesters) {
+      items.add(_PartitionItem(
+        id: s.id,
+        name: state.formatPeriodDisplayName(s),
+        start: s.startDate,
+        end: s.endDate,
+        type: 'semester',
+        color: _brand,
+        lightColor: _brandLight,
+        icon: Icons.calendar_month_rounded,
+      ));
+    }
+    for (final v in yearVacations) {
+      items.add(_PartitionItem(
+        id: v.id,
+        name: v.name,
+        start: v.startDate,
+        end: v.endDate,
+        type: 'vacation',
+        color: const Color(0xFFD97706),
+        lightColor: const Color(0xFFFEF3C7),
+        icon: Icons.beach_access_rounded,
+      ));
+    }
+    for (final e in yearExams) {
+      items.add(_PartitionItem(
+        id: e.id,
+        name: e.name ?? 'Session d\'examen',
+        start: e.startDate,
+        end: e.endDate,
+        type: 'exam',
+        color: const Color(0xFFDC2626),
+        lightColor: const Color(0xFFFEE2E2),
+        icon: Icons.assignment_turned_in_rounded,
+      ));
+    }
+
+    items.sort((a, b) => a.start.compareTo(b.start));
+    final totalYearDays = math.max(1, year.endDate.difference(year.startDate).inDays);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section header with legend
+          Row(
+            children: [
+              const Icon(Icons.auto_graph_rounded, size: 16, color: _brand),
+              const SizedBox(width: 8),
+              const Text(
+                'Partition de l\'année scolaire',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              const Spacer(),
+              _buildLegendDot(_brand, state.periodLabelPlural),
+              const SizedBox(width: 14),
+              _buildLegendDot(const Color(0xFFD97706), 'Vacances'),
+              const SizedBox(width: 14),
+              _buildLegendDot(const Color(0xFFDC2626), 'Examens'),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Proportional segmented bar of blocks
+          if (items.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: items.map((item) {
+                    final days = math.max(1, item.end.difference(item.start).inDays);
+                    final flex = math.max(1, ((days / totalYearDays) * 100).round());
+                    return Expanded(
+                      flex: flex,
+                      child: Tooltip(
+                        message: '${item.name}\n${shortDateFormat.format(item.start)} → ${shortDateFormat.format(item.end)} (${days} jours)',
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 1),
+                          decoration: BoxDecoration(
+                            color: item.color,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              alignment: Alignment.center,
+              child: const Text(
+                'Aucune période configurée pour cette année scolaire.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+              ),
+            ),
+
+          const SizedBox(height: 16),
+
+          // Month Timeline Markings (matching the Period Card month graph)
+          if (yearMonths.isNotEmpty)
+            SizedBox(
+              height: 80,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: yearMonths.length,
+                itemBuilder: (context, i) {
+                  final mDate = yearMonths[i];
+                  final isCur = mDate.year == now.year && mDate.month == now.month;
+                  final isLast = i == yearMonths.length - 1;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (i == 0) const SizedBox(width: 4),
+                      Column(
+                        children: [
+                          Text(
+                            monthsFr[mDate.month - 1],
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: isCur ? _brand : AppColors.textTertiary,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: isCur ? _brand : _brandLight,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isCur ? _brand : _brand.withOpacity(0.3),
+                                width: isCur ? 2 : 1,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${i + 1}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: isCur ? Colors.white : _brand,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          if (isCur)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: _brandLight,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'En cours',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: _brand,
+                                ),
+                              ),
+                            )
+                          else
+                            Text(
+                              '${mDate.year}',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: AppColors.textTertiary,
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (!isLast)
+                        Container(
+                          margin: const EdgeInsets.only(top: 17),
+                          width: 24,
+                          height: 2,
+                          decoration: BoxDecoration(
+                            color: _brand.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(1),
+                          ),
+                        ),
+                      if (isLast) const SizedBox(width: 4),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${shortDateFormat.format(year.startDate)} → ${shortDateFormat.format(year.endDate)}  ·  $months mois ($duration jours)',
-                  style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
-                ),
-              ],
+                  );
+                },
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
           ),
-          OutlinedButton.icon(
-            onPressed: () => _showAcademicYearConfigDialog(context, year),
-            icon: const Icon(Icons.edit_calendar_outlined, size: 16),
-            label: const Text(
-              'Modifier les dates',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _brand,
-              side: const BorderSide(color: Color(0xFFDDD6FE)),
-              backgroundColor: const Color(0xFFFAF5FF),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF64748B),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Nouvelle année scolaire',
-            onPressed: () => _showAcademicYearConfigDialog(context, null),
-            icon: const Icon(Icons.add_circle_outline, color: Color(0xFF6B7280), size: 22),
+        ),
+      ],
+    );
+  }
+
+  void _confirmDeleteAcademicYear(BuildContext context, AcademicYearModel year) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer l\'année scolaire'),
+        content: Text(
+          'Êtes-vous sûr de vouloir supprimer l\'année scolaire "${year.name}" ? Toutes les périodes, vacances et examens associés seront également supprimés.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref.read(semestersProvider.notifier).deleteAcademicYear(year.id);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Année scolaire supprimée avec succès'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(UserFriendlyError.format(e)),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -2508,18 +2853,25 @@ class _AcademicYearConfigDialogContentState
   late bool _isCurrent;
   bool _isSaving = false;
   String? _error;
+  bool _userEditedName = false;
+
+  String _formatAcademicYearName(DateTime start, DateTime end) {
+    return '${start.year}-${end.year}';
+  }
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     final defaultStartYear = now.month >= 8 ? now.year : now.year - 1;
-    _nameController = TextEditingController(
-      text: widget.existingYear?.name ?? '$defaultStartYear-${defaultStartYear + 1}',
-    );
     _startDate = widget.existingYear?.startDate ?? DateTime(defaultStartYear, 9, 1);
     _endDate = widget.existingYear?.endDate ?? DateTime(defaultStartYear + 1, 6, 30);
     _isCurrent = widget.existingYear?.isCurrent ?? true;
+    _userEditedName = widget.existingYear != null && widget.existingYear!.name.trim().isNotEmpty;
+    final initialName = widget.existingYear?.name.trim().isNotEmpty == true
+        ? widget.existingYear!.name
+        : _formatAcademicYearName(_startDate, _endDate);
+    _nameController = TextEditingController(text: initialName);
   }
 
   @override
@@ -2565,16 +2917,19 @@ class _AcademicYearConfigDialogContentState
         } else {
           _endDate = picked;
         }
+        if (!_userEditedName || _nameController.text.trim().isEmpty) {
+          _nameController.text = _formatAcademicYearName(_startDate, _endDate);
+        }
         _error = null;
       });
     }
   }
 
   Future<void> _save() async {
-    final name = _nameController.text.trim();
+    var name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _error = 'Le nom de l\'année scolaire est requis.');
-      return;
+      name = _formatAcademicYearName(_startDate, _endDate);
+      _nameController.text = name;
     }
     if (!_startDate.isBefore(_endDate)) {
       setState(() => _error = 'La date de début doit être strictement antérieure à la date de fin.');
@@ -2741,8 +3096,11 @@ class _AcademicYearConfigDialogContentState
                 const SizedBox(height: 6),
                 TextField(
                   controller: _nameController,
+                  onChanged: (val) {
+                    _userEditedName = val.trim().isNotEmpty;
+                  },
                   decoration: InputDecoration(
-                    hintText: 'Ex: 2026-2027',
+                    hintText: _formatAcademicYearName(_startDate, _endDate),
                     filled: true,
                     fillColor: const Color(0xFFF9FAFB),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -2929,43 +3287,50 @@ class _AcademicYearConfigDialogContentState
 
           // Footer
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
             decoration: const BoxDecoration(
-              color: Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-              border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+              border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: _isSaving ? null : () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    ),
+                    child: const Text(
+                      'Annuler',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
                   ),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton.icon(
-                  onPressed: _isSaving ? null : _save,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.check_rounded, size: 16),
-                  label: Text(
-                    widget.existingYear != null ? 'Enregistrer' : 'Créer l\'année',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _brand,
-                    foregroundColor: Colors.white,
-                    elevation: 1,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _save,
+                    icon: _isSaving
+                        ? const IosLoader.small(color: Colors.white)
+                        : const Icon(Icons.check_rounded, size: 16),
+                    label: Text(
+                      widget.existingYear != null ? 'Enregistrer' : 'Créer l\'année',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6D4CF6),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 2,
+                    ),
                   ),
                 ),
               ],
@@ -2975,4 +3340,26 @@ class _AcademicYearConfigDialogContentState
       ),
     );
   }
+}
+
+class _PartitionItem {
+  final String id;
+  final String name;
+  final DateTime start;
+  final DateTime end;
+  final String type;
+  final Color color;
+  final Color lightColor;
+  final IconData icon;
+
+  _PartitionItem({
+    required this.id,
+    required this.name,
+    required this.start,
+    required this.end,
+    required this.type,
+    required this.color,
+    required this.lightColor,
+    required this.icon,
+  });
 }

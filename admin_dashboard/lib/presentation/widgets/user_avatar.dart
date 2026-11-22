@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 /// Consistent avatar widget used across the entire admin dashboard.
@@ -17,6 +18,7 @@ class UserAvatar extends StatelessWidget {
     super.key,
     required this.name,
     this.photoUrl,
+    this.imageBytes,
     this.radius = 17,
     this.gender,
     this.borderColor,
@@ -31,6 +33,9 @@ class UserAvatar extends StatelessWidget {
 
   /// Optional network URL for a profile photo.
   final String? photoUrl;
+
+  /// Optional in-memory bytes for immediate local preview without flicker.
+  final Uint8List? imageBytes;
 
   /// Circle radius (default 17 → 34×34 logical pixels).
   final double radius;
@@ -114,14 +119,33 @@ class UserAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: hasPhoto
+      child: imageBytes != null
+          ? ClipOval(
+              child: Image.memory(
+                imageBytes!,
+                fit: BoxFit.cover,
+                width: size,
+                height: size,
+                errorBuilder: (_, _, _) => Center(
+                  child: Text(
+                    _initials(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: fs,
+                      color: fg,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : hasPhoto
           ? ClipOval(
               child: Image.network(
                 photoUrl!,
                 fit: BoxFit.cover,
                 width: size,
                 height: size,
-                errorBuilder: (_, __, ___) => Center(
+                errorBuilder: (_, _, _) => Center(
                   child: Text(
                     _initials(),
                     style: TextStyle(

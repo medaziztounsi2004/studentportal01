@@ -101,12 +101,14 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       final schoolId = userResp['school_id'];
 
       // Get users with their current class name, niveau, and section via enrollments
+      // Super admins belong to the platform console and must never appear in school dashboard
       final usersResp = await _supabase
           .from('users')
           .select(
             '*, enrollments:enrollments(class_id, classes:classes(name, niveau_id, section_id, niveaux:niveaux(code, name), sections:sections(code)))',
           )
           .eq('school_id', schoolId)
+          .neq('role', 'super_admin')
           .order('full_name');
 
       final classesResp = await _supabase
@@ -117,7 +119,9 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       final groupsResp = await _supabase.from('groups').select();
 
       // Parse users and extract class name, niveau, and section from enrollment
-      final users = (usersResp as List).map((e) {
+      final users = (usersResp as List)
+          .where((e) => e['role'] != 'super_admin')
+          .map((e) {
         final enrollments = e['enrollments'] as List?;
         String? className;
         String? niveauCode;
