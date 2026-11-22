@@ -1193,40 +1193,43 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     final searchQuery = state.searchQuery;
     final rawList = state.filtered;
     final list = List<Suggestion>.from(rawList);
-    switch (_sortKey) {
-      case 'date_asc':
-        list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        break;
-      case 'pending_first':
-        list.sort((a, b) {
+    list.sort((a, b) {
+      int cmp;
+      switch (_sortKey) {
+        case 'date_asc':
+          cmp = a.createdAt.compareTo(b.createdAt);
+          break;
+        case 'pending_first':
           final aPending = a.status == 'pending' ? 0 : 1;
           final bPending = b.status == 'pending' ? 0 : 1;
           if (aPending != bPending) return aPending.compareTo(bPending);
-          return b.createdAt.compareTo(a.createdAt);
-        });
-        break;
-      case 'unread_first':
-        list.sort((a, b) {
+          cmp = b.createdAt.compareTo(a.createdAt);
+          break;
+        case 'unread_first':
           final aUnread = !a.isRead ? 0 : 1;
           final bUnread = !b.isRead ? 0 : 1;
           if (aUnread != bUnread) return aUnread.compareTo(bUnread);
-          return b.createdAt.compareTo(a.createdAt);
-        });
-        break;
-      case 'subject_asc':
-        list.sort((a, b) => a.subject.toLowerCase().compareTo(b.subject.toLowerCase()));
-        break;
-      case 'subject_desc':
-        list.sort((a, b) => b.subject.toLowerCase().compareTo(a.subject.toLowerCase()));
-        break;
-      case 'student_asc':
-        list.sort((a, b) => (a.studentName ?? '').toLowerCase().compareTo((b.studentName ?? '').toLowerCase()));
-        break;
-      case 'date_desc':
-      default:
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
-    }
+          cmp = b.createdAt.compareTo(a.createdAt);
+          break;
+        case 'subject_asc':
+          cmp = a.subject.toLowerCase().compareTo(b.subject.toLowerCase());
+          break;
+        case 'subject_desc':
+          cmp = b.subject.toLowerCase().compareTo(a.subject.toLowerCase());
+          break;
+        case 'student_asc':
+          cmp = (a.studentName ?? '').toLowerCase().compareTo((b.studentName ?? '').toLowerCase());
+          break;
+        case 'date_desc':
+        default:
+          cmp = b.createdAt.compareTo(a.createdAt);
+          break;
+      }
+      if (cmp != 0) return cmp;
+      final dCmp = b.createdAt.compareTo(a.createdAt);
+      if (dCmp != 0) return dCmp;
+      return a.id.compareTo(b.id);
+    });
     
     if (list.isEmpty) {
       return Center(

@@ -1787,39 +1787,49 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
     // Apply sorting
     users.sort((a, b) {
+      int cmp;
       switch (_sortKey) {
         case 'date_desc':
-          return b.createdAt.compareTo(a.createdAt);
+          cmp = b.createdAt.compareTo(a.createdAt);
+          break;
         case 'date_asc':
-          return a.createdAt.compareTo(b.createdAt);
+          cmp = a.createdAt.compareTo(b.createdAt);
+          break;
         case 'name_desc':
-          return b.fullName.toLowerCase().compareTo(a.fullName.toLowerCase());
+          cmp = b.fullName.toLowerCase().compareTo(a.fullName.toLowerCase());
+          break;
         case 'email_asc':
-          return a.email.toLowerCase().compareTo(b.email.toLowerCase());
+          cmp = a.email.toLowerCase().compareTo(b.email.toLowerCase());
+          break;
         case 'status_active':
           if (a.isActive != b.isActive) {
             return a.isActive ? -1 : 1;
           }
-          return a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+          cmp = a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+          break;
         case 'name_asc':
-          return a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+          cmp = a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+          break;
         default:
-          int result;
           switch (_sortBy) {
             case 'email':
-              result = a.email.compareTo(b.email);
+              cmp = a.email.compareTo(b.email);
               break;
             case 'id':
-              result = a.id.compareTo(b.id);
+              cmp = a.id.compareTo(b.id);
               break;
             case 'date':
-              result = a.createdAt.compareTo(b.createdAt);
+              cmp = a.createdAt.compareTo(b.createdAt);
               break;
             default:
-              result = a.fullName.compareTo(b.fullName);
+              cmp = a.fullName.compareTo(b.fullName);
           }
-          return _sortAscending ? result : -result;
+          if (!_sortAscending) cmp = -cmp;
       }
+      if (cmp != 0) return cmp;
+      final dateCmp = b.createdAt.compareTo(a.createdAt);
+      if (dateCmp != 0) return dateCmp;
+      return a.id.compareTo(b.id);
     });
 
     return users;

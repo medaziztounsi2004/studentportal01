@@ -296,17 +296,26 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
     }).toList();
 
     filtered.sort((a, b) {
+      int cmp;
       switch (_studentSortKey) {
         case 'name_desc':
-          return b.fullName.compareTo(a.fullName);
+          cmp = b.fullName.compareTo(a.fullName);
+          break;
         case 'code_asc':
-          return (a.studentCode ?? '').compareTo(b.studentCode ?? '');
+          cmp = (a.studentCode ?? '').compareTo(b.studentCode ?? '');
+          break;
         case 'status_asc':
-          return a.status.compareTo(b.status);
+          cmp = a.status.compareTo(b.status);
+          break;
         case 'name_asc':
         default:
-          return a.fullName.compareTo(b.fullName);
+          cmp = a.fullName.compareTo(b.fullName);
+          break;
       }
+      if (cmp != 0) return cmp;
+      final nameCmp = a.fullName.compareTo(b.fullName);
+      if (nameCmp != 0) return nameCmp;
+      return a.id.compareTo(b.id);
     });
 
     final totalPages = (filtered.length / _perPage).ceil();
@@ -2239,11 +2248,18 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           }
 
           // Sort
-          if (sortBy == 'name') {
-            filtered.sort((a, b) => (a['full_name'] ?? '').toString().compareTo((b['full_name'] ?? '').toString()));
-          } else if (sortBy == 'date') {
-            filtered.sort((a, b) => (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString()));
-          }
+          filtered.sort((a, b) {
+            int cmp = 0;
+            if (sortBy == 'name') {
+              cmp = (a['full_name'] ?? '').toString().compareTo((b['full_name'] ?? '').toString());
+            } else if (sortBy == 'date') {
+              cmp = (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString());
+            }
+            if (cmp != 0) return cmp;
+            final nameCmp = (a['full_name'] ?? '').toString().compareTo((b['full_name'] ?? '').toString());
+            if (nameCmp != 0) return nameCmp;
+            return (a['id'] ?? '').toString().compareTo((b['id'] ?? '').toString());
+          });
 
           // Search filter
           if (search.isNotEmpty) {
@@ -2564,11 +2580,18 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           }
 
           // Sort
-          if (sortBy == 'name') {
-            filtered.sort((a, b) => (a['full_name'] ?? '').toString().compareTo((b['full_name'] ?? '').toString()));
-          } else if (sortBy == 'date') {
-            filtered.sort((a, b) => (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString()));
-          }
+          filtered.sort((a, b) {
+            int cmp = 0;
+            if (sortBy == 'name') {
+              cmp = (a['full_name'] ?? '').toString().compareTo((b['full_name'] ?? '').toString());
+            } else if (sortBy == 'date') {
+              cmp = (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString());
+            }
+            if (cmp != 0) return cmp;
+            final nameCmp = (a['full_name'] ?? '').toString().compareTo((b['full_name'] ?? '').toString());
+            if (nameCmp != 0) return nameCmp;
+            return (a['id'] ?? '').toString().compareTo((b['id'] ?? '').toString());
+          });
 
           // Search filter
           if (search.isNotEmpty) {
@@ -2886,23 +2909,33 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
       data: (teachers) {
         final sortedTeachers = List<ClassTeacherWithSubject>.from(teachers);
         sortedTeachers.sort((a, b) {
+          int cmp;
           switch (_teacherSortKey) {
             case 'name_desc':
-              return b.fullName.compareTo(a.fullName);
+              cmp = b.fullName.compareTo(a.fullName);
+              break;
             case 'subject_asc':
-              return (a.subjectName ?? '').compareTo(b.subjectName ?? '');
+              cmp = (a.subjectName ?? '').compareTo(b.subjectName ?? '');
+              break;
             case 'date_desc':
               final da = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
               final db = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-              return db.compareTo(da);
+              cmp = db.compareTo(da);
+              break;
             case 'date_asc':
               final da = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
               final db = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-              return da.compareTo(db);
+              cmp = da.compareTo(db);
+              break;
             case 'name_asc':
             default:
-              return a.fullName.compareTo(b.fullName);
+              cmp = a.fullName.compareTo(b.fullName);
+              break;
           }
+          if (cmp != 0) return cmp;
+          final nameCmp = a.fullName.compareTo(b.fullName);
+          if (nameCmp != 0) return nameCmp;
+          return a.id.compareTo(b.id);
         });
 
         return Container(

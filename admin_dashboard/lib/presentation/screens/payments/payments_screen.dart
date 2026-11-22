@@ -2644,34 +2644,37 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
       });
     }
 
-    switch (_sortKey) {
-      case 'student_desc':
-        enrichedStudents.sort((a, b) => (b['full_name'] as String).toLowerCase().compareTo((a['full_name'] as String).toLowerCase()));
-        break;
-      case 'unpaid_first':
-        enrichedStudents.sort((a, b) {
+    enrichedStudents.sort((a, b) {
+      int cmp;
+      switch (_sortKey) {
+        case 'student_desc':
+          cmp = (b['full_name'] as String).toLowerCase().compareTo((a['full_name'] as String).toLowerCase());
+          break;
+        case 'unpaid_first':
           final aUnpaid = ((a['totalPayments'] as int) - (a['paidPayments'] as int)) > 0 ? 0 : 1;
           final bUnpaid = ((b['totalPayments'] as int) - (b['paidPayments'] as int)) > 0 ? 0 : 1;
           if (aUnpaid != bUnpaid) return aUnpaid.compareTo(bUnpaid);
-          return (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase());
-        });
-        break;
-      case 'paid_first':
-        enrichedStudents.sort((a, b) {
+          cmp = (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase());
+          break;
+        case 'paid_first':
           final aPaid = ((a['totalPayments'] as int) > 0 && (a['paidPayments'] as int) >= (a['totalPayments'] as int)) ? 0 : 1;
           final bPaid = ((b['totalPayments'] as int) > 0 && (b['paidPayments'] as int) >= (b['totalPayments'] as int)) ? 0 : 1;
           if (aPaid != bPaid) return aPaid.compareTo(bPaid);
-          return (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase());
-        });
-        break;
-      case 'payments_desc':
-        enrichedStudents.sort((a, b) => (b['totalPayments'] as int).compareTo(a['totalPayments'] as int));
-        break;
-      case 'student_asc':
-      default:
-        enrichedStudents.sort((a, b) => (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase()));
-        break;
-    }
+          cmp = (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase());
+          break;
+        case 'payments_desc':
+          cmp = (b['totalPayments'] as int).compareTo(a['totalPayments'] as int);
+          break;
+        case 'student_asc':
+        default:
+          cmp = (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase());
+          break;
+      }
+      if (cmp != 0) return cmp;
+      final nameCmp = (a['full_name'] as String).toLowerCase().compareTo((b['full_name'] as String).toLowerCase());
+      if (nameCmp != 0) return nameCmp;
+      return (a['id'] ?? '').toString().compareTo((b['id'] ?? '').toString());
+    });
 
     final totalPages = _classStudentsPerPage > 0
         ? (enrichedStudents.length / _classStudentsPerPage).ceil()
@@ -5061,49 +5064,42 @@ class _StudentPaymentDetailDialogState
         return _normalizeCategory(cat?.toString()) != 'scolarite';
       }).toList();
     }
-    switch (_detailSortKey) {
-      case 'due_date_desc':
-        result.sort((a, b) {
-          final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return db.compareTo(da);
-        });
-        break;
-      case 'amount_desc':
-        result.sort((a, b) => ((b['amount'] as num?) ?? 0).compareTo((a['amount'] as num?) ?? 0));
-        break;
-      case 'amount_asc':
-        result.sort((a, b) => ((a['amount'] as num?) ?? 0).compareTo((b['amount'] as num?) ?? 0));
-        break;
-      case 'pending_first':
-        result.sort((a, b) {
+    result.sort((a, b) {
+      int cmp;
+      final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+      switch (_detailSortKey) {
+        case 'due_date_desc':
+          cmp = db.compareTo(da);
+          break;
+        case 'amount_desc':
+          cmp = ((b['amount'] as num?) ?? 0).compareTo((a['amount'] as num?) ?? 0);
+          break;
+        case 'amount_asc':
+          cmp = ((a['amount'] as num?) ?? 0).compareTo((b['amount'] as num?) ?? 0);
+          break;
+        case 'pending_first':
           final sA = a['status'] == 'pending' ? 0 : 1;
           final sB = b['status'] == 'pending' ? 0 : 1;
           if (sA != sB) return sA.compareTo(sB);
-          final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return da.compareTo(db);
-        });
-        break;
-      case 'paid_first':
-        result.sort((a, b) {
+          cmp = da.compareTo(db);
+          break;
+        case 'paid_first':
           final sA = a['status'] == 'paid' ? 0 : 1;
           final sB = b['status'] == 'paid' ? 0 : 1;
           if (sA != sB) return sA.compareTo(sB);
-          final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return da.compareTo(db);
-        });
-        break;
-      case 'due_date_asc':
-      default:
-        result.sort((a, b) {
-          final da = DateTime.tryParse(a['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final db = DateTime.tryParse(b['due_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return da.compareTo(db);
-        });
-        break;
-    }
+          cmp = da.compareTo(db);
+          break;
+        case 'due_date_asc':
+        default:
+          cmp = da.compareTo(db);
+          break;
+      }
+      if (cmp != 0) return cmp;
+      final dCmp = da.compareTo(db);
+      if (dCmp != 0) return dCmp;
+      return (a['id'] ?? '').toString().compareTo((b['id'] ?? '').toString());
+    });
     return result;
   }
 

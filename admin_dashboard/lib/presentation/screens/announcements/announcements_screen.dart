@@ -1528,31 +1528,35 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     }
 
     // Sort
-    switch (_sortKey) {
-      case 'date_desc':
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
-      case 'date_asc':
-        list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        break;
-      case 'title_asc':
-        list.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-        break;
-      case 'title_desc':
-        list.sort((a, b) => b.title.toLowerCase().compareTo(a.title.toLowerCase()));
-        break;
-      case 'type_asc':
-        list.sort((a, b) => a.announcementType.compareTo(b.announcementType));
-        break;
-      case 'pinned_first':
-      default:
-        list.sort((a, b) {
-          if (a.isPinned && !b.isPinned) return -1;
-          if (!a.isPinned && b.isPinned) return 1;
-          return b.createdAt.compareTo(a.createdAt);
-        });
-        break;
-    }
+    list.sort((a, b) {
+      int cmp;
+      switch (_sortKey) {
+        case 'date_desc':
+          cmp = b.createdAt.compareTo(a.createdAt);
+          break;
+        case 'date_asc':
+          cmp = a.createdAt.compareTo(b.createdAt);
+          break;
+        case 'title_asc':
+          cmp = a.title.toLowerCase().compareTo(b.title.toLowerCase());
+          break;
+        case 'title_desc':
+          cmp = b.title.toLowerCase().compareTo(a.title.toLowerCase());
+          break;
+        case 'type_asc':
+          cmp = a.announcementType.compareTo(b.announcementType);
+          break;
+        case 'pinned_first':
+        default:
+          if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+          cmp = b.createdAt.compareTo(a.createdAt);
+          break;
+      }
+      if (cmp != 0) return cmp;
+      final dCmp = b.createdAt.compareTo(a.createdAt);
+      if (dCmp != 0) return dCmp;
+      return a.id.compareTo(b.id);
+    });
 
     // Paginate
     final totalPages = (list.length / _pageSize).ceil().clamp(1, 999999);

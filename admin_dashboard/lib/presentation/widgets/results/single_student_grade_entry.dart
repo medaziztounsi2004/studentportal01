@@ -648,13 +648,29 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
 
   List<Map<String, dynamic>> _getFilteredOfferings() {
     final query = _effectiveSearchQuery;
-    return widget.subjectOfferings.where((offering) {
+    final list = widget.subjectOfferings.where((offering) {
       if (query.isEmpty) return true;
       final subject = offering['subjects'] as Map<String, dynamic>?;
       final name = (subject?['name']?.toString() ?? '').toLowerCase();
       final code = (subject?['code']?.toString() ?? '').toLowerCase();
       return name.contains(query) || code.contains(query);
     }).toList();
+
+    list.sort((a, b) {
+      final subA = a['subjects'] as Map<String, dynamic>?;
+      final subB = b['subjects'] as Map<String, dynamic>?;
+      final nameA = (subA?['name']?.toString() ?? '').toLowerCase();
+      final nameB = (subB?['name']?.toString() ?? '').toLowerCase();
+      final cmp = nameA.compareTo(nameB);
+      if (cmp != 0) return cmp;
+      final codeA = (subA?['code']?.toString() ?? '').toLowerCase();
+      final codeB = (subB?['code']?.toString() ?? '').toLowerCase();
+      final cCmp = codeA.compareTo(codeB);
+      if (cCmp != 0) return cCmp;
+      return (a['id']?.toString() ?? '').compareTo(b['id']?.toString() ?? '');
+    });
+
+    return list;
   }
 
   @override

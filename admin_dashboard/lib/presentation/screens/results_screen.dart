@@ -79,6 +79,105 @@ class _ResultsScreenState extends State<ResultsScreen> {
       _searchController.clear();
       providerRef?.setSearchQuery('');
     });
+    providerRef?.loadClassGrades();
+  }
+
+  ({int totalSubjects, int collectedCount, double? semesterAverage, bool allCollected}) _calculateStudentProgress(
+    ResultsProvider provider,
+    String enrollmentId,
+  ) {
+    final offerings = provider.subjectOfferings;
+    final totalSubjects = offerings.length;
+    if (totalSubjects == 0) {
+      return (totalSubjects: 0, collectedCount: 0, semesterAverage: null, allCollected: false);
+    }
+
+    final grades = provider.gradesByEnrollmentId[enrollmentId] ?? [];
+    int collectedCount = 0;
+    double totalWeightedMoyenne = 0;
+    double totalCoefficients = 0;
+
+    for (final offering in offerings) {
+      final offeringId = offering['id']?.toString();
+      final coef = (offering['coefficient'] as num?)?.toDouble() ?? 1.0;
+      final components = (offering['grade_components'] as List?) ?? [];
+
+      if (components.isNotEmpty) {
+        bool allComponentsFilled = true;
+        double compWeightedSum = 0;
+        double compTotalWeight = 0;
+
+        for (final comp in components) {
+          final compMap = comp as Map<String, dynamic>;
+          final compId = compMap['id']?.toString();
+          final weight = (compMap['weight_percent'] as num?)?.toDouble() ?? 0.0;
+
+          Map<String, dynamic>? gradeEntry;
+          for (final g in grades) {
+            if (g['subject_offering_id']?.toString() == offeringId &&
+                g['component_id']?.toString() == compId) {
+              gradeEntry = g;
+              break;
+            }
+          }
+
+          if (gradeEntry == null) {
+            allComponentsFilled = false;
+            break;
+          }
+
+          final status = gradeEntry['status']?.toString() ?? 'OK';
+          final val = gradeEntry['grade_value'];
+
+          if (val == null && status == 'OK') {
+            allComponentsFilled = false;
+            break;
+          }
+
+          if (val != null) {
+            final numVal = (val as num).toDouble();
+            compWeightedSum += numVal * weight;
+            compTotalWeight += weight;
+          }
+        }
+
+        if (allComponentsFilled) {
+          collectedCount++;
+          final subjectAvg = compTotalWeight > 0 ? (compWeightedSum / compTotalWeight) : 0.0;
+          totalWeightedMoyenne += subjectAvg * coef;
+          totalCoefficients += coef;
+        }
+      } else {
+        Map<String, dynamic>? gradeEntry;
+        for (final g in grades) {
+          if (g['subject_offering_id']?.toString() == offeringId) {
+            gradeEntry = g;
+            break;
+          }
+        }
+
+        if (gradeEntry != null &&
+            (gradeEntry['grade_value'] != null || (gradeEntry['status'] != null && gradeEntry['status'] != 'OK'))) {
+          collectedCount++;
+          final val = (gradeEntry['grade_value'] as num?)?.toDouble() ?? 0.0;
+          totalWeightedMoyenne += val * coef;
+          totalCoefficients += coef;
+        }
+      }
+    }
+
+    final allCollected = totalSubjects > 0 && collectedCount == totalSubjects;
+    double? semesterAverage;
+    if (allCollected && totalCoefficients > 0) {
+      semesterAverage = totalWeightedMoyenne / totalCoefficients;
+    }
+
+    return (
+      totalSubjects: totalSubjects,
+      collectedCount: collectedCount,
+      semesterAverage: semesterAverage,
+      allCollected: allCollected,
+    );
   }
 
   int _getNiveauSortOrder(String? str) {
@@ -720,11 +819,31 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   // Shared student table — every row navigates directly to grade entry
   Widget _buildStudentDataTable(BuildContext context, ResultsProvider provider, List<Map<String, dynamic>> students) {
-    final totalPages = _itemsPerPage == -1 ? 1 : (students.length / _itemsPerPage).ceil();
+    if (provider.gradesByEnrollmentId.isEmpty && students.isNotEmpty && !provider.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        provider.loadClassGrades();
+      });
+    }
+
+    final sortedStudents = List<Map<String, dynamic>>.from(students)..sort((a, b) {
+      final userA = a['users'] as Map<String, dynamic>? ?? {};
+      final userB = b['users'] as Map<String, dynamic>? ?? {};
+      final nameA = (userA['full_name']?.toString() ?? '').toLowerCase();
+      final nameB = (userB['full_name']?.toString() ?? '').toLowerCase();
+      final cmp = nameA.compareTo(nameB);
+      if (cmp != 0) return cmp;
+      final codeA = (a['student_code'] ?? userA['student_code'] ?? '').toString();
+      final codeB = (b['student_code'] ?? userB['student_code'] ?? '').toString();
+      final codeCmp = codeA.compareTo(codeB);
+      if (codeCmp != 0) return codeCmp;
+      return (a['id']?.toString() ?? '').compareTo(b['id']?.toString() ?? '');
+    });
+
+    final totalPages = _itemsPerPage == -1 ? 1 : (sortedStudents.length / _itemsPerPage).ceil();
     if (_currentPage > totalPages && totalPages > 0) _currentPage = totalPages;
     final startIndex = _itemsPerPage == -1 ? 0 : (_currentPage - 1) * _itemsPerPage;
-    final endIndex = _itemsPerPage == -1 ? students.length : (startIndex + _itemsPerPage).clamp(0, students.length);
-    final pageStudents = students.sublist(startIndex, endIndex);
+    final endIndex = _itemsPerPage == -1 ? sortedStudents.length : (startIndex + _itemsPerPage).clamp(0, sortedStudents.length);
+    final pageStudents = sortedStudents.sublist(startIndex, endIndex);
     final allPageSelected = pageStudents.isNotEmpty && pageStudents.every((s) => _selectedStudentsForBulk.contains(s['id'].toString()));
 
     return Stack(
@@ -735,11 +854,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
             const checkboxW = 44.0;
             const niveauW = 130.0;
             const classeW = 95.0;
-            const codeW = 130.0;
+            const moyenneW = 160.0;
             const createdW = 120.0;
             const actionsW = 48.0;
 
-            final totalFixed = checkboxW + niveauW + classeW + codeW + createdW + actionsW;
+            final totalFixed = checkboxW + niveauW + classeW + moyenneW + createdW + actionsW;
             final nameW = (availableWidth - totalFixed).clamp(240.0, 500.0);
             final minTotalW = totalFixed + nameW;
 
@@ -794,7 +913,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                       DataColumn(label: SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL'))),
                       DataColumn(label: SizedBox(width: niveauW, child: _headerLabel('NIVEAU'))),
                       DataColumn(label: SizedBox(width: classeW, child: _headerLabel('CLASSE'))),
-                      DataColumn(label: SizedBox(width: codeW, child: _headerLabel('CODE ÉTUD.'))),
+                      DataColumn(label: SizedBox(width: moyenneW, child: _headerLabel('MOYENNE SEMESTRE'))),
                       DataColumn(label: SizedBox(width: createdW, child: _headerLabel('CRÉÉ LE'))),
                       DataColumn(label: SizedBox(width: actionsW, child: Container())),
                     ],
@@ -810,7 +929,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
                           student['classes']?['niveaux']?['code']?.toString() ??
                           _getSelectedNiveauName(provider);
                       final className = student['classes']?['name']?.toString() ?? _getSelectedClassName(provider);
-                      final code = (student['student_code'] ?? user['student_code'] ?? '—').toString();
                       final createdAtRaw = user['created_at']?.toString();
                       final createdAt = createdAtRaw != null ? DateTime.tryParse(createdAtRaw) : null;
 
@@ -929,36 +1047,69 @@ class _ResultsScreenState extends State<ResultsScreen> {
                             ),
                             onTap: () => _navigateToStudentGradeEntry(provider, student),
                           ),
-                          // Student Code
+                          // Moyenne Semestre or Notes Collected pill
                           DataCell(
                             SizedBox(
-                              width: codeW,
+                              width: moyenneW,
                               child: Align(
                                 alignment: Alignment.centerLeft,
-                                child: InkWell(
-                                  onTap: code != '—' ? () {
-                                    Clipboard.setData(ClipboardData(text: code));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Code étudiant copié!'), duration: Duration(seconds: 1)),
-                                    );
-                                  } : null,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.slate50,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      code,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontFamily: 'monospace',
-                                        color: AppColors.textSecondary,
+                                child: () {
+                                  final progress = _calculateStudentProgress(provider, studentId);
+                                  if (progress.allCollected && progress.semesterAverage != null) {
+                                    final avg = progress.semesterAverage!;
+                                    final isPassing = avg >= 10.0;
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: isPassing ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                        borderRadius: BorderRadius.circular(9999),
+                                        border: Border.all(
+                                          color: isPassing ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
+                                        ),
                                       ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            avg.toStringAsFixed(2),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: isPassing ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                            ),
+                                          ),
+                                          Text(
+                                            ' / 20',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w500,
+                                              color: isPassing ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  } else {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFFBEB),
+                                        borderRadius: BorderRadius.circular(9999),
+                                        border: Border.all(color: const Color(0xFFFDE68A)),
+                                      ),
+                                      child: Text(
+                                        progress.totalSubjects > 0
+                                            ? '${progress.collectedCount} / ${progress.totalSubjects} matière${progress.totalSubjects > 1 ? 's' : ''}'
+                                            : '0 matière',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFFB45309),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                }(),
                               ),
                             ),
                             onTap: () => _navigateToStudentGradeEntry(provider, student),

@@ -163,13 +163,11 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
         final bJust = b.justified ? 1 : 0;
         comparison = aJust.compareTo(bJust);
       }
-      if (comparison == 0) {
-        comparison = a.createdAt.compareTo(b.createdAt);
-      }
-      if (comparison == 0) {
-        comparison = a.id.compareTo(b.id);
-      }
-      return _sortAscending ? comparison : -comparison;
+      int result = _sortAscending ? comparison : -comparison;
+      if (result != 0) return result;
+      final cCmp = b.createdAt.compareTo(a.createdAt);
+      if (cCmp != 0) return cCmp;
+      return a.id.compareTo(b.id);
     });
 
     return Stack(

@@ -25,9 +25,11 @@ enum ResultsViewMode {
 /// Provider for managing results/grades
 class ResultsProvider extends ChangeNotifier {
   final ResultsRepository _repository;
+  final SupabaseClient _client;
 
   ResultsProvider(SupabaseClient client)
-    : _repository = ResultsRepository(client);
+    : _client = client,
+      _repository = ResultsRepository(client);
 
   // State
   bool _isLoading = true;
@@ -57,6 +59,7 @@ class ResultsProvider extends ChangeNotifier {
   ClassResult? _classResult;
   StudentResult? _selectedStudentResult;
   GradingConfiguration? _gradingConfig;
+  Map<String, List<Map<String, dynamic>>> _gradesByEnrollmentId = {};
 
   // Getters
   bool get isLoading => _isLoading;
@@ -113,6 +116,7 @@ class ResultsProvider extends ChangeNotifier {
   ClassResult? get classResult => _classResult;
   StudentResult? get selectedStudentResult => _selectedStudentResult;
   GradingConfiguration? get gradingConfig => _gradingConfig;
+  Map<String, List<Map<String, dynamic>>> get gradesByEnrollmentId => _gradesByEnrollmentId;
 
   /// Get current academic year name
   String get currentAcademicYearName {
@@ -428,6 +432,7 @@ class ResultsProvider extends ChangeNotifier {
         '📚 Loaded ${_enrolledStudents.length} students for class $_selectedClassId',
       );
       notifyListeners();
+      await loadClassGrades();
     } catch (e) {
       _error = UserFriendlyError.format(
         e,
@@ -435,6 +440,39 @@ class ResultsProvider extends ChangeNotifier {
       );
       debugPrint('❌ Error loading students: $e');
       notifyListeners();
+    }
+  }
+
+  /// Load grades for all currently loaded enrolled students
+  Future<void> loadClassGrades() async {
+    final students = _enrolledStudents.isNotEmpty ? _enrolledStudents : _allEnrolledStudents;
+    if (students.isEmpty) {
+      _gradesByEnrollmentId = {};
+      notifyListeners();
+      return;
+    }
+    final enrollmentIds = students
+        .map((s) => s['id']?.toString())
+        .whereType<String>()
+        .toList();
+    if (enrollmentIds.isEmpty) return;
+
+    try {
+      final response = await _client
+          .from('grades')
+          .select('enrollment_id, student_id, subject_offering_id, component_id, grade_value, status')
+          .inFilter('enrollment_id', enrollmentIds);
+      final map = <String, List<Map<String, dynamic>>>{};
+      for (final row in response) {
+        final eId = row['enrollment_id']?.toString();
+        if (eId != null) {
+          map.putIfAbsent(eId, () => []).add(row);
+        }
+      }
+      _gradesByEnrollmentId = map;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading class grades: $e');
     }
   }
 
@@ -542,6 +580,7 @@ class ResultsProvider extends ChangeNotifier {
 
       // Recalculate results
       await calculateResults();
+      await loadClassGrades();
     } catch (e) {
       _error = UserFriendlyError.format(
         e,
@@ -560,6 +599,7 @@ class ResultsProvider extends ChangeNotifier {
       final gradesData = grades.map((g) => g.toJson()).toList();
       await _repository.saveBulkGrades(gradesData);
       await calculateResults();
+      await loadClassGrades();
     } catch (e) {
       _error = UserFriendlyError.format(
         e,
@@ -595,7 +635,7 @@ class ResultsProvider extends ChangeNotifier {
 
   void setSemester(String? semesterId) {
     _selectedSemesterId = semesterId;
-    loadSubjectOfferings();
+    loadSubjectOfferings().then((_) => loadClassGrades());
     if (_selectedClassId != null && _selectedAcademicYearId != null) {
       calculateResults();
     }
@@ -632,6 +672,7 @@ class ResultsProvider extends ChangeNotifier {
           loadSubjectOfferings(),
           loadEnrolledStudents(),
         ]);
+        await loadClassGrades();
       } finally {
         _isLoading = false;
         notifyListeners();
