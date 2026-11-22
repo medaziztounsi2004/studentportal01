@@ -556,6 +556,134 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
     });
   }
 
+  Future<void> updateAcademicYear({
+    required String id,
+    required String name,
+    required DateTime startDate,
+    required DateTime endDate,
+    required bool isCurrent,
+  }) async {
+    if (_isMutating) {
+      throw Exception('Une opération est déjà en cours. Veuillez patienter.');
+    }
+    _isMutating = true;
+    final previousState = state.asData?.value;
+    state = const AsyncLoading();
+    try {
+      final admin = SupabaseConfig.adminClient;
+      final user = SupabaseConfig.client.auth.currentUser;
+      if (user == null) throw Exception('Non connecté');
+
+      final profile = await admin
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .single();
+      final schoolId = profile['school_id'];
+
+      final sStart = SemestersState.stripTime(startDate);
+      final sEnd = SemestersState.stripTime(endDate);
+
+      if (!sStart.isBefore(sEnd)) {
+        throw Exception('La date de début doit être strictement antérieure à la date de fin.');
+      }
+
+      if (isCurrent) {
+        await admin
+            .from('academic_years')
+            .update({'is_current': false})
+            .eq('school_id', schoolId);
+      }
+
+      await admin
+          .from('academic_years')
+          .update({
+            'name': name.trim(),
+            'start_date': sStart.toIso8601String().split('T')[0],
+            'end_date': sEnd.toIso8601String().split('T')[0],
+            'is_current': isCurrent,
+          })
+          .eq('id', id);
+
+      // Rebuild auto gap vacations with new bounds
+      await _rebuildAutoGapVacations(schoolId, id);
+
+      final fresh = await _load();
+      state = AsyncData(fresh.copyWith(selectedAcademicYearId: id));
+    } catch (e) {
+      if (previousState != null) {
+        state = AsyncData(previousState);
+      }
+      rethrow;
+    } finally {
+      _isMutating = false;
+    }
+  }
+
+  Future<void> createAcademicYear({
+    required String name,
+    required DateTime startDate,
+    required DateTime endDate,
+    required bool isCurrent,
+  }) async {
+    if (_isMutating) {
+      throw Exception('Une opération est déjà en cours. Veuillez patienter.');
+    }
+    _isMutating = true;
+    final previousState = state.asData?.value;
+    state = const AsyncLoading();
+    try {
+      final admin = SupabaseConfig.adminClient;
+      final user = SupabaseConfig.client.auth.currentUser;
+      if (user == null) throw Exception('Non connecté');
+
+      final profile = await admin
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .single();
+      final schoolId = profile['school_id'];
+
+      final sStart = SemestersState.stripTime(startDate);
+      final sEnd = SemestersState.stripTime(endDate);
+
+      if (!sStart.isBefore(sEnd)) {
+        throw Exception('La date de début doit être strictement antérieure à la date de fin.');
+      }
+
+      if (isCurrent) {
+        await admin
+            .from('academic_years')
+            .update({'is_current': false})
+            .eq('school_id', schoolId);
+      }
+
+      final res = await admin
+          .from('academic_years')
+          .insert({
+            'school_id': schoolId,
+            'name': name.trim(),
+            'start_date': sStart.toIso8601String().split('T')[0],
+            'end_date': sEnd.toIso8601String().split('T')[0],
+            'is_current': isCurrent,
+          })
+          .select()
+          .single();
+
+      final newYearId = res['id']?.toString();
+
+      final fresh = await _load();
+      state = AsyncData(fresh.copyWith(selectedAcademicYearId: newYearId));
+    } catch (e) {
+      if (previousState != null) {
+        state = AsyncData(previousState);
+      }
+      rethrow;
+    } finally {
+      _isMutating = false;
+    }
+  }
+
   Future<void> _refreshCurrentSemester(String schoolId) async {
     final admin = SupabaseConfig.adminClient;
     final now = DateTime.now();
@@ -669,9 +797,32 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
           .single();
       final schoolId = profile['school_id'];
 
-      final currentState = state.asData?.value;
-      final currentYear = currentState?.selectedAcademicYear ?? currentState?.currentAcademicYear;
-      if (currentYear == null) throw Exception('Aucune année scolaire active');
+      final currentState = previousState ?? state.asData?.value;
+      var currentYear = currentState?.selectedAcademicYear ?? currentState?.currentAcademicYear;
+      if (currentYear == null) {
+        final ayData = await admin
+            .from('academic_years')
+            .select()
+            .eq('school_id', schoolId)
+            .eq('is_current', true)
+            .maybeSingle();
+        if (ayData != null) {
+          currentYear = AcademicYearModel.fromJson(ayData);
+        } else {
+          final anyYear = await admin
+              .from('academic_years')
+              .select()
+              .eq('school_id', schoolId)
+              .order('start_date', ascending: false)
+              .limit(1)
+              .maybeSingle();
+          if (anyYear != null) {
+            currentYear = AcademicYearModel.fromJson(anyYear);
+          } else {
+            currentYear = await _ensureCurrentAcademicYear(schoolId, []);
+          }
+        }
+      }
 
       // Fetch fresh academic year directly from DB to verify bounds
       final yearRes = await admin

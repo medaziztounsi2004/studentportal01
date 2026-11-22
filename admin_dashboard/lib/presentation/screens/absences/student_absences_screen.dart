@@ -1845,7 +1845,7 @@ const SizedBox.shrink(),
     if (_selectedAbsences.isEmpty) return;
     final ids = _selectedAbsences.toList();
     ref.read(studentAbsencesProvider(widget.studentId).notifier).bulkToggleJustified(ids, justified);
-    setState(() => _selectedAbsences.clear());
+    if (mounted) setState(() {});
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
