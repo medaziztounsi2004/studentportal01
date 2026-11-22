@@ -869,7 +869,7 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
         }
         return a;
       }).toList();
-      state = AsyncData(s.copyWith(absences: updatedList, selectedIds: {}));
+      state = AsyncData(s.copyWith(absences: updatedList));
     });
 
     try {

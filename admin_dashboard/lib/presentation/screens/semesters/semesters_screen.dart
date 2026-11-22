@@ -594,7 +594,9 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     final state = ref.read(semestersProvider).value;
     if (state == null) return;
 
-    final year = state.selectedAcademicYear ?? state.currentAcademicYear;
+    final year = state.selectedAcademicYear ??
+        state.currentAcademicYear ??
+        state.academicYears.firstOrNull;
     if (year == null) {
       _showAcademicYearConfigDialog(context, null);
       return;
@@ -715,8 +717,11 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     DateTime endDate =
         semester?.endDate ?? startDate.add(Duration(days: durationDays));
 
-    String? selectedYearId =
-        semester?.academicYearId ?? state.selectedAcademicYearId;
+    String? selectedYearId = semester?.academicYearId ??
+        state.selectedAcademicYearId ??
+        state.selectedAcademicYear?.id ??
+        state.currentAcademicYear?.id ??
+        state.academicYears.firstOrNull?.id;
     String? errorMessage;
 
     showDialog(
@@ -1408,7 +1413,9 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
     final state = ref.read(semestersProvider).value;
     if (state == null) return;
 
-    final year = state.selectedAcademicYear ?? state.currentAcademicYear;
+    final year = state.selectedAcademicYear ??
+        state.currentAcademicYear ??
+        state.academicYears.firstOrNull;
     if (year == null) {
       _showAcademicYearConfigDialog(context, null);
       return;

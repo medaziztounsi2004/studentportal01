@@ -203,11 +203,14 @@ class SemestersState {
   SemesterModel? get current => semesters.where((s) => s.isCurrent).firstOrNull;
 
   AcademicYearModel? get currentAcademicYear =>
-      academicYears.where((y) => y.isCurrent).firstOrNull;
+      academicYears.where((y) => y.isCurrent).firstOrNull ??
+      academicYears.firstOrNull;
 
-  AcademicYearModel? get selectedAcademicYear => selectedAcademicYearId != null
-      ? academicYears.where((y) => y.id == selectedAcademicYearId).firstOrNull
-      : currentAcademicYear;
+  AcademicYearModel? get selectedAcademicYear =>
+      (selectedAcademicYearId != null
+          ? academicYears.where((y) => y.id == selectedAcademicYearId).firstOrNull
+          : null) ??
+      currentAcademicYear;
 
   List<SemesterModel> get filteredSemesters {
     final list = selectedAcademicYearId != null
@@ -496,6 +499,14 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       schoolId,
       academicYears,
     );
+
+    // Sync isCurrent flag in local academicYears list
+    academicYears = academicYears.map((y) {
+      if (y.id == currentYear.id) {
+        return y.copyWith(isCurrent: true);
+      }
+      return y.copyWith(isCurrent: false);
+    }).toList();
 
     // Reload if we created a new year
     if (!academicYears.any((y) => y.id == currentYear.id)) {
@@ -797,32 +808,25 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
           .single();
       final schoolId = profile['school_id'];
 
-      final currentState = previousState ?? state.asData?.value;
-      var currentYear = currentState?.selectedAcademicYear ?? currentState?.currentAcademicYear;
+      var currentYear = previousState?.selectedAcademicYear ?? previousState?.currentAcademicYear;
+      currentYear ??= previousState?.academicYears.where((y) => y.isCurrent).firstOrNull ?? previousState?.academicYears.firstOrNull;
+
       if (currentYear == null) {
-        final ayData = await admin
+        // Query active or latest academic year directly from DB as a robust fallback
+        final yearRes = await admin
             .from('academic_years')
-            .select()
+            .select('id, name, start_date, end_date, is_current')
             .eq('school_id', schoolId)
-            .eq('is_current', true)
+            .order('is_current', ascending: false)
+            .order('start_date', ascending: false)
+            .limit(1)
             .maybeSingle();
-        if (ayData != null) {
-          currentYear = AcademicYearModel.fromJson(ayData);
-        } else {
-          final anyYear = await admin
-              .from('academic_years')
-              .select()
-              .eq('school_id', schoolId)
-              .order('start_date', ascending: false)
-              .limit(1)
-              .maybeSingle();
-          if (anyYear != null) {
-            currentYear = AcademicYearModel.fromJson(anyYear);
-          } else {
-            currentYear = await _ensureCurrentAcademicYear(schoolId, []);
-          }
+        if (yearRes != null) {
+          currentYear = AcademicYearModel.fromJson(yearRes);
         }
       }
+
+      if (currentYear == null) throw Exception('Aucune année scolaire active');
 
       // Fetch fresh academic year directly from DB to verify bounds
       final yearRes = await admin
@@ -1361,7 +1365,22 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
         .single();
     final schoolId = profile['school_id'];
 
-    final year = state.asData?.value.currentAcademicYear;
+    final currentState = state.asData?.value;
+    var year = currentState?.selectedAcademicYear ?? currentState?.currentAcademicYear;
+    year ??= currentState?.academicYears.where((y) => y.isCurrent).firstOrNull ?? currentState?.academicYears.firstOrNull;
+    if (year == null) {
+      final yearRes = await admin
+          .from('academic_years')
+          .select('id, name, start_date, end_date, is_current')
+          .eq('school_id', schoolId)
+          .order('is_current', ascending: false)
+          .order('start_date', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (yearRes != null) {
+        year = AcademicYearModel.fromJson(yearRes);
+      }
+    }
     if (year == null) throw Exception('Aucune année scolaire active');
 
     await admin.from('vacation_periods').insert({
@@ -1392,7 +1411,22 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
         .single();
     final schoolId = profile['school_id'];
 
-    final year = state.asData?.value.currentAcademicYear;
+    final currentState = state.asData?.value;
+    var year = currentState?.selectedAcademicYear ?? currentState?.currentAcademicYear;
+    year ??= currentState?.academicYears.where((y) => y.isCurrent).firstOrNull ?? currentState?.academicYears.firstOrNull;
+    if (year == null) {
+      final yearRes = await admin
+          .from('academic_years')
+          .select('id, name, start_date, end_date, is_current')
+          .eq('school_id', schoolId)
+          .order('is_current', ascending: false)
+          .order('start_date', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (yearRes != null) {
+        year = AcademicYearModel.fromJson(yearRes);
+      }
+    }
     if (year == null) throw Exception('Aucune année scolaire active');
 
     await admin.from('exam_periods').insert({
