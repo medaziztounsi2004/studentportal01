@@ -741,9 +741,10 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
 
         ref.read(undoRedoProvider.notifier).recordAction(
           AppAction(
+            scope: 'professors',
             title: newActive ? 'Activation professeur' : 'Désactivation professeur',
             description: newActive ? 'Activation de $fullName' : 'Désactivation de $fullName',
-            undo: () async {
+            undo: (r) async {
               await SupabaseConfig.adminClient
                   .from('users')
                   .update({'is_active': !newActive})
@@ -752,10 +753,10 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                 setState(() {
                   _user = Map<String, dynamic>.from(_user ?? {})..[ 'is_active'] = !newActive;
                 });
-                ref.invalidate(professorsProvider);
               }
+              r.invalidate(professorsProvider);
             },
-            redo: () async {
+            redo: (r) async {
               await SupabaseConfig.adminClient
                   .from('users')
                   .update({'is_active': newActive})
@@ -764,8 +765,8 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                 setState(() {
                   _user = Map<String, dynamic>.from(_user ?? {})..[ 'is_active'] = newActive;
                 });
-                ref.invalidate(professorsProvider);
               }
+              r.invalidate(professorsProvider);
             },
           ),
         );

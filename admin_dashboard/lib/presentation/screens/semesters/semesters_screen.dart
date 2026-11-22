@@ -1,15 +1,19 @@
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/config/supabase_config.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../providers/semesters_provider.dart';
+import '../../providers/undo_redo_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../widgets/feedback_pill.dart';
 
 const _brand = Color(0xFF7C3AED);
 const _brandLight = Color(0xFFF3E8FF);
@@ -21,12 +25,47 @@ class SemestersScreen extends ConsumerStatefulWidget {
 }
 
 class _SemestersScreenState extends ConsumerState<SemestersScreen> {
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('semesters')) return;
+    try {
+      final desc = await notifier.undo('semesters');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('semesters')) return;
+    try {
+      final desc = await notifier.redo('semesters');
+      if (mounted && desc != null) {
+        FeedbackPill.show(context, message: 'Action rétablie : $desc', type: FeedbackPillType.info);
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final semestersAsync = ref.watch(semestersProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF8FAFC),
       body: Row(
         children: [
           const AdminSidebar(currentRoute: '/semesters'),
@@ -84,7 +123,9 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
           ),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _buildHeader(
@@ -150,7 +191,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          const UndoRedoToolbarButtons(),
+          const UndoRedoToolbarButtons(scope: 'semesters'),
           const SizedBox(width: 12),
           // Add button
           SizedBox(
@@ -2265,44 +2306,42 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                     height: 40,
                     child: ElevatedButton.icon(
                       onPressed: () async {
+                        final sSnapshot = {
+                          'id': s.id,
+                          'name': s.name,
+                          'number': s.number,
+                          'start_date': DateFormat('yyyy-MM-dd').format(s.startDate),
+                          'end_date': DateFormat('yyyy-MM-dd').format(s.endDate),
+                          'is_current': s.isCurrent,
+                          'academic_year_id': s.academicYearId,
+                        };
                         Navigator.pop(ctx);
                         try {
                           await ref.read(semestersProvider.notifier).delete(s.id);
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Row(
-                                  children: [
-                                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Période supprimée avec succès'),
-                                  ],
-                                ),
-                                backgroundColor: Color(0xFF10B981),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
+                            FeedbackPill.showSuccess(context, 'Période "$displayName" supprimée');
                           }
+                          ref.read(undoRedoProvider.notifier).recordAction(
+                            AppAction(
+                              scope: 'semesters',
+                              title: 'Suppression période',
+                              description: 'Suppression de $displayName',
+                              undo: (r) async {
+                                await SupabaseConfig.adminClient.from('semesters').insert(sSnapshot);
+                                await r.read(semestersProvider.notifier).refresh();
+                              },
+                              redo: (r) async {
+                                await r.read(semestersProvider.notifier).delete(s.id);
+                              },
+                            ),
+                          );
                         } catch (e) {
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Row(
-                                  children: [
-                                    const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        UserFriendlyError.format(
-                                          e,
-                                          fallback: 'Impossible de supprimer cette période scolaire.',
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                backgroundColor: const Color(0xFFEF4444),
-                                behavior: SnackBarBehavior.floating,
+                            FeedbackPill.showError(
+                              context,
+                              UserFriendlyError.format(
+                                e,
+                                fallback: 'Impossible de supprimer cette période scolaire.',
                               ),
                             );
                           }

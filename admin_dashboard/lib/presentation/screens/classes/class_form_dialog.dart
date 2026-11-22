@@ -7,6 +7,8 @@ import '../../providers/grade_levels_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/feedback_pill.dart';
 
 class ClassFormDialog extends ConsumerStatefulWidget {
   final ClassModel? classModel;
@@ -372,13 +374,48 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
           : int.tryParse(_capacityController.text);
 
       if (isEditing) {
+        final oldCls = widget.classModel!;
+        final newName = _nameController.text.trim();
+        final newGradeLevelId = _selectedGradeLevelId;
+        final newSectionId = _selectedSectionId;
+        final newRoom = _selectedRoomId;
+        final newCap = capacity;
+
         await notifier.updateClass(
-          id: widget.classModel!.id,
-          name: _nameController.text.trim(),
-          gradeLevelId: _selectedGradeLevelId,
-          sectionId: _selectedSectionId,
-          capacity: capacity,
-          room: _selectedRoomId,
+          id: oldCls.id,
+          name: newName,
+          gradeLevelId: newGradeLevelId,
+          sectionId: newSectionId,
+          capacity: newCap,
+          room: newRoom,
+        );
+
+        ref.read(undoRedoProvider.notifier).recordAction(
+          AppAction(
+            scope: 'classes',
+            title: 'Modification classe',
+            description: 'Modification de $newName',
+            undo: (r) async {
+              await r.read(classesProvider.notifier).updateClass(
+                id: oldCls.id,
+                name: oldCls.name,
+                gradeLevelId: oldCls.gradeLevelId,
+                sectionId: oldCls.sectionId,
+                capacity: oldCls.capacity,
+                room: oldCls.room,
+              );
+            },
+            redo: (r) async {
+              await r.read(classesProvider.notifier).updateClass(
+                id: oldCls.id,
+                name: newName,
+                gradeLevelId: newGradeLevelId,
+                sectionId: newSectionId,
+                capacity: newCap,
+                room: newRoom,
+              );
+            },
+          ),
         );
       } else {
         await notifier.create(
@@ -391,12 +428,7 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
       }
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isEditing ? 'Classe modifiée' : 'Classe créée'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        FeedbackPill.showSuccess(context, isEditing ? 'Classe modifiée' : 'Classe créée');
       }
     } catch (e) {
       if (mounted) {

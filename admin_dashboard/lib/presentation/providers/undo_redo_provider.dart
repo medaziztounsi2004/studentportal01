@@ -1,23 +1,53 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+typedef UndoRedoAsyncCallback = Future<void> Function(Ref ref);
+
 class AppAction {
   final String id;
   final String title;
   final String description;
-  final Future<void> Function() undo;
-  final Future<void> Function() redo;
+  final String? scope;
+  final dynamic _undo;
+  final dynamic _redo;
   final DateTime timestamp;
 
   AppAction({
     required this.title,
     required this.description,
-    required this.undo,
-    required this.redo,
+    required dynamic undo,
+    required dynamic redo,
+    this.scope,
     String? id,
     DateTime? timestamp,
-  })  : id = id ?? DateTime.now().microsecondsSinceEpoch.toString(),
+  })  : _undo = undo,
+        _redo = redo,
+        id = id ?? DateTime.now().microsecondsSinceEpoch.toString(),
         timestamp = timestamp ?? DateTime.now();
+
+  Future<void> executeUndo(Ref ref) async {
+    if (_undo is Future<void> Function(Ref)) {
+      await (_undo as Future<void> Function(Ref))(ref);
+    } else if (_undo is Future<void> Function()) {
+      await (_undo as Future<void> Function())();
+    }
+  }
+
+  Future<void> executeRedo(Ref ref) async {
+    if (_redo is Future<void> Function(Ref)) {
+      await (_redo as Future<void> Function(Ref))(ref);
+    } else if (_redo is Future<void> Function()) {
+      await (_redo as Future<void> Function())();
+    }
+  }
+
+  Future<void> Function() get undo => () => _undo is Future<void> Function(Ref)
+      ? (_undo as Future<void> Function(Ref))(null as dynamic)
+      : (_undo as Future<void> Function())();
+
+  Future<void> Function() get redo => () => _redo is Future<void> Function(Ref)
+      ? (_redo as Future<void> Function(Ref))(null as dynamic)
+      : (_redo as Future<void> Function())();
 }
 
 class UndoRedoState {
@@ -31,19 +61,51 @@ class UndoRedoState {
     this.isExecuting = false,
   });
 
-  bool get canUndo => undoStack.isNotEmpty && !isExecuting;
-  bool get canRedo => redoStack.isNotEmpty && !isExecuting;
+  bool canUndo([String? scope]) {
+    if (isExecuting) return false;
+    if (scope == null) return undoStack.isNotEmpty;
+    return undoStack.any((a) => a.scope == scope);
+  }
 
-  AppAction? get currentUndoAction => undoStack.isNotEmpty ? undoStack.last : null;
-  AppAction? get currentRedoAction => redoStack.isNotEmpty ? redoStack.last : null;
+  bool canRedo([String? scope]) {
+    if (isExecuting) return false;
+    if (scope == null) return redoStack.isNotEmpty;
+    return redoStack.any((a) => a.scope == scope);
+  }
 
-  String get undoTooltip => canUndo
-      ? 'Annuler : ${currentUndoAction!.description} (Ctrl+Z)'
-      : 'Annuler (Ctrl+Z)';
+  AppAction? currentUndoAction([String? scope]) {
+    if (undoStack.isEmpty) return null;
+    if (scope == null) return undoStack.last;
+    try {
+      return undoStack.lastWhere((a) => a.scope == scope);
+    } catch (_) {
+      return null;
+    }
+  }
 
-  String get redoTooltip => canRedo
-      ? 'Rétablir : ${currentRedoAction!.description} (Ctrl+Y)'
-      : 'Rétablir (Ctrl+Y)';
+  AppAction? currentRedoAction([String? scope]) {
+    if (redoStack.isEmpty) return null;
+    if (scope == null) return redoStack.last;
+    try {
+      return redoStack.lastWhere((a) => a.scope == scope);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String undoTooltip([String? scope]) {
+    final a = currentUndoAction(scope);
+    return a != null
+        ? 'Annuler : ${a.description} (Ctrl+Z)'
+        : 'Annuler (Ctrl+Z)';
+  }
+
+  String redoTooltip([String? scope]) {
+    final a = currentRedoAction(scope);
+    return a != null
+        ? 'Rétablir : ${a.description} (Ctrl+Y)'
+        : 'Rétablir (Ctrl+Y)';
+  }
 
   UndoRedoState copyWith({
     List<AppAction>? undoStack,
@@ -79,15 +141,22 @@ class UndoRedoNotifier extends Notifier<UndoRedoState> {
       redoStack: [], // New action clears redo history
       isExecuting: false,
     );
-    debugPrint('[UndoRedo] Recorded action: ${action.title} - ${action.description}. Undo count: ${updatedUndo.length}');
+    debugPrint('[UndoRedo] Recorded action (${action.scope ?? "global"}): ${action.title} - ${action.description}. Undo count: ${updatedUndo.length}');
   }
 
   /// Rollback the latest action and push it to redo
-  Future<String?> undo() async {
-    if (!state.canUndo) return null;
+  Future<String?> undo([String? scope]) async {
+    if (!state.canUndo(scope)) return null;
 
-    final action = state.undoStack.last;
-    final updatedUndo = state.undoStack.sublist(0, state.undoStack.length - 1);
+    final AppAction action;
+    final List<AppAction> updatedUndo = List.from(state.undoStack);
+    if (scope == null) {
+      action = updatedUndo.removeLast();
+    } else {
+      final index = updatedUndo.lastIndexWhere((a) => a.scope == scope);
+      if (index == -1) return null;
+      action = updatedUndo.removeAt(index);
+    }
 
     state = state.copyWith(
       isExecuting: true,
@@ -95,8 +164,8 @@ class UndoRedoNotifier extends Notifier<UndoRedoState> {
     );
 
     try {
-      debugPrint('[UndoRedo] Executing UNDO: ${action.title}');
-      await action.undo();
+      debugPrint('[UndoRedo] Executing UNDO (${action.scope ?? "global"}): ${action.title}');
+      await action.executeUndo(ref);
       final updatedRedo = [...state.redoStack, action];
       state = state.copyWith(
         redoStack: updatedRedo,
@@ -115,11 +184,18 @@ class UndoRedoNotifier extends Notifier<UndoRedoState> {
   }
 
   /// Re-execute the latest undone action and push back to undo
-  Future<String?> redo() async {
-    if (!state.canRedo) return null;
+  Future<String?> redo([String? scope]) async {
+    if (!state.canRedo(scope)) return null;
 
-    final action = state.redoStack.last;
-    final updatedRedo = state.redoStack.sublist(0, state.redoStack.length - 1);
+    final AppAction action;
+    final List<AppAction> updatedRedo = List.from(state.redoStack);
+    if (scope == null) {
+      action = updatedRedo.removeLast();
+    } else {
+      final index = updatedRedo.lastIndexWhere((a) => a.scope == scope);
+      if (index == -1) return null;
+      action = updatedRedo.removeAt(index);
+    }
 
     state = state.copyWith(
       isExecuting: true,
@@ -127,8 +203,8 @@ class UndoRedoNotifier extends Notifier<UndoRedoState> {
     );
 
     try {
-      debugPrint('[UndoRedo] Executing REDO: ${action.title}');
-      await action.redo();
+      debugPrint('[UndoRedo] Executing REDO (${action.scope ?? "global"}): ${action.title}');
+      await action.executeRedo(ref);
       final updatedUndo = [...state.undoStack, action];
       state = state.copyWith(
         undoStack: updatedUndo,
@@ -137,7 +213,6 @@ class UndoRedoNotifier extends Notifier<UndoRedoState> {
       return action.description;
     } catch (e) {
       debugPrint('[UndoRedo] Error executing REDO: $e');
-      // Restore action to redo stack on failure
       state = state.copyWith(
         redoStack: [...state.redoStack, action],
         isExecuting: false,
@@ -146,7 +221,14 @@ class UndoRedoNotifier extends Notifier<UndoRedoState> {
     }
   }
 
-  void clear() {
-    state = UndoRedoState();
+  void clear([String? scope]) {
+    if (scope == null) {
+      state = UndoRedoState();
+    } else {
+      state = state.copyWith(
+        undoStack: state.undoStack.where((a) => a.scope != scope).toList(),
+        redoStack: state.redoStack.where((a) => a.scope != scope).toList(),
+      );
+    }
   }
 }

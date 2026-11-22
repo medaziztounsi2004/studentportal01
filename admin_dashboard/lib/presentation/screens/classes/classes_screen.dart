@@ -1,18 +1,22 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/config/supabase_config.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/class_model.dart';
 import '../../../data/models/academic_models.dart';
 import '../../providers/classes_provider.dart';
 import '../../providers/grade_levels_provider.dart';
+import '../../providers/undo_redo_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../widgets/feedback_pill.dart';
 
 import 'class_form_dialog.dart';
 
@@ -43,28 +47,65 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
     super.dispose();
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('classes')) return;
+    try {
+      final desc = await notifier.undo('classes');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('classes')) return;
+    try {
+      final desc = await notifier.redo('classes');
+      if (mounted && desc != null) {
+        FeedbackPill.show(context, message: 'Action rétablie : $desc', type: FeedbackPillType.info);
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final classesAsync = ref.watch(classesProvider);
     final gradeLevelsAsync = ref.watch(gradeLevelsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: Row(
-        children: [
-          const AdminSidebar(currentRoute: '/classes'),
-          Expanded(
-            child: classesAsync.when(
-              loading: () => const ClassesSkeletonLoader(),
-              error: (e, _) => _buildErrorState(e),
-              data: (state) => gradeLevelsAsync.when(
-                loading: () => const ClassesSkeletonLoader(),
-                error: (e, _) => _buildErrorState(e),
-                data: (glState) => _buildBody(context, state, glState),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF5F7FA),
+          body: Row(
+            children: [
+              const AdminSidebar(currentRoute: '/classes'),
+              Expanded(
+                child: classesAsync.when(
+                  loading: () => const ClassesSkeletonLoader(),
+                  error: (e, _) => _buildErrorState(e),
+                  data: (state) => gradeLevelsAsync.when(
+                    loading: () => const ClassesSkeletonLoader(),
+                    error: (e, _) => _buildErrorState(e),
+                    data: (glState) => _buildBody(context, state, glState),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -590,7 +631,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          const UndoRedoToolbarButtons(),
+          const UndoRedoToolbarButtons(scope: 'classes'),
           const SizedBox(width: 16),
           // + Nouvelle classe button
           SizedBox(
@@ -1125,7 +1166,42 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
             Material(
               color: AppColors.error, borderRadius: BorderRadius.circular(10),
               child: InkWell(
-                onTap: () { ref.read(classesProvider.notifier).delete(cls.id); Navigator.pop(ctx); },
+                onTap: () {
+                  final classSnapshot = cls;
+                  ref.read(classesProvider.notifier).delete(cls.id);
+                  Navigator.pop(ctx);
+                  ref.read(undoRedoProvider.notifier).recordAction(
+                    AppAction(
+                      scope: 'classes',
+                      title: 'Suppression classe',
+                      description: 'Suppression de ${cls.name}',
+                      undo: (r) async {
+                        final user = SupabaseConfig.client.auth.currentUser;
+                        final profile = user != null
+                            ? await SupabaseConfig.adminClient
+                                .from('users')
+                                .select('school_id')
+                                .eq('id', user.id)
+                                .single()
+                            : null;
+                        await SupabaseConfig.adminClient.from('classes').insert({
+                          'id': classSnapshot.id,
+                          'name': classSnapshot.name,
+                          'school_id': profile?['school_id'],
+                          'niveau_id': classSnapshot.gradeLevelId,
+                          'section_id': classSnapshot.sectionId,
+                          'room': classSnapshot.room,
+                          'capacity': classSnapshot.capacity,
+                        });
+                        await r.read(classesProvider.notifier).refresh();
+                      },
+                      redo: (r) async {
+                        await r.read(classesProvider.notifier).delete(classSnapshot.id);
+                      },
+                    ),
+                  );
+                  if (mounted) FeedbackPill.showSuccess(context, 'Classe "${cls.name}" supprimée');
+                },
                 borderRadius: BorderRadius.circular(10),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 22, vertical: 11),

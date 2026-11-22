@@ -425,7 +425,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           // Inline stat pills
           _inlineStat(Icons.meeting_room_rounded, currentRoom, AppColors.slate500),
           const Spacer(),
-          const UndoRedoToolbarButtons(),
+          const UndoRedoToolbarButtons(scope: 'classes'),
           const SizedBox(width: 8),
           SizedBox(
             width: 220, height: 36,

@@ -21,6 +21,7 @@ import 'simple_bulk_import_screen.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/admin_sort_dropdown.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/undo_redo_provider.dart';
 import '../../widgets/undo_redo_toolbar_buttons.dart';
 import '../../widgets/feedback_pill.dart';
@@ -115,9 +116,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
   Future<void> _handleUndo() async {
     final notifier = ref.read(undoRedoProvider.notifier);
-    if (!ref.read(undoRedoProvider).canUndo) return;
+    if (!ref.read(undoRedoProvider).canUndo('users')) return;
     try {
-      final desc = await notifier.undo();
+      final desc = await notifier.undo('users');
       if (mounted && desc != null) {
         FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
       }
@@ -130,9 +131,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
   Future<void> _handleRedo() async {
     final notifier = ref.read(undoRedoProvider.notifier);
-    if (!ref.read(undoRedoProvider).canRedo) return;
+    if (!ref.read(undoRedoProvider).canRedo('users')) return;
     try {
-      final desc = await notifier.redo();
+      final desc = await notifier.redo('users');
       if (mounted && desc != null) {
         FeedbackPill.show(context, message: 'Action rétablie : $desc', type: FeedbackPillType.info);
       }
@@ -396,7 +397,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             onPressed: _toggleFilters,
           ),
           const SizedBox(width: 8),
-          const UndoRedoToolbarButtons(),
+          const UndoRedoToolbarButtons(scope: 'users'),
           const SizedBox(width: 8),
           _buildHeaderIconButton(
             icon: Icons.file_download_outlined,
@@ -2088,20 +2089,29 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                           .read(usersProvider.notifier)
                           .toggleUserArchive(user.id, !willSuspend);
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              success
-                                  ? (willSuspend
-                                      ? 'Compte suspendu'
-                                      : 'Compte activé')
-                                  : 'Échec de la modification du statut',
+                        if (success) {
+                          FeedbackPill.showSuccess(
+                            context,
+                            willSuspend ? 'Compte suspendu' : 'Compte activé',
+                          );
+                          ref.read(undoRedoProvider.notifier).recordAction(
+                            AppAction(
+                              scope: 'users',
+                              title: willSuspend ? 'Suspension utilisateur' : 'Activation utilisateur',
+                              description: willSuspend
+                                  ? 'Suspension de ${user.fullName}'
+                                  : 'Activation de ${user.fullName}',
+                              undo: (r) async {
+                                await r.read(usersProvider.notifier).toggleUserArchive(user.id, willSuspend);
+                              },
+                              redo: (r) async {
+                                await r.read(usersProvider.notifier).toggleUserArchive(user.id, !willSuspend);
+                              },
                             ),
-                            backgroundColor: success
-                                ? (willSuspend ? AppColors.warning : AppColors.success)
-                                : AppColors.error,
-                          ),
-                        );
+                          );
+                        } else {
+                          FeedbackPill.showError(context, 'Échec de la modification du statut');
+                        }
                       }
                     },
                     icon: Icon(willSuspend ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded, size: 16),
@@ -2175,10 +2185,40 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               SizedBox(
                 height: 40,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ref.read(usersProvider.notifier).deleteUser(u.id);
+                  onPressed: () async {
+                    final uSnapshot = u.toJson();
+                    final uId = u.id;
+                    final uName = u.fullName;
                     Navigator.pop(ctx);
-                    FeedbackPill.showSuccess(context, 'Utilisateur "${u.fullName}" supprimé');
+                    await ref.read(usersProvider.notifier).deleteUser(uId);
+                    if (mounted) {
+                      FeedbackPill.showSuccess(context, 'Utilisateur "$uName" supprimé');
+                    }
+                    ref.read(undoRedoProvider.notifier).recordAction(
+                      AppAction(
+                        scope: 'users',
+                        title: 'Suppression utilisateur',
+                        description: 'Suppression de $uName',
+                        undo: (r) async {
+                          final schoolId = r.read(authProvider).user?.schoolId ?? uSnapshot['school_id'];
+                          await SupabaseConfig.adminClient.from('users').upsert({
+                            'id': uSnapshot['id'],
+                            'school_id': schoolId,
+                            'role': uSnapshot['role'] ?? 'student',
+                            'full_name': uSnapshot['full_name'],
+                            'email': uSnapshot['email'],
+                            'phone': uSnapshot['phone'],
+                            'photo_url': uSnapshot['photo_url'],
+                            'gender': uSnapshot['gender'],
+                            'is_active': uSnapshot['is_active'] ?? true,
+                          });
+                          await r.read(usersProvider.notifier).loadUsers();
+                        },
+                        redo: (r) async {
+                          await r.read(usersProvider.notifier).deleteUser(uId);
+                        },
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
                   label: const Text('Supprimer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -2237,15 +2277,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           );
           ref.read(undoRedoProvider.notifier).recordAction(
             AppAction(
+              scope: 'users',
               title: shouldArchive ? 'Suspension utilisateurs' : 'Activation utilisateurs',
               description: shouldArchive
                   ? 'Suspension de $count utilisateur(s)'
                   : 'Activation de $count utilisateur(s)',
-              undo: () async {
-                await ref.read(usersProvider.notifier).bulkToggleArchive(selectedIds, !newActive);
+              undo: (r) async {
+                await r.read(usersProvider.notifier).bulkToggleArchive(selectedIds, !newActive);
               },
-              redo: () async {
-                await ref.read(usersProvider.notifier).bulkToggleArchive(selectedIds, newActive);
+              redo: (r) async {
+                await r.read(usersProvider.notifier).bulkToggleArchive(selectedIds, newActive);
               },
             ),
           );
@@ -2700,10 +2741,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 height: 40,
                 child: ElevatedButton.icon(
                   onPressed: () async {
+                    final selectedList = _selectedUserIds.toList();
+                    final allUsers = ref.read(usersProvider).value?.users ?? [];
+                    final snapshots = allUsers
+                        .where((u) => selectedList.contains(u.id))
+                        .map((u) => u.toJson())
+                        .toList();
                     Navigator.pop(ctx);
                     FeedbackPill.showProcessing(context, 'Suppression de $count utilisateurs en cours...');
                     final notifier = ref.read(usersProvider.notifier);
-                    final result = await notifier.bulkDeleteUsers(_selectedUserIds.toList());
+                    final result = await notifier.bulkDeleteUsers(selectedList);
                     final deleted = result['deleted'] ?? 0;
                     final failed = result['failed'] ?? 0;
                     setState(() {
@@ -2716,6 +2763,35 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       } else {
                         FeedbackPill.showError(context, '$deleted supprimé(s), $failed échec(s)');
                       }
+                    }
+                    if (deleted > 0) {
+                      ref.read(undoRedoProvider.notifier).recordAction(
+                        AppAction(
+                          scope: 'users',
+                          title: 'Suppression en masse',
+                          description: 'Suppression de $deleted utilisateur(s)',
+                          undo: (r) async {
+                            final schoolId = r.read(authProvider).user?.schoolId;
+                            for (final s in snapshots) {
+                              await SupabaseConfig.adminClient.from('users').upsert({
+                                'id': s['id'],
+                                'school_id': schoolId ?? s['school_id'],
+                                'role': s['role'] ?? 'student',
+                                'full_name': s['full_name'],
+                                'email': s['email'],
+                                'phone': s['phone'],
+                                'photo_url': s['photo_url'],
+                                'gender': s['gender'],
+                                'is_active': s['is_active'] ?? true,
+                              });
+                            }
+                            await r.read(usersProvider.notifier).loadUsers();
+                          },
+                          redo: (r) async {
+                            await r.read(usersProvider.notifier).bulkDeleteUsers(selectedList);
+                          },
+                        ),
+                      );
                     }
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),

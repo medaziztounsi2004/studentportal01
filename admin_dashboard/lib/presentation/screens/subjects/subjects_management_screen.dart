@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/config/supabase_config.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../providers/subjects_management_provider.dart';
+import '../../providers/undo_redo_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/ios_loader.dart';
@@ -14,6 +16,7 @@ import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/modern_animated_switch.dart';
 import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../widgets/feedback_pill.dart';
 import '../../../data/models/academic_models.dart';
 import '../../../data/models/school_models.dart';
 import '../../../data/models/user_model.dart';
@@ -185,12 +188,47 @@ class _SubjectsManagementScreenState
     });
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('subjects')) return;
+    try {
+      final desc = await notifier.undo('subjects');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('subjects')) return;
+    try {
+      final desc = await notifier.redo('subjects');
+      if (mounted && desc != null) {
+        FeedbackPill.show(context, message: 'Action rétablie : $desc', type: FeedbackPillType.info);
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final stateAsync = ref.watch(subjectsManagementProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF6F7FB),
       body: Stack(
         children: [
           Row(
@@ -259,7 +297,9 @@ class _SubjectsManagementScreenState
             ),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _buildFloatingSubjectSelectionBar(
@@ -609,7 +649,7 @@ class _SubjectsManagementScreenState
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           const SizedBox(width: 8),
-          const UndoRedoToolbarButtons(),
+          const UndoRedoToolbarButtons(scope: 'subjects'),
           const SizedBox(width: 12),
           SizedBox(
             height: 40,
@@ -6448,12 +6488,27 @@ class _SubjectsManagementScreenState
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () async {
+                    final subjectSnapshot = subject.toJson()..['id'] = subject.id;
                     try {
                       await ref
                           .read(subjectsManagementProvider.notifier)
                           .deleteSubject(subject.id);
                       if (ctx.mounted) Navigator.pop(ctx);
-                      _showSuccess('Matière supprimée');
+                      _showSuccess('Matière "${subject.name}" supprimée');
+                      ref.read(undoRedoProvider.notifier).recordAction(
+                        AppAction(
+                          scope: 'subjects',
+                          title: 'Suppression matière',
+                          description: 'Suppression de ${subject.name}',
+                          undo: (r) async {
+                            await SupabaseConfig.adminClient.from('subjects').insert(subjectSnapshot);
+                            await r.read(subjectsManagementProvider.notifier).refresh();
+                          },
+                          redo: (r) async {
+                            await r.read(subjectsManagementProvider.notifier).deleteSubject(subject.id);
+                          },
+                        ),
+                      );
                     } catch (e) {
                       _showError(UserFriendlyError.format(e));
                     }
@@ -7731,15 +7786,11 @@ class _SubjectsManagementScreenState
   }
 
   void _showSuccess(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: AppColors.success),
-    );
+    if (mounted) FeedbackPill.showSuccess(context, msg);
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: AppColors.error),
-    );
+    if (mounted) FeedbackPill.showError(context, msg);
   }
 }
 

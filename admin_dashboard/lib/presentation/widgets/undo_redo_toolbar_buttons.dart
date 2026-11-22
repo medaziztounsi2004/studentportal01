@@ -6,19 +6,22 @@ import 'feedback_pill.dart';
 
 /// Modern borderless Undo and Redo toolbar buttons.
 /// Styled cleanly like the filter icon without square containers or borders.
+/// Optionally supports a [scope] string to isolate undo/redo history per section/page.
 class UndoRedoToolbarButtons extends ConsumerWidget {
+  final String? scope;
   final Future<void> Function()? onUndo;
   final Future<void> Function()? onRedo;
 
   const UndoRedoToolbarButtons({
     super.key,
+    this.scope,
     this.onUndo,
     this.onRedo,
   });
 
   Future<void> _handleUndo(BuildContext context, WidgetRef ref) async {
     final notifier = ref.read(undoRedoProvider.notifier);
-    if (!ref.read(undoRedoProvider).canUndo) return;
+    if (!ref.read(undoRedoProvider).canUndo(scope)) return;
 
     if (onUndo != null) {
       await onUndo!();
@@ -26,7 +29,7 @@ class UndoRedoToolbarButtons extends ConsumerWidget {
     }
 
     try {
-      final desc = await notifier.undo();
+      final desc = await notifier.undo(scope);
       if (context.mounted && desc != null) {
         FeedbackPill.showUndo(
           context,
@@ -42,7 +45,7 @@ class UndoRedoToolbarButtons extends ConsumerWidget {
 
   Future<void> _handleRedo(BuildContext context, WidgetRef ref) async {
     final notifier = ref.read(undoRedoProvider.notifier);
-    if (!ref.read(undoRedoProvider).canRedo) return;
+    if (!ref.read(undoRedoProvider).canRedo(scope)) return;
 
     if (onRedo != null) {
       await onRedo!();
@@ -50,7 +53,7 @@ class UndoRedoToolbarButtons extends ConsumerWidget {
     }
 
     try {
-      final desc = await notifier.redo();
+      final desc = await notifier.redo(scope);
       if (context.mounted && desc != null) {
         FeedbackPill.show(
           context,
@@ -68,16 +71,18 @@ class UndoRedoToolbarButtons extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final undoState = ref.watch(undoRedoProvider);
+    final canUndo = undoState.canUndo(scope);
+    final canRedo = undoState.canRedo(scope);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           icon: const Icon(Icons.rotate_left_rounded, size: 20),
-          tooltip: undoState.undoTooltip,
-          onPressed: undoState.canUndo ? () => _handleUndo(context, ref) : null,
-          color: undoState.canUndo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
-          disabledColor: AppColors.textTertiary.withOpacity(0.35),
+          tooltip: undoState.undoTooltip(scope),
+          onPressed: canUndo ? () => _handleUndo(context, ref) : null,
+          color: canUndo ? AppColors.textPrimary : AppColors.textTertiary.withValues(alpha: 0.35),
+          disabledColor: AppColors.textTertiary.withValues(alpha: 0.35),
           style: IconButton.styleFrom(
             backgroundColor: Colors.transparent,
             shape: RoundedRectangleBorder(
@@ -89,10 +94,10 @@ class UndoRedoToolbarButtons extends ConsumerWidget {
         ),
         IconButton(
           icon: const Icon(Icons.rotate_right_rounded, size: 20),
-          tooltip: undoState.redoTooltip,
-          onPressed: undoState.canRedo ? () => _handleRedo(context, ref) : null,
-          color: undoState.canRedo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
-          disabledColor: AppColors.textTertiary.withOpacity(0.35),
+          tooltip: undoState.redoTooltip(scope),
+          onPressed: canRedo ? () => _handleRedo(context, ref) : null,
+          color: canRedo ? AppColors.textPrimary : AppColors.textTertiary.withValues(alpha: 0.35),
+          disabledColor: AppColors.textTertiary.withValues(alpha: 0.35),
           style: IconButton.styleFrom(
             backgroundColor: Colors.transparent,
             shape: RoundedRectangleBorder(

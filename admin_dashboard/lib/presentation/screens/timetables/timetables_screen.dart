@@ -20,6 +20,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/feedback_pill.dart';
 
 // ===================== MODELS =====================
 
@@ -2563,7 +2565,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const UndoRedoToolbarButtons(),
+                      const UndoRedoToolbarButtons(scope: 'timetables'),
                     ],
                   ),
                   // Active filters
@@ -4143,16 +4145,12 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
 
   Future<void> _deleteSlot(TimetableSlotAdmin slot) async {
     final selectedClass = ref.read(selectedClassProvider);
-    if (selectedClass != null) {
-      ref.read(classTimetableSlotsProvider(selectedClass.id).notifier).removeSlot(slot.id);
+    final classId = selectedClass?.id;
+    if (classId != null) {
+      ref.read(classTimetableSlotsProvider(classId).notifier).removeSlot(slot.id);
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cours supprimé'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      FeedbackPill.showSuccess(context, 'Cours supprimé');
     }
 
     try {
@@ -4160,14 +4158,43 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
           .from('timetable_slots')
           .delete()
           .eq('id', slot.id);
+
+      final slotSnapshot = {
+        'id': slot.id,
+        'subject_offering_id': slot.subjectOfferingId,
+        'day_of_week': slot.dayOfWeek,
+        'start_time': slot.startTime,
+        'end_time': slot.endTime,
+        'room': slot.room,
+        'timetable_type': slot.timetableType,
+        'exam_period_id': slot.examPeriodId,
+      };
+
+      ref.read(undoRedoProvider.notifier).recordAction(
+        AppAction(
+          scope: 'timetables',
+          title: 'Suppression cours',
+          description: 'Suppression du cours de ${slot.subjectName}',
+          undo: (r) async {
+            await SupabaseConfig.client.from('timetable_slots').insert(slotSnapshot);
+            if (classId != null) {
+              r.invalidate(classTimetableSlotsProvider(classId));
+            }
+          },
+          redo: (r) async {
+            await SupabaseConfig.client.from('timetable_slots').delete().eq('id', slot.id);
+            if (classId != null) {
+              r.invalidate(classTimetableSlotsProvider(classId));
+            }
+          },
+        ),
+      );
     } catch (e) {
-      if (selectedClass != null) {
-        ref.invalidate(classTimetableSlotsProvider(selectedClass.id));
+      if (classId != null) {
+        ref.invalidate(classTimetableSlotsProvider(classId));
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
-        );
+        FeedbackPill.showError(context, UserFriendlyError.format(e));
       }
     }
   }

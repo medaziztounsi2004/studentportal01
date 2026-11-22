@@ -1,13 +1,17 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart' show AppColors;
+import '../../../core/config/supabase_config.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../providers/grade_levels_provider.dart';
+import '../../providers/undo_redo_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../widgets/feedback_pill.dart';
 
 import '../../../data/models/academic_models.dart';
 
@@ -47,12 +51,47 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
     super.dispose();
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('grade_levels')) return;
+    try {
+      final desc = await notifier.undo('grade_levels');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('grade_levels')) return;
+    try {
+      final desc = await notifier.redo('grade_levels');
+      if (mounted && desc != null) {
+        FeedbackPill.show(context, message: 'Action rétablie : $desc', type: FeedbackPillType.info);
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final stateAsync = ref.watch(gradeLevelsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F6F8),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF6F6F8),
       body: Stack(
         children: [
           Row(
@@ -126,7 +165,9 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
           ],
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   // ====================== HEADER ======================
@@ -207,7 +248,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
           // Filter button
           _buildFilterButton(),
           const SizedBox(width: 8),
-          const UndoRedoToolbarButtons(),
+          const UndoRedoToolbarButtons(scope: 'grade_levels'),
           const SizedBox(width: 16),
           // Ajouter popup button
           _buildAddButton(),
@@ -1955,7 +1996,24 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
       onConfirm: () async {
         try {
           await ref.read(gradeLevelsProvider.notifier).deleteGradeLevel(grade.id);
-          _showSuccess('Niveau supprimé');
+          _showSuccess('Niveau "${grade.name}" supprimé');
+          ref.read(undoRedoProvider.notifier).recordAction(
+            AppAction(
+              scope: 'grade_levels',
+              title: 'Suppression niveau',
+              description: 'Suppression de ${grade.name}',
+              undo: (r) async {
+                await SupabaseConfig.adminClient
+                    .from('niveaux')
+                    .update({'is_active': true})
+                    .eq('id', grade.id);
+                r.invalidate(gradeLevelsProvider);
+              },
+              redo: (r) async {
+                await r.read(gradeLevelsProvider.notifier).deleteGradeLevel(grade.id);
+              },
+            ),
+          );
         } catch (e) {
           _showError(UserFriendlyError.format(e));
         }
@@ -1971,7 +2029,24 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
       onConfirm: () async {
         try {
           await ref.read(gradeLevelsProvider.notifier).deleteSection(section.id);
-          _showSuccess('Filière supprimée');
+          _showSuccess('Filière "${section.name}" supprimée');
+          ref.read(undoRedoProvider.notifier).recordAction(
+            AppAction(
+              scope: 'grade_levels',
+              title: 'Suppression filière',
+              description: 'Suppression de ${section.name}',
+              undo: (r) async {
+                await SupabaseConfig.adminClient
+                    .from('sections')
+                    .update({'is_active': true})
+                    .eq('id', section.id);
+                r.invalidate(gradeLevelsProvider);
+              },
+              redo: (r) async {
+                await r.read(gradeLevelsProvider.notifier).deleteSection(section.id);
+              },
+            ),
+          );
         } catch (e) {
           _showError(UserFriendlyError.format(e));
         }
@@ -1987,7 +2062,24 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
       onConfirm: () async {
         try {
           await ref.read(gradeLevelsProvider.notifier).deleteExamType(examType.id);
-          _showSuccess('Type d\'examen supprimé');
+          _showSuccess('Type d\'examen "${examType.name}" supprimé');
+          ref.read(undoRedoProvider.notifier).recordAction(
+            AppAction(
+              scope: 'grade_levels',
+              title: 'Suppression type d\'examen',
+              description: 'Suppression de ${examType.name}',
+              undo: (r) async {
+                await SupabaseConfig.adminClient
+                    .from('exam_types')
+                    .update({'is_active': true})
+                    .eq('id', examType.id);
+                r.invalidate(gradeLevelsProvider);
+              },
+              redo: (r) async {
+                await r.read(gradeLevelsProvider.notifier).deleteExamType(examType.id);
+              },
+            ),
+          );
         } catch (e) {
           _showError(UserFriendlyError.format(e));
         }
@@ -1997,17 +2089,39 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
 
   void _confirmBulkDeleteSections() {
     final count = _selectedSectionIds.length;
+    final idsToDelete = _selectedSectionIds.toList();
     _showBulkDeleteDialog(
       context: context,
       itemType: 'filière(s)',
       count: count,
       onConfirm: () async {
         try {
-          for (final id in _selectedSectionIds.toList()) {
+          for (final id in idsToDelete) {
             await ref.read(gradeLevelsProvider.notifier).deleteSection(id);
           }
           setState(() => _selectedSectionIds.clear());
           _showSuccess('$count filière(s) supprimée(s)');
+          ref.read(undoRedoProvider.notifier).recordAction(
+            AppAction(
+              scope: 'grade_levels',
+              title: 'Suppression en masse filières',
+              description: 'Suppression de $count filière(s)',
+              undo: (r) async {
+                for (final id in idsToDelete) {
+                  await SupabaseConfig.adminClient
+                      .from('sections')
+                      .update({'is_active': true})
+                      .eq('id', id);
+                }
+                r.invalidate(gradeLevelsProvider);
+              },
+              redo: (r) async {
+                for (final id in idsToDelete) {
+                  await r.read(gradeLevelsProvider.notifier).deleteSection(id);
+                }
+              },
+            ),
+          );
         } catch (e) {
           _showError(UserFriendlyError.format(e));
         }
@@ -2017,17 +2131,39 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
 
   void _confirmBulkDeleteExamTypes() {
     final count = _selectedExamTypeIds.length;
+    final idsToDelete = _selectedExamTypeIds.toList();
     _showBulkDeleteDialog(
       context: context,
       itemType: 'type(s) d\'examen',
       count: count,
       onConfirm: () async {
         try {
-          for (final id in _selectedExamTypeIds.toList()) {
+          for (final id in idsToDelete) {
             await ref.read(gradeLevelsProvider.notifier).deleteExamType(id);
           }
           setState(() => _selectedExamTypeIds.clear());
           _showSuccess('$count type(s) d\'examen supprimé(s)');
+          ref.read(undoRedoProvider.notifier).recordAction(
+            AppAction(
+              scope: 'grade_levels',
+              title: 'Suppression en masse types d\'examen',
+              description: 'Suppression de $count type(s) d\'examen',
+              undo: (r) async {
+                for (final id in idsToDelete) {
+                  await SupabaseConfig.adminClient
+                      .from('exam_types')
+                      .update({'is_active': true})
+                      .eq('id', id);
+                }
+                r.invalidate(gradeLevelsProvider);
+              },
+              redo: (r) async {
+                for (final id in idsToDelete) {
+                  await r.read(gradeLevelsProvider.notifier).deleteExamType(id);
+                }
+              },
+            ),
+          );
         } catch (e) {
           _showError(UserFriendlyError.format(e));
         }
@@ -2133,15 +2269,11 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   }
 
   void _showSuccess(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.success));
+    if (mounted) FeedbackPill.showSuccess(context, msg);
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.error));
+    if (mounted) FeedbackPill.showError(context, msg);
   }
 
   // ==================== FILTER PANEL ====================

@@ -251,9 +251,9 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
 
   Future<void> _handleUndo() async {
     final notifier = ref.read(undoRedoProvider.notifier);
-    if (!ref.read(undoRedoProvider).canUndo) return;
+    if (!ref.read(undoRedoProvider).canUndo('professors')) return;
     try {
-      final desc = await notifier.undo();
+      final desc = await notifier.undo('professors');
       if (mounted && desc != null) {
         FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
       }
@@ -266,9 +266,9 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
 
   Future<void> _handleRedo() async {
     final notifier = ref.read(undoRedoProvider.notifier);
-    if (!ref.read(undoRedoProvider).canRedo) return;
+    if (!ref.read(undoRedoProvider).canRedo('professors')) return;
     try {
-      final desc = await notifier.redo();
+      final desc = await notifier.redo('professors');
       if (mounted && desc != null) {
         FeedbackPill.show(context, message: 'Action rétablie : $desc', type: FeedbackPillType.info);
       }
@@ -603,7 +603,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           const SizedBox(width: 8),
-          const UndoRedoToolbarButtons(),
+          const UndoRedoToolbarButtons(scope: 'professors'),
           const SizedBox(width: 16),
           // Ajouter button — same as users
           SizedBox(
@@ -1002,13 +1002,14 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.read(professorsProvider.notifier).toggleArchive([id], false);
                       ref.read(undoRedoProvider.notifier).recordAction(
                         AppAction(
+                          scope: 'professors',
                           title: 'Désactivation professeur',
                           description: 'Désactivation de $name',
-                          undo: () async {
-                            await ref.read(professorsProvider.notifier).toggleArchive([id], true);
+                          undo: (r) async {
+                            await r.read(professorsProvider.notifier).toggleArchive([id], true);
                           },
-                          redo: () async {
-                            await ref.read(professorsProvider.notifier).toggleArchive([id], false);
+                          redo: (r) async {
+                            await r.read(professorsProvider.notifier).toggleArchive([id], false);
                           },
                         ),
                       );
@@ -1081,13 +1082,14 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.read(professorsProvider.notifier).toggleArchive([id], true);
                       ref.read(undoRedoProvider.notifier).recordAction(
                         AppAction(
+                          scope: 'professors',
                           title: 'Activation professeur',
                           description: 'Activation de $name',
-                          undo: () async {
-                            await ref.read(professorsProvider.notifier).toggleArchive([id], false);
+                          undo: (r) async {
+                            await r.read(professorsProvider.notifier).toggleArchive([id], false);
                           },
-                          redo: () async {
-                            await ref.read(professorsProvider.notifier).toggleArchive([id], true);
+                          redo: (r) async {
+                            await r.read(professorsProvider.notifier).toggleArchive([id], true);
                           },
                         ),
                       );
@@ -1175,10 +1177,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     ref.read(professorsProvider.notifier).delete(id);
                     ref.read(undoRedoProvider.notifier).recordAction(
                       AppAction(
+                        scope: 'professors',
                         title: 'Suppression professeur',
                         description: 'Suppression de $name',
-                        undo: () async {
-                          final schoolId = ref.read(authProvider).user?.schoolId ?? profSnapshot['school_id'];
+                        undo: (r) async {
+                          final schoolId = r.read(authProvider).user?.schoolId ?? profSnapshot['school_id'];
                           await SupabaseConfig.adminClient.from('users').upsert({
                             'id': profSnapshot['id'],
                             'school_id': schoolId,
@@ -1190,10 +1193,10 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                             'gender': profSnapshot['gender'],
                             'is_active': profSnapshot['is_active'] ?? true,
                           });
-                          await ref.read(professorsProvider.notifier).refresh(showLoading: false);
+                          await r.read(professorsProvider.notifier).refresh(showLoading: false);
                         },
-                        redo: () async {
-                          await ref.read(professorsProvider.notifier).delete(id);
+                        redo: (r) async {
+                          await r.read(professorsProvider.notifier).delete(id);
                         },
                       ),
                     );
@@ -1441,13 +1444,14 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.read(professorsProvider.notifier).toggleArchive(ids, false);
                       ref.read(undoRedoProvider.notifier).recordAction(
                         AppAction(
+                          scope: 'professors',
                           title: 'Désactivation en masse',
                           description: 'Désactivation de ${ids.length} professeur(s)',
-                          undo: () async {
-                            await ref.read(professorsProvider.notifier).toggleArchive(ids, true);
+                          undo: (r) async {
+                            await r.read(professorsProvider.notifier).toggleArchive(ids, true);
                           },
-                          redo: () async {
-                            await ref.read(professorsProvider.notifier).toggleArchive(ids, false);
+                          redo: (r) async {
+                            await r.read(professorsProvider.notifier).toggleArchive(ids, false);
                           },
                         ),
                       );
@@ -1588,13 +1592,14 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.read(professorsProvider.notifier).toggleArchive(ids, true);
                       ref.read(undoRedoProvider.notifier).recordAction(
                         AppAction(
+                          scope: 'professors',
                           title: 'Activation en masse',
                           description: 'Activation de ${ids.length} professeur(s)',
-                          undo: () async {
-                            await ref.read(professorsProvider.notifier).toggleArchive(ids, false);
+                          undo: (r) async {
+                            await r.read(professorsProvider.notifier).toggleArchive(ids, false);
                           },
-                          redo: () async {
-                            await ref.read(professorsProvider.notifier).toggleArchive(ids, true);
+                          redo: (r) async {
+                            await r.read(professorsProvider.notifier).toggleArchive(ids, true);
                           },
                         ),
                       );
@@ -1667,10 +1672,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     ref.read(professorsProvider.notifier).bulkDelete(ids);
                     ref.read(undoRedoProvider.notifier).recordAction(
                       AppAction(
+                        scope: 'professors',
                         title: 'Suppression en masse',
                         description: 'Suppression de ${ids.length} professeur(s)',
-                        undo: () async {
-                          final schoolId = ref.read(authProvider).user?.schoolId;
+                        undo: (r) async {
+                          final schoolId = r.read(authProvider).user?.schoolId;
                           for (final p in snapshots) {
                             await SupabaseConfig.adminClient.from('users').upsert({
                               'id': p['id'],
@@ -1684,10 +1690,10 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                               'is_active': p['is_active'] ?? true,
                             });
                           }
-                          await ref.read(professorsProvider.notifier).refresh(showLoading: false);
+                          await r.read(professorsProvider.notifier).refresh(showLoading: false);
                         },
-                        redo: () async {
-                          await ref.read(professorsProvider.notifier).bulkDelete(ids);
+                        redo: (r) async {
+                          await r.read(professorsProvider.notifier).bulkDelete(ids);
                         },
                       ),
                     );
