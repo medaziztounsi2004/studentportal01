@@ -585,7 +585,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     final isLoading = professorsAsync.isLoading;
     final totalCount = allProfs.length;
     final activeCount = allProfs.where((p) => p['is_active'] == true).length;
-    final archivedCount = allProfs.where((p) => p['is_active'] != true).length;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
@@ -932,21 +931,37 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF6B7280), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    ref.read(professorsProvider.notifier).toggleArchive([id], false);
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" archivé'), backgroundColor: AppColors.warning));
-                  },
-                  icon: const Icon(Icons.archive_outlined, size: 16),
-                  label: const Text('Archiver', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      ref.read(professorsProvider.notifier).toggleArchive([id], false);
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" archivé'), backgroundColor: AppColors.warning));
+                    },
+                    icon: const Icon(Icons.archive_outlined, size: 16),
+                    label: const Text('Archiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.warning,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -983,21 +998,37 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF6B7280), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    ref.read(professorsProvider.notifier).toggleArchive([id], true);
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désarchivé'), backgroundColor: AppColors.success));
-                  },
-                  icon: const Icon(Icons.unarchive_outlined, size: 16),
-                  label: const Text('Désarchiver', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6D4CF6), foregroundColor: Colors.white, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      ref.read(professorsProvider.notifier).toggleArchive([id], true);
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désarchivé'), backgroundColor: AppColors.success));
+                    },
+                    icon: const Icon(Icons.unarchive_outlined, size: 16),
+                    label: const Text('Désarchiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6D4CF6),
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1288,34 +1319,42 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    final ids = _selectedProfIds.toList();
-                    setState(() => _selectedProfIds.clear());
-                    Navigator.pop(ctx);
-                    ref.read(professorsProvider.notifier).toggleArchive(ids, false);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$count professeur${count > 1 ? 's archivés' : ' archivé'}'), backgroundColor: AppColors.warning),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.archive_outlined, size: 16),
-                  label: const Text('Archiver', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.warning, foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      final ids = _selectedProfIds.toList();
+                      setState(() => _selectedProfIds.clear());
+                      Navigator.pop(ctx);
+                      ref.read(professorsProvider.notifier).toggleArchive(ids, false);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$count professeur${count > 1 ? 's archivés' : ' archivé'}'), backgroundColor: AppColors.warning),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.archive_outlined, size: 16),
+                    label: const Text('Archiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.warning,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
               ],
@@ -1417,34 +1456,42 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    final ids = _selectedProfIds.toList();
-                    setState(() => _selectedProfIds.clear());
-                    Navigator.pop(ctx);
-                    ref.read(professorsProvider.notifier).toggleArchive(ids, true);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$count professeur${count > 1 ? 's désarchivés' : ' désarchivé'}'), backgroundColor: AppColors.success),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.unarchive_outlined, size: 16),
-                  label: const Text('Désarchiver', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary, foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      final ids = _selectedProfIds.toList();
+                      setState(() => _selectedProfIds.clear());
+                      Navigator.pop(ctx);
+                      ref.read(professorsProvider.notifier).toggleArchive(ids, true);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$count professeur${count > 1 ? 's désarchivés' : ' désarchivé'}'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.unarchive_outlined, size: 16),
+                    label: const Text('Désarchiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6D4CF6),
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
               ],
@@ -1570,12 +1617,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
         const checkboxW = 40.0;
         const actionsW = 40.0;
         const phoneW = 140.0;
-        const statusW = 70.0;
         const specialityW = 140.0;
         const niveauxW = 100.0;
         const classesW = 110.0;
         const dateJoinedW = 90.0;
-        final nameW = (availableWidth - checkboxW - phoneW - statusW - specialityW - niveauxW - classesW - dateJoinedW - actionsW).clamp(200.0, 320.0);
+        final nameW = (availableWidth - checkboxW - phoneW - specialityW - niveauxW - classesW - dateJoinedW - actionsW).clamp(220.0, 360.0);
 
         return SingleChildScrollView(
           child: ConstrainedBox(
@@ -1627,7 +1673,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     DataColumn(label: SizedBox(width: niveauxW, child: _headerLabel('NIVEAUX', alignment: Alignment.center, textAlign: TextAlign.center))),
                     DataColumn(label: SizedBox(width: classesW, child: _headerLabel('CLASSES', alignment: Alignment.center, textAlign: TextAlign.center))),
                     DataColumn(label: SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE', alignment: Alignment.center, textAlign: TextAlign.center))),
-                    DataColumn(label: SizedBox(width: statusW, child: _headerLabel('STATUT', alignment: Alignment.center, textAlign: TextAlign.center))),
                     DataColumn(label: SizedBox(width: dateJoinedW, child: _headerLabel('CRÉÉ LE', alignment: Alignment.center, textAlign: TextAlign.center))),
                     DataColumn(label: SizedBox(width: actionsW, child: Container())),
                   ],
@@ -1696,10 +1741,38 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text(
-                                        name,
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
-                                        overflow: TextOverflow.ellipsis,
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              name,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13,
+                                                color: isActiveProf ? AppColors.textPrimary : AppColors.textTertiary,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (!isActiveProf) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFEF2F2),
+                                                borderRadius: BorderRadius.circular(100),
+                                              ),
+                                              child: const Text(
+                                                'Inactif',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFFDC2626),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
@@ -1787,25 +1860,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                             width: phoneW,
                             child: Center(
                               child: Text(phone.isNotEmpty ? phone : '—', style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
-                            ),
-                          ),
-                        ),
-                        // Status (matching users page niveau pill style)
-                        DataCell(
-                          SizedBox(
-                            width: statusW,
-                            child: Center(
-                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: isActiveProf ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
-                                  borderRadius: BorderRadius.circular(AppRadius.xs),
-                                ),
-                                child: Text(
-                                  isActiveProf ? 'Actif' : 'Inactif',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isActiveProf ? const Color(0xFF16A34A) : const Color(0xFFDC2626)),
-                                ),
-                              ),
                             ),
                           ),
                         ),

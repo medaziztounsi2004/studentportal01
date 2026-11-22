@@ -327,23 +327,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 980;
               if (isWide) {
-                return IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Cashflow line chart (62%)
-                      Expanded(
-                        flex: 62,
-                        child: _buildCashflowChartCard(context, state, currencyFormat),
-                      ),
-                      const SizedBox(width: 20),
-                      // Répartition par Catégorie (38%)
-                      Expanded(
-                        flex: 38,
-                        child: _buildCategoryBreakdownCard(context, state, currencyFormat),
-                      ),
-                    ],
-                  ),
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Cashflow line chart (62%)
+                    Expanded(
+                      flex: 62,
+                      child: _buildCashflowChartCard(context, state, currencyFormat),
+                    ),
+                    const SizedBox(width: 20),
+                    // Répartition par Catégorie (38%)
+                    Expanded(
+                      flex: 38,
+                      child: _buildCategoryBreakdownCard(context, state, currencyFormat),
+                    ),
+                  ],
                 );
               } else {
                 return Column(
@@ -363,31 +361,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 1050;
               if (isWide) {
-                return IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Répartition par Filière (30%)
-                      Expanded(
-                        flex: 3,
-                        child: _buildFiliereDonutCard(context, state),
-                      ),
-                      const SizedBox(width: 18),
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Répartition par Filière (30%)
+                    Expanded(
+                      flex: 3,
+                      child: _buildFiliereDonutCard(context, state),
+                    ),
+                    const SizedBox(width: 18),
 
-                      // Calendrier & Séances / Examens (40%)
-                      Expanded(
-                        flex: 4,
-                        child: _buildCalendarScheduleCard(context, state),
-                      ),
-                      const SizedBox(width: 18),
+                    // Calendrier & Séances / Examens (40%)
+                    Expanded(
+                      flex: 4,
+                      child: _buildCalendarScheduleCard(context, state),
+                    ),
+                    const SizedBox(width: 18),
 
-                      // Taux de Présence par Niveau (30%)
-                      Expanded(
-                        flex: 3,
-                        child: _buildAttendanceByLevelCard(context, state),
-                      ),
-                    ],
-                  ),
+                    // Taux de Présence par Niveau (30%)
+                    Expanded(
+                      flex: 3,
+                      child: _buildAttendanceByLevelCard(context, state),
+                    ),
+                  ],
                 );
               } else {
                 return Column(
@@ -1123,32 +1119,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                       return Expanded(
                         flex: (cat.percentage.toInt()).clamp(5, 100),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                _selectedCategoryIndex = (_selectedCategoryIndex == idx) ? null : idx;
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(6),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOutCubic,
-                              height: isSelected ? 24 : 14, // Zooms in when clicked!
-                              margin: EdgeInsets.symmetric(horizontal: isSelected ? 2 : 1.5),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? Color(cat.colorValue)
-                                    : (hasSelection
-                                        ? Color(cat.colorValue).withValues(alpha: 0.35)
-                                        : Color(cat.colorValue)),
-                                borderRadius: BorderRadius.circular(6),
-                                border: isSelected
-                                    ? Border.all(color: Colors.white, width: 2)
-                                    : null,
-                                boxShadow: null,
-                              ),
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategoryIndex = (_selectedCategoryIndex == idx) ? null : idx;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutCubic,
+                            height: isSelected ? 24 : 14, // Zooms in when clicked!
+                            margin: EdgeInsets.symmetric(horizontal: isSelected ? 2 : 1.5),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Color(cat.colorValue)
+                                  : (hasSelection
+                                      ? Color(cat.colorValue).withValues(alpha: 0.35)
+                                      : Color(cat.colorValue)),
+                              borderRadius: BorderRadius.circular(6),
+                              border: isSelected
+                                  ? Border.all(color: Colors.white, width: 2)
+                                  : null,
+                              boxShadow: null,
                             ),
                           ),
                         ),
@@ -1307,12 +1300,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: PieChart(
-                    PieChartData(
-                      pieTouchData: PieTouchData(
-                        touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                PieChart(
+                  PieChartData(
+                    pieTouchData: PieTouchData(
+                      mouseCursorResolver: (event, response) =>
+                          response?.touchedSection != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                      touchCallback: (FlTouchEvent event, pieTouchResponse) {
                           if (!event.isInterestedForInteractions ||
                               pieTouchResponse == null ||
                               pieTouchResponse.touchedSection == null) {
@@ -1362,7 +1355,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             }).toList(),
                     ),
                   ),
-                ),
 
                 // Center Text (Shows selected partition value & info on click)
                 Column(
@@ -1441,14 +1433,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             )
           else
-            LayoutBuilder(
-              builder: (context, boxConstraints) {
-                final isCompact = boxConstraints.maxWidth < 310;
-                if (isCompact) {
-                  return Column(
+            Column(
+              children: [
+                for (int i = 0; i < filieres.length; i += 2) ...[
+                  Row(
                     children: [
-                      for (int i = 0; i < filieres.length; i++) ...[
-                        _buildCleanFiliereItem(
+                      Expanded(
+                        child: _buildCleanFiliereItem(
                           filieres[i],
                           isSelected: _selectedFiliereIndex == i,
                           onTap: () {
@@ -1458,50 +1449,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             });
                           },
                         ),
-                        if (i + 1 < filieres.length) const SizedBox(height: 4),
+                      ),
+                      if (i + 1 < filieres.length) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildCleanFiliereItem(
+                            filieres[i + 1],
+                            isSelected: _selectedFiliereIndex == (i + 1),
+                            onTap: () {
+                              setState(() {
+                                _selectedFiliereIndex =
+                                    (_selectedFiliereIndex == (i + 1)) ? null : (i + 1);
+                              });
+                            },
+                          ),
+                        ),
                       ],
                     ],
-                  );
-                }
-                return Column(
-                  children: [
-                    for (int i = 0; i < filieres.length; i += 2) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildCleanFiliereItem(
-                              filieres[i],
-                              isSelected: _selectedFiliereIndex == i,
-                              onTap: () {
-                                setState(() {
-                                  _selectedFiliereIndex =
-                                      (_selectedFiliereIndex == i) ? null : i;
-                                });
-                              },
-                            ),
-                          ),
-                          if (i + 1 < filieres.length) ...[
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _buildCleanFiliereItem(
-                                filieres[i + 1],
-                                isSelected: _selectedFiliereIndex == (i + 1),
-                                onTap: () {
-                                  setState(() {
-                                    _selectedFiliereIndex =
-                                        (_selectedFiliereIndex == (i + 1)) ? null : (i + 1);
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (i + 2 < filieres.length) const SizedBox(height: 4),
-                    ],
-                  ],
-                );
-              },
+                  ),
+                  if (i + 2 < filieres.length) const SizedBox(height: 4),
+                ],
+              ],
             ),
         ],
       ),

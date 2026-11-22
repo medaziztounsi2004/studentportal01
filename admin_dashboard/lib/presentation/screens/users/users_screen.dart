@@ -586,7 +586,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   children: [
                     _buildStatusChip('Tous', totalCount, _statusFilter == null, () => setState(() { _statusFilter = null; _currentPage = 1; })),
                     _buildStatusChip('Actifs', activeCount, _statusFilter == 'active', () => setState(() { _statusFilter = 'active'; _currentPage = 1; })),
-                    _buildStatusChip('Archivés', archivedCount, _statusFilter == 'archived', () => setState(() { _statusFilter = 'archived'; _currentPage = 1; })),
                   ],
                 ),
               ),
@@ -893,14 +892,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                                   if (!u.isActive) ...[
                                     const SizedBox(width: 6),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFFEF2F2),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: const Color(0xFFFECACA), width: 0.8),
+                                        borderRadius: BorderRadius.circular(100),
                                       ),
                                       child: const Text(
-                                        'Archivé',
+                                        'Suspendu',
                                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFFDC2626)),
                                       ),
                                     ),
@@ -1062,9 +1060,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       _buildPopupItem('reset_password', Icons.lock_reset_outlined, 'Réinitialiser mot de passe', AppColors.textSecondary),
                       _buildPopupItem(
                         'archive',
-                        u.isActive ? Icons.archive_outlined : Icons.unarchive_outlined,
-                        u.isActive ? 'Archiver' : 'Désarchiver',
-                        AppColors.textSecondary,
+                        u.isActive ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded,
+                        u.isActive ? 'Suspendre' : 'Activer',
+                        u.isActive ? AppColors.warning : AppColors.success,
                       ),
                       const PopupMenuDivider(),
                       _buildPopupItem('delete', Icons.delete_outline_rounded, 'Supprimer', AppColors.error),
@@ -1272,8 +1270,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             ),
             // Actions
             _buildSelectionAction(
-              allArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
-              allArchived ? 'Désarchiver' : 'Archiver',
+              allArchived ? Icons.check_circle_outline_rounded : Icons.pause_circle_outline_rounded,
+              allArchived ? 'Activer' : 'Suspendre',
               Colors.white70,
               () => _bulkToggleArchive(shouldArchive: !allArchived),
             ),
@@ -1987,7 +1985,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   }
 
   void _confirmArchive(BuildContext context, UserModel user) {
-    final willArchive = user.isActive;
+    final willSuspend = user.isActive;
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.08),
@@ -2000,26 +1998,26 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               Container(
                 width: 36, height: 36,
                 decoration: BoxDecoration(
-                  color: willArchive ? AppColors.warningSoft : AppColors.successSoft,
+                  color: willSuspend ? AppColors.warningSoft : AppColors.successSoft,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  willArchive ? Icons.archive_outlined : Icons.unarchive_outlined,
-                  color: willArchive ? AppColors.warning : AppColors.success,
+                  willSuspend ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded,
+                  color: willSuspend ? AppColors.warning : AppColors.success,
                   size: 18,
                 ),
               ),
               const SizedBox(width: 12),
               Text(
-                willArchive ? 'Archiver cet utilisateur ?' : 'Désarchiver cet utilisateur ?',
+                willSuspend ? 'Suspendre ce compte ?' : 'Activer ce compte ?',
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ],
           ),
           content: Text(
-            willArchive
-                ? 'L\'utilisateur "${user.fullName}" sera archivé.'
-                : 'L\'utilisateur "${user.fullName}" sera réactivé.',
+            willSuspend
+                ? 'Le compte de "${user.fullName}" sera suspendu.'
+                : 'Le compte de "${user.fullName}" sera réactivé.',
           ),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
           actions: [
@@ -2035,7 +2033,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -2046,28 +2044,28 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       Navigator.pop(ctx);
                       final success = await ref
                           .read(usersProvider.notifier)
-                          .toggleUserArchive(user.id, !willArchive);
+                          .toggleUserArchive(user.id, !willSuspend);
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
                               success
-                                  ? (willArchive
-                                      ? 'Utilisateur archivé'
-                                      : 'Utilisateur désarchivé')
+                                  ? (willSuspend
+                                      ? 'Compte suspendu'
+                                      : 'Compte activé')
                                   : 'Échec de la modification du statut',
                             ),
                             backgroundColor: success
-                                ? (willArchive ? AppColors.warning : AppColors.success)
+                                ? (willSuspend ? AppColors.warning : AppColors.success)
                                 : AppColors.error,
                           ),
                         );
                       }
                     },
-                    icon: Icon(willArchive ? Icons.archive_outlined : Icons.unarchive_outlined, size: 16),
-                    label: Text(willArchive ? 'Archiver' : 'Désarchiver', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    icon: Icon(willSuspend ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded, size: 16),
+                    label: Text(willSuspend ? 'Suspendre' : 'Activer', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: willArchive ? AppColors.warning : AppColors.success,
+                      backgroundColor: willSuspend ? AppColors.warning : AppColors.success,
                       foregroundColor: Colors.white,
                       elevation: 2,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -2128,7 +2126,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -2140,7 +2138,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     Navigator.pop(ctx);
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
-                  label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                  label: const Text('Supprimer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.error,
                     foregroundColor: Colors.white,
@@ -2182,8 +2180,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               const SizedBox(width: 12),
               Text(
                 shouldArchive
-                    ? 'Archivage de $count utilisateur(s) en cours...'
-                    : 'Désarchivage de $count utilisateur(s) en cours...',
+                    ? 'Suspension de $count utilisateur(s) en cours...'
+                    : 'Activation de $count utilisateur(s) en cours...',
               ),
             ],
           ),
@@ -2204,8 +2202,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             content: Text(
               success
                   ? (shouldArchive
-                      ? '$count utilisateur(s) archivé(s)'
-                      : '$count utilisateur(s) désarchivé(s)')
+                      ? '$count utilisateur(s) suspendu(s)'
+                      : '$count utilisateur(s) activé(s)')
                   : 'Échec de la modification du statut',
             ),
             backgroundColor: success
