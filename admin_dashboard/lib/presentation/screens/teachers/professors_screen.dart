@@ -642,21 +642,54 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           const SizedBox(width: 8),
-          // Undo action button
-          IconButton(
-            icon: const Icon(Icons.undo_rounded, size: 20),
-            tooltip: undoState.undoTooltip,
-            onPressed: undoState.canUndo ? () => _handleUndo() : null,
-            color: undoState.canUndo ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.35),
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-          ),
-          // Redo action button
-          IconButton(
-            icon: const Icon(Icons.redo_rounded, size: 20),
-            tooltip: undoState.redoTooltip,
-            onPressed: undoState.canRedo ? () => _handleRedo() : null,
-            color: undoState.canRedo ? AppColors.textSecondary : AppColors.textTertiary.withOpacity(0.35),
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          // Undo / Redo segmented control
+          Container(
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Tooltip(
+                  message: undoState.undoTooltip,
+                  child: InkWell(
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(7)),
+                    onTap: undoState.canUndo ? () => _handleUndo() : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      child: Icon(
+                        Icons.rotate_left_rounded,
+                        size: 20,
+                        color: undoState.canUndo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 18,
+                  color: AppColors.border,
+                ),
+                Tooltip(
+                  message: undoState.redoTooltip,
+                  child: InkWell(
+                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(7)),
+                    onTap: undoState.canRedo ? () => _handleRedo() : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      child: Icon(
+                        Icons.rotate_right_rounded,
+                        size: 20,
+                        color: undoState.canRedo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 16),
           // Ajouter button — same as users
@@ -970,10 +1003,10 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               Container(
                 width: 36, height: 36,
                 decoration: BoxDecoration(color: AppColors.warningSoft, borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.archive_outlined, color: AppColors.warning, size: 18),
+                child: const Icon(Icons.pause_circle_outline_rounded, color: AppColors.warning, size: 18),
               ),
               const SizedBox(width: 12),
-              const Text('Archiver ce professeur ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const Text('Désactiver ce professeur ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
           content: Column(
@@ -1025,7 +1058,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Ce professeur sera archivé et désactivé.',
+                'Ce professeur sera désactivé.',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ],
@@ -1056,8 +1089,8 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.read(professorsProvider.notifier).toggleArchive([id], false);
                       ref.read(undoRedoProvider.notifier).recordAction(
                         AppAction(
-                          title: 'Archivage professeur',
-                          description: 'Archivage de $name',
+                          title: 'Désactivation professeur',
+                          description: 'Désactivation de $name',
                           undo: () async {
                             await ref.read(professorsProvider.notifier).toggleArchive([id], true);
                           },
@@ -1066,10 +1099,10 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                           },
                         ),
                       );
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" archivé'), backgroundColor: AppColors.warning));
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désactivé'), backgroundColor: AppColors.warning));
                     },
-                    icon: const Icon(Icons.archive_outlined, size: 16),
-                    label: const Text('Archiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    icon: const Icon(Icons.pause_circle_outline_rounded, size: 16),
+                    label: const Text('Désactiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.warning,
                       foregroundColor: Colors.white,
@@ -1101,11 +1134,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             children: [
               Container(
                 width: 36, height: 36,
-                decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.unarchive_outlined, color: Color(0xFF6D4CF6), size: 18),
+                decoration: BoxDecoration(color: AppColors.successSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.check_circle_outline_rounded, color: AppColors.success, size: 18),
               ),
               const SizedBox(width: 12),
-              const Text('Désarchiver ce professeur ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const Text('Activer ce professeur ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
           content: Text('Le professeur "$name" sera réactivé.'),
@@ -1135,8 +1168,8 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.read(professorsProvider.notifier).toggleArchive([id], true);
                       ref.read(undoRedoProvider.notifier).recordAction(
                         AppAction(
-                          title: 'Désarchivage professeur',
-                          description: 'Désarchivage de $name',
+                          title: 'Activation professeur',
+                          description: 'Activation de $name',
                           undo: () async {
                             await ref.read(professorsProvider.notifier).toggleArchive([id], false);
                           },
@@ -1145,12 +1178,12 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                           },
                         ),
                       );
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désarchivé'), backgroundColor: AppColors.success));
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" activé'), backgroundColor: AppColors.success));
                     },
-                    icon: const Icon(Icons.unarchive_outlined, size: 16),
-                    label: const Text('Désarchiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                    label: const Text('Activer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6D4CF6),
+                      backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,
                       elevation: 2,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1340,9 +1373,9 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             ),
             // Actions
             if (allInactive)
-              _buildSelectionAction(Icons.unarchive_outlined, 'Désarchiver', Colors.white, () => _bulkUnarchive(context))
+              _buildSelectionAction(Icons.check_circle_outline_rounded, 'Activer', Colors.white, () => _bulkUnarchive(context))
             else
-              _buildSelectionAction(Icons.archive_outlined, 'Archiver', Colors.white70, () => _bulkArchive(context)),
+              _buildSelectionAction(Icons.pause_circle_outline_rounded, 'Désactiver', Colors.white70, () => _bulkArchive(context)),
             _buildSelectionAction(Icons.delete_outline, 'Supprimer', const Color(0xFFFCA5A5), () => _bulkDelete(context)),
             // Close button
             Container(
@@ -1400,13 +1433,13 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               Container(
                 width: 36, height: 36,
                 decoration: BoxDecoration(color: AppColors.warningSoft, borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.archive_outlined, color: AppColors.warning, size: 18),
+                child: const Icon(Icons.pause_circle_outline_rounded, color: AppColors.warning, size: 18),
               ),
               const SizedBox(width: 12),
               Text(
                 count == 1 && singleProf != null
-                    ? 'Archiver ce professeur ?'
-                    : 'Archiver $count professeur${count > 1 ? 's' : ''} ?',
+                    ? 'Désactiver ce professeur ?'
+                    : 'Désactiver $count professeur${count > 1 ? 's' : ''} ?',
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ],
@@ -1461,12 +1494,12 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Ce professeur sera archivé et désactivé.',
+                      'Ce professeur sera désactivé.',
                       style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),
                   ],
                 )
-              : Text('$count professeur${count > 1 ? 's seront archivés' : ' sera archivé'} et désactivé${count > 1 ? 's' : ''}.'),
+              : Text('$count professeur${count > 1 ? 's seront désactivés' : ' sera désactivé'}.'),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
           actions: [
             Row(
@@ -1495,8 +1528,8 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.read(professorsProvider.notifier).toggleArchive(ids, false);
                       ref.read(undoRedoProvider.notifier).recordAction(
                         AppAction(
-                          title: 'Archivage en masse',
-                          description: 'Archivage de ${ids.length} professeur(s)',
+                          title: 'Désactivation en masse',
+                          description: 'Désactivation de ${ids.length} professeur(s)',
                           undo: () async {
                             await ref.read(professorsProvider.notifier).toggleArchive(ids, true);
                           },
@@ -1507,12 +1540,12 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       );
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$count professeur${count > 1 ? 's archivés' : ' archivé'}'), backgroundColor: AppColors.warning),
+                          SnackBar(content: Text('$count professeur${count > 1 ? 's désactivés' : ' désactivé'}'), backgroundColor: AppColors.warning),
                         );
                       }
                     },
-                    icon: const Icon(Icons.archive_outlined, size: 16),
-                    label: const Text('Archiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    icon: const Icon(Icons.pause_circle_outline_rounded, size: 16),
+                    label: const Text('Désactiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.warning,
                       foregroundColor: Colors.white,
@@ -1548,14 +1581,14 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             children: [
               Container(
                 width: 36, height: 36,
-                decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.unarchive_outlined, color: AppColors.primary, size: 18),
+                decoration: BoxDecoration(color: AppColors.successSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.check_circle_outline_rounded, color: AppColors.success, size: 18),
               ),
               const SizedBox(width: 12),
               Text(
                 count == 1 && singleProf != null
-                    ? 'Désarchiver ce professeur ?'
-                    : 'Désarchiver $count professeur${count > 1 ? 's' : ''} ?',
+                    ? 'Activer ce professeur ?'
+                    : 'Activer $count professeur${count > 1 ? 's' : ''} ?',
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ],
@@ -1610,12 +1643,12 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Ce professeur sera désarchivé et réactivé.',
+                      'Ce professeur sera réactivé.',
                       style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),
                   ],
                 )
-              : Text('$count professeur${count > 1 ? 's seront désarchivés' : ' sera désarchivé'} et réactivé${count > 1 ? 's' : ''}.'),
+              : Text('$count professeur${count > 1 ? 's seront activés' : ' sera activé'}.'),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
           actions: [
             Row(
@@ -1644,8 +1677,8 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ref.read(professorsProvider.notifier).toggleArchive(ids, true);
                       ref.read(undoRedoProvider.notifier).recordAction(
                         AppAction(
-                          title: 'Désarchivage en masse',
-                          description: 'Désarchivage de ${ids.length} professeur(s)',
+                          title: 'Activation en masse',
+                          description: 'Activation de ${ids.length} professeur(s)',
                           undo: () async {
                             await ref.read(professorsProvider.notifier).toggleArchive(ids, false);
                           },
@@ -1656,14 +1689,14 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       );
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$count professeur${count > 1 ? 's désarchivés' : ' désarchivé'}'), backgroundColor: AppColors.success),
+                          SnackBar(content: Text('$count professeur${count > 1 ? 's activés' : ' activé'}'), backgroundColor: AppColors.success),
                         );
                       }
                     },
-                    icon: const Icon(Icons.unarchive_outlined, size: 16),
-                    label: const Text('Désarchiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                    label: const Text('Activer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6D4CF6),
+                      backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,
                       elevation: 2,
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -2093,9 +2126,9 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                               itemBuilder: (ctx) => [
                                 _buildProfPopupItem('view', Icons.visibility_outlined, 'Voir profil', AppColors.success),
                                 if (isActiveProf)
-                                  _buildProfPopupItem('archive', Icons.archive_outlined, 'Archiver', AppColors.textSecondary)
+                                  _buildProfPopupItem('archive', Icons.pause_circle_outline_rounded, 'Désactiver', AppColors.warning)
                                 else
-                                  _buildProfPopupItem('unarchive', Icons.unarchive_outlined, 'Désarchiver', AppColors.primary),
+                                  _buildProfPopupItem('unarchive', Icons.check_circle_outline_rounded, 'Activer', AppColors.success),
                                 const PopupMenuDivider(),
                                 _buildProfPopupItem('delete', Icons.delete_outline_rounded, 'Supprimer', AppColors.error),
                               ],

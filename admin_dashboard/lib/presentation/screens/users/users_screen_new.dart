@@ -419,21 +419,55 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             badgeCount: _activeFilterCount,
             onPressed: () => setState(() => _showFilterDrawer = !_showFilterDrawer),
           ),
-          const SizedBox(width: 6),
-          // Undo action button
-          _HeaderIconButton(
-            icon: Icons.undo_rounded,
-            tooltip: undoState.undoTooltip,
-            isEnabled: undoState.canUndo,
-            onPressed: undoState.canUndo ? () => _handleUndo() : null,
-          ),
-          const SizedBox(width: 4),
-          // Redo action button
-          _HeaderIconButton(
-            icon: Icons.redo_rounded,
-            tooltip: undoState.redoTooltip,
-            isEnabled: undoState.canRedo,
-            onPressed: undoState.canRedo ? () => _handleRedo() : null,
+          const SizedBox(width: 8),
+          // Undo / Redo segmented control
+          Container(
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(AppRadius.xs),
+              border: Border.all(color: AppColors.border.withOpacity(0.5)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Tooltip(
+                  message: undoState.undoTooltip,
+                  child: InkWell(
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(6)),
+                    onTap: undoState.canUndo ? () => _handleUndo() : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      child: Icon(
+                        Icons.rotate_left_rounded,
+                        size: 19,
+                        color: undoState.canUndo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 18,
+                  color: AppColors.border.withOpacity(0.5),
+                ),
+                Tooltip(
+                  message: undoState.redoTooltip,
+                  child: InkWell(
+                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
+                    onTap: undoState.canRedo ? () => _handleRedo() : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      child: Icon(
+                        Icons.rotate_right_rounded,
+                        size: 19,
+                        color: undoState.canRedo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           // Vertical divider
           Padding(
@@ -447,16 +481,6 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const SimpleBulkImportScreen()),
-            ),
-          ),
-          const SizedBox(width: 4),
-          // Print / Photo
-          _HeaderIconButton(
-            icon: Icons.photo_library_outlined,
-            tooltip: 'Photos en masse',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BulkPhotoUploadScreen()),
             ),
           ),
           const SizedBox(width: 12),
