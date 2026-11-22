@@ -394,7 +394,7 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
           AppAction(
             scope: 'classes',
             title: 'Modification classe',
-            description: 'Modification de $newName',
+            description: 'Modification de la classe "$newName"',
             undo: (r) async {
               await r.read(classesProvider.notifier).updateClass(
                 id: oldCls.id,
@@ -426,21 +426,19 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
           room: _selectedRoomId,
         );
       }
+      final clsName = _nameController.text.trim();
       if (mounted) {
         Navigator.pop(context);
-        FeedbackPill.showSuccess(context, isEditing ? 'Classe modifiée' : 'Classe créée');
+        FeedbackPill.showSuccess(context, isEditing ? 'Classe "$clsName" modifiée' : 'Classe "$clsName" créée');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              UserFriendlyError.format(
-                e,
-                fallback: 'Unable to save this class right now. Please try again.',
-              ),
-            ),
-            backgroundColor: AppColors.error,
+        final clsName = _nameController.text.trim();
+        FeedbackPill.showError(
+          context,
+          UserFriendlyError.format(
+            e,
+            fallback: 'Impossible d\'enregistrer la classe "$clsName".',
           ),
         );
       }

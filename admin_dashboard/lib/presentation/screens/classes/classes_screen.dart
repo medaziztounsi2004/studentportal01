@@ -1489,7 +1489,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
                     AppAction(
                       scope: 'classes',
                       title: 'Suppression classe',
-                      description: 'Suppression de ${cls.name}',
+                      description: 'Suppression de la classe "${cls.name}"',
                       undo: (r) async {
                         final user = SupabaseConfig.client.auth.currentUser;
                         final profile = user != null

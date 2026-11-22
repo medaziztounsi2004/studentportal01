@@ -1743,10 +1743,15 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
     final nextJustified = !absence.justified;
     ref.read(studentAbsencesProvider(widget.studentId).notifier).toggleJustified(absence.id, nextJustified);
 
+    final sName = absence.studentName.isNotEmpty ? absence.studentName : (ref.read(studentAbsencesProvider(widget.studentId)).value?.user['full_name'] as String? ?? 'Étudiant');
+    final subj = absence.subjectName ?? 'Matière';
+    final dateStr = DateFormat('dd/MM/yyyy').format(absence.date);
+    final absDetail = 'de "$sName" en $subj ($dateStr)';
+
     if (mounted) {
       FeedbackPill.showSuccess(
         context,
-        nextJustified ? 'Absence marquée justifiée' : 'Absence marquée non justifiée',
+        nextJustified ? 'Absence $absDetail marquée justifiée' : 'Absence $absDetail marquée non justifiée',
       );
     }
 
@@ -1760,7 +1765,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
         AppAction(
           scope: 'absences',
           title: nextJustified ? 'Justifier absence' : 'Non-justifier absence',
-          description: nextJustified ? 'Absence justifiée' : 'Absence non justifiée',
+          description: nextJustified ? 'Absence $absDetail justifiée' : 'Absence $absDetail non justifiée',
           undo: (r) async {
             await SupabaseConfig.adminClient
                 .from('absence_records')
@@ -1862,8 +1867,13 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
     ref.read(studentAbsencesProvider(widget.studentId).notifier).removeAbsence(absence.id);
     setState(() => _selectedAbsences.remove(absence.id));
 
+    final sName = absence.studentName.isNotEmpty ? absence.studentName : (ref.read(studentAbsencesProvider(widget.studentId)).value?.user['full_name'] as String? ?? 'Étudiant');
+    final subj = absence.subjectName ?? 'Matière';
+    final dateStr = DateFormat('dd/MM/yyyy').format(absence.date);
+    final absDetail = 'de "$sName" en $subj ($dateStr)';
+
     if (mounted) {
-      FeedbackPill.showSuccess(context, 'Absence supprimée');
+      FeedbackPill.showSuccess(context, 'Absence $absDetail supprimée');
     }
 
     try {
@@ -1876,7 +1886,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
         AppAction(
           scope: 'absences',
           title: 'Suppression absence',
-          description: 'Absence de ${absence.studentName}',
+          description: 'Suppression de l\'absence $absDetail',
           undo: (r) async {
             await SupabaseConfig.adminClient.from('absence_records').insert({
               'id': absence.id,
@@ -1912,14 +1922,16 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
   Future<void> _bulkToggleJustified(bool justified) async {
     if (_selectedAbsences.isEmpty) return;
     final ids = _selectedAbsences.toList();
+    final count = ids.length;
+    final sName = ref.read(studentAbsencesProvider(widget.studentId)).value?.user['full_name'] as String? ?? 'Étudiant';
     ref.read(studentAbsencesProvider(widget.studentId).notifier).bulkToggleJustified(ids, justified);
 
     if (mounted) {
       FeedbackPill.showSuccess(
         context,
         justified
-            ? '${ids.length} absence(s) marquée(s) justifiée(s)'
-            : '${ids.length} absence(s) marquée(s) non justifiée(s)',
+            ? '$count absence(s) de "$sName" marquée(s) justifiée(s)'
+            : '$count absence(s) de "$sName" marquée(s) non justifiée(s)',
       );
     }
 
@@ -1934,8 +1946,8 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
           scope: 'absences',
           title: justified ? 'Justifier absences' : 'Non justifier absences',
           description: justified
-              ? '${ids.length} absence(s) justifiée(s)'
-              : '${ids.length} absence(s) non justifiée(s)',
+              ? '$count absence(s) de "$sName" justifiée(s)'
+              : '$count absence(s) de "$sName" non justifiée(s)',
           undo: (r) async {
             await SupabaseConfig.adminClient
                 .from('absence_records')
@@ -2039,12 +2051,13 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
     final ids = _selectedAbsences.toList();
     final absencesList = ref.read(studentAbsencesProvider(widget.studentId)).value?.absences ?? [];
     final toDelete = absencesList.where((a) => ids.contains(a.id)).toList();
+    final sName = ref.read(studentAbsencesProvider(widget.studentId)).value?.user['full_name'] as String? ?? 'Étudiant';
 
     ref.read(studentAbsencesProvider(widget.studentId).notifier).bulkRemove(ids);
     setState(() => _selectedAbsences.clear());
 
     if (mounted) {
-      FeedbackPill.showSuccess(context, '$count absence(s) supprimée(s)');
+      FeedbackPill.showSuccess(context, '$count absence(s) de "$sName" supprimée(s)');
     }
 
     try {
@@ -2057,7 +2070,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
         AppAction(
           scope: 'absences',
           title: 'Suppression en masse',
-          description: 'Suppression de $count absence(s)',
+          description: 'Suppression de $count absence(s) de "$sName"',
           undo: (r) async {
             final insertRows = toDelete.map((a) => {
               'id': a.id,

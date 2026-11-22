@@ -6499,7 +6499,7 @@ class _SubjectsManagementScreenState
                         AppAction(
                           scope: 'subjects',
                           title: 'Suppression matière',
-                          description: 'Suppression de ${subject.name}',
+                          description: 'Suppression de la matière "${subject.name}"',
                           undo: (r) async {
                             await SupabaseConfig.adminClient.from('subjects').insert(subjectSnapshot);
                             await r.read(subjectsManagementProvider.notifier).refresh();

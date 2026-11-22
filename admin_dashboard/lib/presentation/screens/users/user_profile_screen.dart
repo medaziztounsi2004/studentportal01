@@ -791,12 +791,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                     _isTogglingAccountStatus = true;
                   });
 
+                  final studentName = user['full_name']?.toString() ?? 'Élève';
                   if (mounted) {
                     FeedbackPill.showSuccess(
                       context,
                       nextStatus == 'paused_unpaid'
-                          ? 'Accès élève suspendu.'
-                          : 'Accès élève réactivé.',
+                          ? 'Accès de "$studentName" suspendu.'
+                          : 'Accès de "$studentName" réactivé.',
                     );
                   }
 
@@ -817,7 +818,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                         user['is_active'] = !nextActive;
                         user['account_status'] = isPaused ? 'paused_unpaid' : 'active';
                       });
-                      FeedbackPill.showError(context, 'Impossible de modifier le statut d\'accès.');
+                      FeedbackPill.showError(context, 'Impossible de modifier le statut d\'accès de "$studentName".');
                     } else {
                       ref.invalidate(userProfileDataProvider(widget.userId));
                       ref.read(usersProvider.notifier).refresh(showLoading: false);

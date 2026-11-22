@@ -2092,15 +2092,15 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                         if (success) {
                           FeedbackPill.showSuccess(
                             context,
-                            willSuspend ? 'Compte suspendu' : 'Compte activé',
+                            willSuspend ? 'Compte de "${user.fullName}" suspendu' : 'Compte de "${user.fullName}" activé',
                           );
                           ref.read(undoRedoProvider.notifier).recordAction(
                             AppAction(
                               scope: 'users',
                               title: willSuspend ? 'Suspension utilisateur' : 'Activation utilisateur',
                               description: willSuspend
-                                  ? 'Suspension de ${user.fullName}'
-                                  : 'Activation de ${user.fullName}',
+                                  ? 'Suspension de "${user.fullName}"'
+                                  : 'Activation de "${user.fullName}"',
                               undo: (r) async {
                                 await r.read(usersProvider.notifier).toggleUserArchive(user.id, willSuspend);
                               },
@@ -2110,7 +2110,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                             ),
                           );
                         } else {
-                          FeedbackPill.showError(context, 'Échec de la modification du statut');
+                          FeedbackPill.showError(context, 'Échec de la modification du statut de "${user.fullName}"');
                         }
                       }
                     },
@@ -2249,6 +2249,20 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     final count = selectedIds.length;
     final newActive = !shouldArchive;
 
+    final allUsers = ref.read(usersProvider).value?.users ?? [];
+    final selectedNames = allUsers
+        .where((u) => selectedIds.contains(u.id))
+        .map((u) => u.fullName)
+        .where((n) => n.isNotEmpty)
+        .toList();
+    final namesStr = selectedNames.isEmpty
+        ? '$count utilisateur(s)'
+        : (selectedNames.length == 1
+            ? '"${selectedNames.first}"'
+            : (selectedNames.length <= 3
+                ? selectedNames.map((n) => '"$n"').join(', ')
+                : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
+
     setState(() {
       _selectedUserIds.clear();
       _isSelectionMode = false;
@@ -2258,8 +2272,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
       FeedbackPill.showProcessing(
         context,
         shouldArchive
-            ? 'Suspension de $count utilisateur(s) en cours...'
-            : 'Activation de $count utilisateur(s) en cours...',
+            ? 'Suspension de $namesStr en cours...'
+            : 'Activation de $namesStr en cours...',
       );
     }
 
@@ -2272,16 +2286,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           FeedbackPill.showSuccess(
             context,
             shouldArchive
-                ? '$count utilisateur(s) suspendu(s)'
-                : '$count utilisateur(s) activé(s)',
+                ? 'Compte${count > 1 ? 's' : ''} de $namesStr suspendu${count > 1 ? 's' : ''}'
+                : 'Compte${count > 1 ? 's' : ''} de $namesStr activé${count > 1 ? 's' : ''}',
           );
           ref.read(undoRedoProvider.notifier).recordAction(
             AppAction(
               scope: 'users',
               title: shouldArchive ? 'Suspension utilisateurs' : 'Activation utilisateurs',
               description: shouldArchive
-                  ? 'Suspension de $count utilisateur(s)'
-                  : 'Activation de $count utilisateur(s)',
+                  ? 'Suspension de $namesStr'
+                  : 'Activation de $namesStr',
               undo: (r) async {
                 await r.read(usersProvider.notifier).bulkToggleArchive(selectedIds, !newActive);
               },
@@ -2743,12 +2757,25 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   onPressed: () async {
                     final selectedList = _selectedUserIds.toList();
                     final allUsers = ref.read(usersProvider).value?.users ?? [];
-                    final snapshots = allUsers
+                    final selectedUsers = allUsers
                         .where((u) => selectedList.contains(u.id))
+                        .toList();
+                    final snapshots = selectedUsers
                         .map((u) => u.toJson())
                         .toList();
+                    final selectedNames = selectedUsers
+                        .map((u) => u.fullName)
+                        .where((n) => n.isNotEmpty)
+                        .toList();
+                    final namesStr = selectedNames.isEmpty
+                        ? '$count utilisateur(s)'
+                        : (selectedNames.length == 1
+                            ? '"${selectedNames.first}"'
+                            : (selectedNames.length <= 3
+                                ? selectedNames.map((n) => '"$n"').join(', ')
+                                : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
                     Navigator.pop(ctx);
-                    FeedbackPill.showProcessing(context, 'Suppression de $count utilisateurs en cours...');
+                    FeedbackPill.showProcessing(context, 'Suppression de $namesStr en cours...');
                     final notifier = ref.read(usersProvider.notifier);
                     final result = await notifier.bulkDeleteUsers(selectedList);
                     final deleted = result['deleted'] ?? 0;
@@ -2759,7 +2786,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     });
                     if (mounted) {
                       if (failed == 0) {
-                        FeedbackPill.showSuccess(context, '$deleted utilisateur(s) supprimé(s)');
+                        FeedbackPill.showSuccess(context, 'Utilisateur${deleted > 1 ? 's' : ''} $namesStr supprimé${deleted > 1 ? 's' : ''}');
                       } else {
                         FeedbackPill.showError(context, '$deleted supprimé(s), $failed échec(s)');
                       }
@@ -2769,7 +2796,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                         AppAction(
                           scope: 'users',
                           title: 'Suppression en masse',
-                          description: 'Suppression de $deleted utilisateur(s)',
+                          description: 'Suppression de $namesStr',
                           undo: (r) async {
                             final schoolId = r.read(authProvider).user?.schoolId;
                             for (final s in snapshots) {

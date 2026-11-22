@@ -2325,7 +2325,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             AppAction(
                               scope: 'semesters',
                               title: 'Suppression période',
-                              description: 'Suppression de $displayName',
+                              description: 'Suppression de la période "$displayName"',
                               undo: (r) async {
                                 await SupabaseConfig.adminClient.from('semesters').insert(sSnapshot);
                                 await r.read(semestersProvider.notifier).refresh();

@@ -18,6 +18,7 @@ import 'user_profile_screen.dart';
 import 'bulk_photo_upload_screen.dart';
 import 'simple_bulk_import_screen.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/feedback_pill.dart';
 
 class UsersScreen extends ConsumerStatefulWidget {
   const UsersScreen({super.key});
@@ -93,7 +94,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
   Future<void> _handleUndo() async {
     final notifier = ref.read(undoRedoProvider.notifier);
-    if (!ref.read(undoRedoProvider).canUndo) return;
+    if (!ref.read(undoRedoProvider).canUndo()) return;
     try {
       final desc = await notifier.undo();
       if (mounted && desc != null) {
@@ -128,7 +129,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
   Future<void> _handleRedo() async {
     final notifier = ref.read(undoRedoProvider.notifier);
-    if (!ref.read(undoRedoProvider).canRedo) return;
+    if (!ref.read(undoRedoProvider).canRedo()) return;
     try {
       final desc = await notifier.redo();
       if (mounted && desc != null) {
@@ -432,16 +433,16 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Tooltip(
-                  message: undoState.undoTooltip,
+                  message: undoState.undoTooltip(),
                   child: InkWell(
                     borderRadius: const BorderRadius.horizontal(left: Radius.circular(6)),
-                    onTap: undoState.canUndo ? () => _handleUndo() : null,
+                    onTap: undoState.canUndo() ? () => _handleUndo() : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                       child: Icon(
                         Icons.rotate_left_rounded,
                         size: 19,
-                        color: undoState.canUndo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
+                        color: undoState.canUndo() ? AppColors.textPrimary : AppColors.textTertiary.withValues(alpha: 0.35),
                       ),
                     ),
                   ),
@@ -449,19 +450,19 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 Container(
                   width: 1,
                   height: 18,
-                  color: AppColors.border.withOpacity(0.5),
+                  color: AppColors.border.withValues(alpha: 0.5),
                 ),
                 Tooltip(
-                  message: undoState.redoTooltip,
+                  message: undoState.redoTooltip(),
                   child: InkWell(
                     borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
-                    onTap: undoState.canRedo ? () => _handleRedo() : null,
+                    onTap: undoState.canRedo() ? () => _handleRedo() : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                       child: Icon(
                         Icons.rotate_right_rounded,
                         size: 19,
-                        color: undoState.canRedo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
+                        color: undoState.canRedo() ? AppColors.textPrimary : AppColors.textTertiary.withValues(alpha: 0.35),
                       ),
                     ),
                   ),
@@ -2005,12 +2006,18 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     final userId = u.id;
                     final userName = u.fullName;
                     await ref.read(usersProvider.notifier).toggleUserArchive(userId, !willSuspend);
+                    if (mounted) {
+                      FeedbackPill.showSuccess(
+                        context,
+                        willSuspend ? 'Compte de "$userName" suspendu' : 'Compte de "$userName" activé',
+                      );
+                    }
                     ref.read(undoRedoProvider.notifier).recordAction(
                       AppAction(
                         title: willSuspend ? 'Suspension compte' : 'Activation compte',
                         description: willSuspend
-                            ? 'Suspension du compte de $userName'
-                            : 'Activation du compte de $userName',
+                            ? 'Suspension du compte de "$userName"'
+                            : 'Activation du compte de "$userName"',
                         undo: () async {
                           await ref.read(usersProvider.notifier).toggleUserArchive(userId, willSuspend);
                         },
@@ -2098,14 +2105,35 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                     Navigator.pop(ctx);
                     final ids = _selectedUserIds.toList();
                     final count = ids.length;
+                    final allUsers = ref.read(usersProvider).value?.users ?? [];
+                    final selectedNames = allUsers
+                        .where((u) => ids.contains(u.id))
+                        .map((u) => u.fullName)
+                        .where((n) => n.isNotEmpty)
+                        .toList();
+                    final namesStr = selectedNames.isEmpty
+                        ? '$count compte(s)'
+                        : (selectedNames.length == 1
+                            ? '"${selectedNames.first}"'
+                            : (selectedNames.length <= 3
+                                ? selectedNames.map((n) => '"$n"').join(', ')
+                                : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
                     await ref.read(usersProvider.notifier).bulkToggleArchive(ids, activate);
                     setState(() => _selectedUserIds.clear());
+                    if (mounted) {
+                      FeedbackPill.showSuccess(
+                        context,
+                        activate
+                            ? 'Compte${count > 1 ? 's' : ''} de $namesStr activé${count > 1 ? 's' : ''}'
+                            : 'Compte${count > 1 ? 's' : ''} de $namesStr suspendu${count > 1 ? 's' : ''}',
+                      );
+                    }
                     ref.read(undoRedoProvider.notifier).recordAction(
                       AppAction(
                         title: activate ? 'Activation en masse' : 'Suspension en masse',
                         description: activate
-                            ? 'Activation de $count compte(s)'
-                            : 'Suspension de $count compte(s)',
+                            ? 'Activation de $namesStr'
+                            : 'Suspension de $namesStr',
                         undo: () async {
                           await ref.read(usersProvider.notifier).bulkToggleArchive(ids, !activate);
                         },
@@ -2203,10 +2231,13 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   final userName = u.fullName;
                   ref.read(usersProvider.notifier).deleteUser(userId);
                   Navigator.pop(ctx);
+                  if (mounted) {
+                    FeedbackPill.showSuccess(context, 'Utilisateur "$userName" supprimé');
+                  }
                   ref.read(undoRedoProvider.notifier).recordAction(
                     AppAction(
                       title: 'Suppression utilisateur',
-                      description: 'Suppression de $userName',
+                      description: 'Suppression de "$userName"',
                       undo: () async {
                         await SupabaseConfig.adminClient.from('users').upsert({
                           'id': userSnapshot.id,
@@ -2320,6 +2351,17 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               final idsToDelete = _selectedUserIds.toList();
               final allUsers = ref.read(usersProvider).value?.users ?? [];
               final snapshots = allUsers.where((u) => idsToDelete.contains(u.id)).toList();
+              final selectedNames = snapshots
+                  .map((u) => u.fullName)
+                  .where((n) => n.isNotEmpty)
+                  .toList();
+              final namesStr = selectedNames.isEmpty
+                  ? '$count utilisateur(s)'
+                  : (selectedNames.length == 1
+                      ? '"${selectedNames.first}"'
+                      : (selectedNames.length <= 3
+                          ? selectedNames.map((n) => '"$n"').join(', ')
+                          : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
 
               // Use bulk delete method - much faster!
               final notifier = ref.read(usersProvider.notifier);
@@ -2337,7 +2379,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 ref.read(undoRedoProvider.notifier).recordAction(
                   AppAction(
                     title: 'Suppression en masse',
-                    description: 'Suppression de $deleted utilisateur(s)',
+                    description: 'Suppression de $namesStr',
                     undo: () async {
                       for (final u in snapshots) {
                         await SupabaseConfig.adminClient.from('users').upsert({
@@ -2365,14 +2407,11 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
               if (mounted) {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('$deleted supprimé(s), $failed échec(s)'),
-                    backgroundColor: failed == 0 ? AppColors.success : AppColors.warning,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xs)),
-                  ),
-                );
+                if (failed == 0) {
+                  FeedbackPill.showSuccess(context, 'Utilisateur${deleted > 1 ? 's' : ''} $namesStr supprimé${deleted > 1 ? 's' : ''}');
+                } else {
+                  FeedbackPill.showError(context, '$deleted supprimé(s), $failed échec(s)');
+                }
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),

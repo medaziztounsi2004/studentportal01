@@ -2001,7 +2001,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             AppAction(
               scope: 'grade_levels',
               title: 'Suppression niveau',
-              description: 'Suppression de ${grade.name}',
+              description: 'Suppression du niveau "${grade.name}"',
               undo: (r) async {
                 await SupabaseConfig.adminClient
                     .from('niveaux')
@@ -2034,7 +2034,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             AppAction(
               scope: 'grade_levels',
               title: 'Suppression filière',
-              description: 'Suppression de ${section.name}',
+              description: 'Suppression de la filière "${section.name}"',
               undo: (r) async {
                 await SupabaseConfig.adminClient
                     .from('sections')
@@ -2067,7 +2067,7 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             AppAction(
               scope: 'grade_levels',
               title: 'Suppression type d\'examen',
-              description: 'Suppression de ${examType.name}',
+              description: 'Suppression du type d\'examen "${examType.name}"',
               undo: (r) async {
                 await SupabaseConfig.adminClient
                     .from('exam_types')
@@ -2090,6 +2090,20 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   void _confirmBulkDeleteSections() {
     final count = _selectedSectionIds.length;
     final idsToDelete = _selectedSectionIds.toList();
+    final allSections = ref.read(gradeLevelsProvider).value?.sections ?? [];
+    final selectedNames = allSections
+        .where((s) => idsToDelete.contains(s.id))
+        .map((s) => s.name)
+        .where((n) => n.isNotEmpty)
+        .toList();
+    final namesStr = selectedNames.isEmpty
+        ? '$count filière(s)'
+        : (selectedNames.length == 1
+            ? '"${selectedNames.first}"'
+            : (selectedNames.length <= 3
+                ? selectedNames.map((n) => '"$n"').join(', ')
+                : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
+
     _showBulkDeleteDialog(
       context: context,
       itemType: 'filière(s)',
@@ -2100,12 +2114,12 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             await ref.read(gradeLevelsProvider.notifier).deleteSection(id);
           }
           setState(() => _selectedSectionIds.clear());
-          _showSuccess('$count filière(s) supprimée(s)');
+          _showSuccess('Filière${count > 1 ? 's' : ''} $namesStr supprimée${count > 1 ? 's' : ''}');
           ref.read(undoRedoProvider.notifier).recordAction(
             AppAction(
               scope: 'grade_levels',
               title: 'Suppression en masse filières',
-              description: 'Suppression de $count filière(s)',
+              description: 'Suppression de $namesStr',
               undo: (r) async {
                 for (final id in idsToDelete) {
                   await SupabaseConfig.adminClient
@@ -2132,6 +2146,20 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
   void _confirmBulkDeleteExamTypes() {
     final count = _selectedExamTypeIds.length;
     final idsToDelete = _selectedExamTypeIds.toList();
+    final allExamTypes = ref.read(gradeLevelsProvider).value?.examTypes ?? [];
+    final selectedNames = allExamTypes
+        .where((e) => idsToDelete.contains(e.id))
+        .map((e) => e.name)
+        .where((n) => n.isNotEmpty)
+        .toList();
+    final namesStr = selectedNames.isEmpty
+        ? '$count type(s) d\'examen'
+        : (selectedNames.length == 1
+            ? '"${selectedNames.first}"'
+            : (selectedNames.length <= 3
+                ? selectedNames.map((n) => '"$n"').join(', ')
+                : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
+
     _showBulkDeleteDialog(
       context: context,
       itemType: 'type(s) d\'examen',
@@ -2142,12 +2170,12 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             await ref.read(gradeLevelsProvider.notifier).deleteExamType(id);
           }
           setState(() => _selectedExamTypeIds.clear());
-          _showSuccess('$count type(s) d\'examen supprimé(s)');
+          _showSuccess('Type${count > 1 ? 's' : ''} d\'examen $namesStr supprimé${count > 1 ? 's' : ''}');
           ref.read(undoRedoProvider.notifier).recordAction(
             AppAction(
               scope: 'grade_levels',
               title: 'Suppression en masse types d\'examen',
-              description: 'Suppression de $count type(s) d\'examen',
+              description: 'Suppression de $namesStr',
               undo: (r) async {
                 for (final id in idsToDelete) {
                   await SupabaseConfig.adminClient

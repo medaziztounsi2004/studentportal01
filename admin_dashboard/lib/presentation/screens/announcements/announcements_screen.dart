@@ -2307,8 +2307,12 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
+                    final aTitle = a.title.isNotEmpty ? a.title : 'Annonce';
                     ref.read(announcementsProvider.notifier).delete(a.id, scope: a.scope);
                     Navigator.pop(ctx);
+                    if (mounted) {
+                      FeedbackPill.showSuccess(context, 'Annonce "$aTitle" supprimée');
+                    }
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
                   label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),

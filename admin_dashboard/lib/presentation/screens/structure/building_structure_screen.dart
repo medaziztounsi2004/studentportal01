@@ -1872,12 +1872,12 @@ class _BuildingStructureScreenState
                               }
                               if (ctx.mounted) Navigator.pop(ctx);
                               if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$typeLabel supprimé'), backgroundColor: AppColors.success));
+                                FeedbackPill.showSuccess(context, '$typeLabel "$name" supprimé');
                               }
                             } catch (e) {
                               if (ctx.mounted) Navigator.pop(ctx);
                               if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e'), backgroundColor: AppColors.error));
+                                FeedbackPill.showError(context, 'Impossible de supprimer $typeLabel "$name" : $e');
                               }
                             }
                           },

@@ -1704,8 +1704,10 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       if (controller.text.isEmpty) return;
+                      final author = s.studentName ?? 'Élève';
                       ref.read(suggestionsProvider.notifier).reply(s.id, controller.text);
                       Navigator.pop(ctx);
+                      FeedbackPill.showSuccess(context, 'Réponse envoyée à "$author" pour "${s.subject}"');
                     },
                     icon: const Icon(Icons.send, size: 16),
                     label: const Text('Envoyer', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1768,8 +1770,10 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       if (controller.text.isEmpty) return;
+                      final author = s.studentName ?? 'Élève';
                       ref.read(suggestionsProvider.notifier).updateReply(reply.id, controller.text);
                       Navigator.pop(ctx);
+                      FeedbackPill.showSuccess(context, 'Réponse modifiée pour "${s.subject}" ($author)');
                     },
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Modifier', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -2089,9 +2093,11 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                                             ),
                                             TextButton(
                                               onPressed: () {
+                                                final author = s.studentName ?? 'Élève';
                                                 ref.read(suggestionsProvider.notifier).deleteReply(reply.id);
                                                 Navigator.pop(dialogCtx);
                                                 Navigator.pop(ctx);
+                                                FeedbackPill.showSuccess(context, 'Réponse supprimée pour "${s.subject}" ($author)');
                                               },
                                               child: const Text('Supprimer', style: TextStyle(color: AppColors.error)),
                                             ),

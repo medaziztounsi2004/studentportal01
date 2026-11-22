@@ -4083,8 +4083,10 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     String? room,
   ) async {
     final selectedClass = ref.read(selectedClassProvider);
+    TimetableSlotAdmin? existingSlot;
     if (selectedClass != null) {
       final currentSlots = ref.read(filteredTimetableSlotsProvider(selectedClass.id)).asData?.value ?? [];
+      existingSlot = currentSlots.firstWhereOrNull((s) => s.id == slotId);
       final newStartMin = _timeToMinutes(startTime);
       final newEndMin = _timeToMinutes(endTime);
 
@@ -4098,11 +4100,9 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
 
       if (classConflict != null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Impossible : chevauchement avec ${classConflict.subjectName ?? "un cours"} (${classConflict.startTime} - ${classConflict.endTime})'),
-              backgroundColor: AppColors.error,
-            ),
+          FeedbackPill.showError(
+            context,
+            'Impossible : chevauchement avec ${classConflict.subjectName ?? "un cours"} (${classConflict.startTime} - ${classConflict.endTime})',
           );
         }
         return;
@@ -4118,10 +4118,11 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         room,
       );
     }
+    final dayName = (dayOfWeek >= 1 && dayOfWeek <= _dayLabels.length) ? _dayLabels[dayOfWeek - 1] : '';
+    final subject = existingSlot?.subjectName ?? 'Cours';
+    final details = '$dayName $startTime - $endTime${room != null && room.isNotEmpty ? ' ($room)' : ''}';
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cours modifié'), backgroundColor: AppColors.success),
-      );
+      FeedbackPill.showSuccess(context, 'Cours "$subject" ($details) modifié');
     }
 
     try {
@@ -4136,9 +4137,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         ref.invalidate(classTimetableSlotsProvider(selectedClass.id));
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
-        );
+        FeedbackPill.showError(context, UserFriendlyError.format(e));
       }
     }
   }
@@ -4149,8 +4148,11 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     if (classId != null) {
       ref.read(classTimetableSlotsProvider(classId).notifier).removeSlot(slot.id);
     }
+    final dayName = (slot.dayOfWeek >= 1 && slot.dayOfWeek <= _dayLabels.length) ? _dayLabels[slot.dayOfWeek - 1] : '';
+    final subject = slot.subjectName ?? 'Cours';
+    final details = '$dayName ${slot.startTime} - ${slot.endTime}${slot.room != null && slot.room!.isNotEmpty ? ' (${slot.room})' : ''}';
     if (mounted) {
-      FeedbackPill.showSuccess(context, 'Cours supprimé');
+      FeedbackPill.showSuccess(context, 'Cours "$subject" ($details) supprimé');
     }
 
     try {
@@ -4174,7 +4176,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         AppAction(
           scope: 'timetables',
           title: 'Suppression cours',
-          description: 'Suppression du cours de ${slot.subjectName}',
+          description: 'Suppression du cours "$subject" ($details)',
           undo: (r) async {
             await SupabaseConfig.client.from('timetable_slots').insert(slotSnapshot);
             if (classId != null) {
@@ -5136,6 +5138,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                                         selectedStartTime,
                                         selectedEndTime,
                                         roomLabel,
+                                        subjectName: selectedOffering!.subjectName,
                                       );
                                     },
                                     style: ElevatedButton.styleFrom(
@@ -5251,8 +5254,9 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     int dayOfWeek,
     String startTime,
     String endTime,
-    String? room,
-  ) async {
+    String? room, {
+    String? subjectName,
+  }) async {
     final selectedClass = ref.read(selectedClassProvider);
     if (selectedClass != null) {
       final currentSlots = ref.read(filteredTimetableSlotsProvider(selectedClass.id)).asData?.value ?? [];
@@ -5268,11 +5272,9 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
 
       if (classConflict != null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Impossible : ${classConflict.subjectName ?? "Un cours"} est déjà planifié (${classConflict.startTime} - ${classConflict.endTime}) pour cette classe.'),
-              backgroundColor: AppColors.error,
-            ),
+          FeedbackPill.showError(
+            context,
+            'Impossible : ${classConflict.subjectName ?? "Un cours"} est déjà planifié (${classConflict.startTime} - ${classConflict.endTime}) pour cette classe.',
           );
         }
         return;
@@ -5294,18 +5296,19 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       await SupabaseConfig.adminClient.from('timetable_slots').insert(data);
       ref.invalidate(classTimetableSlotsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_timetableType == 'exam' ? 'Cours d\'examen ajouté' : 'Cours ajouté'),
-            backgroundColor: AppColors.success,
-          ),
+        final dayName = (dayOfWeek >= 1 && dayOfWeek <= _dayLabels.length) ? _dayLabels[dayOfWeek - 1] : '';
+        final sName = subjectName ?? 'Cours';
+        final details = '$dayName $startTime - $endTime${room != null && room.isNotEmpty ? ' ($room)' : ''}';
+        FeedbackPill.showSuccess(
+          context,
+          _timetableType == 'exam'
+              ? 'Examen "$sName" ($details) planifié'
+              : 'Cours "$sName" ($details) ajouté',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
-        );
+        FeedbackPill.showError(context, UserFriendlyError.format(e));
       }
     }
   }

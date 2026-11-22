@@ -1179,7 +1179,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       AppAction(
                         scope: 'professors',
                         title: 'Suppression professeur',
-                        description: 'Suppression de $name',
+                        description: 'Suppression de "$name"',
                         undo: (r) async {
                           final schoolId = r.read(authProvider).user?.schoolId ?? profSnapshot['school_id'];
                           await SupabaseConfig.adminClient.from('users').upsert({
@@ -1200,7 +1200,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         },
                       ),
                     );
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" supprimé'), backgroundColor: AppColors.error));
+                    if (mounted) FeedbackPill.showSuccess(context, 'Professeur "$name" supprimé');
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
                   label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1439,6 +1439,19 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       final ids = _selectedProfIds.toList();
+                      final allProfs = ref.read(professorsProvider).value ?? [];
+                      final selectedNames = allProfs
+                          .where((p) => ids.contains(p['id']))
+                          .map((p) => p['full_name'] as String? ?? '')
+                          .where((n) => n.isNotEmpty)
+                          .toList();
+                      final namesStr = selectedNames.isEmpty
+                          ? '$count professeur(s)'
+                          : (selectedNames.length == 1
+                              ? '"${selectedNames.first}"'
+                              : (selectedNames.length <= 3
+                                  ? selectedNames.map((n) => '"$n"').join(', ')
+                                  : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
                       setState(() => _selectedProfIds.clear());
                       Navigator.pop(ctx);
                       ref.read(professorsProvider.notifier).toggleArchive(ids, false);
@@ -1446,7 +1459,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         AppAction(
                           scope: 'professors',
                           title: 'Désactivation en masse',
-                          description: 'Désactivation de ${ids.length} professeur(s)',
+                          description: 'Désactivation de $namesStr',
                           undo: (r) async {
                             await r.read(professorsProvider.notifier).toggleArchive(ids, true);
                           },
@@ -1456,7 +1469,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         ),
                       );
                       if (mounted) {
-                        FeedbackPill.showSuccess(context, '$count professeur${count > 1 ? 's désactivés' : ' désactivé'}');
+                        FeedbackPill.showSuccess(context, 'Professeur${count > 1 ? 's' : ''} $namesStr désactivé${count > 1 ? 's' : ''}');
                       }
                     },
                     icon: const Icon(Icons.pause_circle_outline_rounded, size: 16),
@@ -1587,6 +1600,19 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       final ids = _selectedProfIds.toList();
+                      final allProfs = ref.read(professorsProvider).value ?? [];
+                      final selectedNames = allProfs
+                          .where((p) => ids.contains(p['id']))
+                          .map((p) => p['full_name'] as String? ?? '')
+                          .where((n) => n.isNotEmpty)
+                          .toList();
+                      final namesStr = selectedNames.isEmpty
+                          ? '$count professeur(s)'
+                          : (selectedNames.length == 1
+                              ? '"${selectedNames.first}"'
+                              : (selectedNames.length <= 3
+                                  ? selectedNames.map((n) => '"$n"').join(', ')
+                                  : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
                       setState(() => _selectedProfIds.clear());
                       Navigator.pop(ctx);
                       ref.read(professorsProvider.notifier).toggleArchive(ids, true);
@@ -1594,7 +1620,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         AppAction(
                           scope: 'professors',
                           title: 'Activation en masse',
-                          description: 'Activation de ${ids.length} professeur(s)',
+                          description: 'Activation de $namesStr',
                           undo: (r) async {
                             await r.read(professorsProvider.notifier).toggleArchive(ids, false);
                           },
@@ -1604,7 +1630,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         ),
                       );
                       if (mounted) {
-                        FeedbackPill.showSuccess(context, '$count professeur${count > 1 ? 's activés' : ' activé'}');
+                        FeedbackPill.showSuccess(context, 'Professeur${count > 1 ? 's' : ''} $namesStr activé${count > 1 ? 's' : ''}');
                       }
                     },
                     icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
@@ -1666,7 +1692,19 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                     final ids = _selectedProfIds.toList();
                     final profsAsync = ref.read(professorsProvider);
                     final allProfs = profsAsync.value ?? [];
-                    final snapshots = allProfs.where((p) => ids.contains(p['id'])).map((p) => Map<String, dynamic>.from(p)).toList();
+                    final selectedProfs = allProfs.where((p) => ids.contains(p['id'])).toList();
+                    final snapshots = selectedProfs.map((p) => Map<String, dynamic>.from(p)).toList();
+                    final selectedNames = selectedProfs
+                        .map((p) => p['full_name'] as String? ?? '')
+                        .where((n) => n.isNotEmpty)
+                        .toList();
+                    final namesStr = selectedNames.isEmpty
+                        ? '$count professeur(s)'
+                        : (selectedNames.length == 1
+                            ? '"${selectedNames.first}"'
+                            : (selectedNames.length <= 3
+                                ? selectedNames.map((n) => '"$n"').join(', ')
+                                : '${selectedNames.take(2).map((n) => '"$n"').join(', ')} et ${selectedNames.length - 2} autres'));
                     setState(() => _selectedProfIds.clear());
                     Navigator.pop(ctx);
                     ref.read(professorsProvider.notifier).bulkDelete(ids);
@@ -1674,7 +1712,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       AppAction(
                         scope: 'professors',
                         title: 'Suppression en masse',
-                        description: 'Suppression de ${ids.length} professeur(s)',
+                        description: 'Suppression de $namesStr',
                         undo: (r) async {
                           final schoolId = r.read(authProvider).user?.schoolId;
                           for (final p in snapshots) {
@@ -1698,9 +1736,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       ),
                     );
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$count professeur${count > 1 ? 's supprimés' : ' supprimé'}'), backgroundColor: AppColors.error),
-                      );
+                      FeedbackPill.showSuccess(context, 'Professeur${count > 1 ? 's' : ''} $namesStr supprimé${count > 1 ? 's' : ''}');
                     }
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),

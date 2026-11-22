@@ -1235,15 +1235,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
                       InkWell(
                         onTap: () {
                           if (provider.subjectOfferings.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Aucune matière pour cette classe.')),
-                            );
+                            final clsName = _getSelectedClassName(provider).isNotEmpty ? _getSelectedClassName(provider) : 'cette classe';
+                            FeedbackPill.showInfo(context, 'Aucune matière pour la classe "$clsName".');
                             return;
                           }
                           if (provider.selectedSemesterId == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Veuillez sélectionner un semestre.')),
-                            );
+                            FeedbackPill.showInfo(context, 'Veuillez sélectionner un semestre.');
                             return;
                           }
                           final selectedObjs = provider.enrolledStudents

@@ -4278,13 +4278,15 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                   height: 46,
                   child: ElevatedButton.icon(
                     onPressed: () {
+                      final sName = payment.studentName ?? 'Élève';
+                      final amt = '${payment.amount.toStringAsFixed(0)} TND';
                       ref.read(paymentsProvider.notifier).markAsPaid(
                         payment.id,
                         method: selectedMethod,
                         reference: referenceController.text.isNotEmpty ? referenceController.text : null,
                       );
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiement marqué comme payé'), backgroundColor: Color(0xFF10B981)));
+                      FeedbackPill.showSuccess(context, 'Paiement de $amt pour "$sName" marqué comme payé');
                     },
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -4358,9 +4360,10 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                   height: 46,
                   child: ElevatedButton.icon(
                     onPressed: () async {
+                      final count = _selectedPayments.length;
                       await ref.read(paymentsProvider.notifier).bulkMarkAsPaid(_selectedPayments.toList(), method: selectedMethod);
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiements marqués comme payés'), backgroundColor: Color(0xFF10B981)));
+                      FeedbackPill.showSuccess(context, '$count paiement(s) marqué(s) comme payé(s)');
                     },
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -4464,6 +4467,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                     height: 46,
                     child: ElevatedButton.icon(
                       onPressed: () {
+                        final sName = payment.studentName ?? 'Élève';
+                        final amt = '${double.tryParse(amountController.text)?.toStringAsFixed(0) ?? payment.amount.toStringAsFixed(0)} TND';
                         ref.read(paymentsProvider.notifier).updatePayment(
                           id: payment.id,
                           amount: double.tryParse(amountController.text),
@@ -4471,7 +4476,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                           notes: notesController.text.isNotEmpty ? notesController.text : null,
                         );
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiement modifié')));
+                        FeedbackPill.showSuccess(context, 'Paiement de $amt pour "$sName" modifié');
                       },
                       icon: const Icon(Icons.check, size: 16),
                       label: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -4624,9 +4629,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
+                    final sName = payment.studentName ?? 'Élève';
+                    final amt = '${payment.amount.toStringAsFixed(0)} TND';
                     ref.read(paymentsProvider.notifier).cancelPayment(payment.id);
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiement annulé')));
+                    FeedbackPill.showSuccess(context, 'Paiement de $amt pour "$sName" annulé');
                   },
                   icon: const Icon(Icons.warning_outlined, size: 16),
                   label: const Text('Oui, annuler', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -4685,9 +4692,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: () {
+                    final sName = payment.studentName ?? 'Élève';
+                    final amt = '${payment.amount.toStringAsFixed(0)} TND';
                     ref.read(paymentsProvider.notifier).deletePayment(payment.id);
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiement supprimé'), backgroundColor: Color(0xFFEF4444)));
+                    FeedbackPill.showSuccess(context, 'Paiement de $amt pour "$sName" supprimé');
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
                   label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),

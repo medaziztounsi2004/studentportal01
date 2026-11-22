@@ -789,7 +789,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        FeedbackPill.showError(context, 'Erreur lors du changement de statut : $e');
+        FeedbackPill.showError(context, 'Erreur lors du changement de statut de "$fullName" : $e');
       }
     }
   }
