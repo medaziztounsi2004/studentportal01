@@ -3461,11 +3461,13 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black54,
+      barrierColor: Colors.black.withOpacity(0.4),
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return Dialog(
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: StatefulBuilder(
+            builder: (ctx, setDialogState) {
+              return Dialog(
               backgroundColor: Colors.transparent,
               insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               child: Container(
@@ -3838,7 +3840,8 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                   ),
                 ),
               );
-          },
+            },
+          ),
         );
       },
     );
@@ -3849,6 +3852,7 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: AlertDialog(
@@ -3879,11 +3883,9 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
               const SizedBox(height: 16),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: const BoxDecoration(
+                  color: Colors.transparent,
                 ),
                 child: Row(
                   children: [

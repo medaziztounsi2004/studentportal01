@@ -671,6 +671,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
   }
 
   Future<void> delete(String id, {String scope = 'global'}) async {
+    state = const AsyncLoading();
     final supabase = SupabaseConfig.client;
 
     final updateData = {'deleted_at': DateTime.now().toIso8601String()};
@@ -690,6 +691,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
   }
 
   Future<void> bulkDelete(List<AnnouncementModel> announcements) async {
+    state = const AsyncLoading();
     final supabase = SupabaseConfig.client;
     final now = DateTime.now().toIso8601String();
 
@@ -721,6 +723,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
     List<AnnouncementModel> announcements,
     bool pinned,
   ) async {
+    state = const AsyncLoading();
     final supabase = SupabaseConfig.client;
 
     final globalIds = announcements
@@ -751,6 +754,7 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
     List<AnnouncementModel> announcements,
     bool important,
   ) async {
+    state = const AsyncLoading();
     final supabase = SupabaseConfig.client;
 
     final globalIds = announcements

@@ -189,6 +189,7 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
 
   Future<void> _saveGradesForOffering(String offeringId) async {
     if (_enrollmentId.isEmpty || _userId == null) return;
+    setState(() => _isLoadingGrades = true);
     try {
       final subjectControllers = _gradeControllers[offeringId];
       final subjectStatus = _gradeStatus[offeringId];
@@ -216,11 +217,14 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
       }
       if (grades.isNotEmpty) {
         await widget.onSaveGrades(grades);
+        await _loadExistingGrades();
+        widget.onRefresh?.call();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Notes enregistrées avec succès'),
               backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -234,11 +238,14 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isLoadingGrades = false);
     }
   }
 
   Future<void> _saveGradesForSelected() async {
     if (_enrollmentId.isEmpty || _userId == null) return;
+    setState(() => _isLoadingGrades = true);
     try {
       final grades = <Map<String, dynamic>>[];
       for (final offeringId in _selectedOfferingIds) {
@@ -268,21 +275,26 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
       }
 
       if (grades.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Aucune note à enregistrer pour les matières sélectionnées'),
-            backgroundColor: AppColors.warning,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Aucune note à enregistrer pour les matières sélectionnées'),
+              backgroundColor: AppColors.warning,
+            ),
+          );
+        }
         return;
       }
 
       await widget.onSaveGrades(grades);
+      await _loadExistingGrades();
+      widget.onRefresh?.call();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${grades.length} note(s) enregistrée(s)'),
             backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -295,12 +307,106 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isLoadingGrades = false);
     }
   }
 
-  void _clearGradesForSelected() {
-    setState(() {
-      for (final offeringId in _selectedOfferingIds) {
+  Future<void> _clearGradesForSelected() async {
+    if (_selectedOfferingIds.isEmpty) return;
+    final count = _selectedOfferingIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                count > 1 ? 'Effacer les notes ($count) ?' : 'Effacer les notes ?',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                count > 1
+                    ? 'Voulez-vous vraiment effacer les notes pour ces $count matières ?'
+                    : 'Voulez-vous vraiment effacer les notes pour la matière sélectionnée ?',
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible. Les notes saisies seront définitivement supprimées.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: Text(count > 1 ? 'Effacer $count' : 'Effacer', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoadingGrades = true);
+    final offeringIds = _selectedOfferingIds.toList();
+    try {
+      if (_enrollmentId.isNotEmpty) {
+        final supabase = Supabase.instance.client;
+        await supabase
+            .from('grades')
+            .delete()
+            .eq('enrollment_id', _enrollmentId)
+            .inFilter('subject_offering_id', offeringIds);
+      }
+      for (final offeringId in offeringIds) {
         final subjectControllers = _gradeControllers[offeringId];
         final subjectStatus = _gradeStatus[offeringId];
         if (subjectControllers != null) {
@@ -314,13 +420,151 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
           }
         }
       }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Notes effacées pour les matières sélectionnées'),
-        backgroundColor: AppColors.slate700,
+      _selectedOfferingIds.clear();
+      await _loadExistingGrades();
+      widget.onRefresh?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Notes effacées avec succès'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(UserFriendlyError.format(e, fallback: 'Erreur lors de la suppression des notes')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingGrades = false);
+    }
+  }
+
+  Future<void> _confirmClearGradesForOffering(String offeringId, String subjectName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text('Effacer les notes ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Voulez-vous vraiment effacer les notes pour "$subjectName" ?'),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible. Les notes saisies seront définitivement supprimées.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Effacer', style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoadingGrades = true);
+    try {
+      if (_enrollmentId.isNotEmpty) {
+        final supabase = Supabase.instance.client;
+        await supabase
+            .from('grades')
+            .delete()
+            .eq('enrollment_id', _enrollmentId)
+            .eq('subject_offering_id', offeringId);
+      }
+      final subjectControllers = _gradeControllers[offeringId];
+      final subjectStatus = _gradeStatus[offeringId];
+      if (subjectControllers != null) {
+        for (final c in subjectControllers.values) {
+          c.clear();
+        }
+      }
+      if (subjectStatus != null) {
+        for (final k in subjectStatus.keys) {
+          subjectStatus[k] = 'OK';
+        }
+      }
+      await _loadExistingGrades();
+      widget.onRefresh?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Notes effacées pour $subjectName'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(UserFriendlyError.format(e, fallback: 'Erreur lors de la suppression des notes')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingGrades = false);
+    }
   }
 
   /// Show dialog to configure exam types for a subject
@@ -1139,26 +1383,7 @@ class _SingleStudentGradeEntryState extends State<SingleStudentGradeEntry> {
         _showExamConfigDialog(offeringId, subjectName, subjectId, components);
         break;
       case 'clear':
-        setState(() {
-          final subjectControllers = _gradeControllers[offeringId];
-          final subjectStatus = _gradeStatus[offeringId];
-          if (subjectControllers != null) {
-            for (final c in subjectControllers.values) {
-              c.clear();
-            }
-          }
-          if (subjectStatus != null) {
-            for (final k in subjectStatus.keys) {
-              subjectStatus[k] = 'OK';
-            }
-          }
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Notes effacées pour $subjectName'),
-            backgroundColor: AppColors.slate700,
-          ),
-        );
+        _confirmClearGradesForOffering(offeringId, subjectName);
         break;
     }
   }

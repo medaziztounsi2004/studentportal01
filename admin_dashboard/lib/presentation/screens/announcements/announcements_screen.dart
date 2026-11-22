@@ -1974,7 +1974,6 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                             decoration: BoxDecoration(
                               color: const Color(0xFFFEF2F2),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.5)),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,

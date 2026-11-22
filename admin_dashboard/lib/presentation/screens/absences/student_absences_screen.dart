@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,6 +34,7 @@ class StudentAbsencesScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
+  bool _isActionInProgress = false;
   String _searchQuery = '';
   String _sortField = 'date'; // 'date', 'matiere', 'status'
   bool _sortAscending = false;
@@ -88,8 +90,10 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
         children: [
           const AdminSidebar(currentRoute: '/absences'),
           Expanded(
-            child: asyncData.when(
-              loading: () => const StudentAbsencesSkeletonLoader(),
+            child: _isActionInProgress
+                ? const StudentAbsencesSkeletonLoader()
+                : asyncData.when(
+                    loading: () => const StudentAbsencesSkeletonLoader(),
               error: (e, _) => Center(
                 child: Container(
                   padding: const EdgeInsets.all(32),
@@ -1666,12 +1670,14 @@ const SizedBox.shrink(),
 
   // ==================== ACTIONS ====================
   Future<void> _toggleJustified(AbsenceModel absence) async {
+    setState(() => _isActionInProgress = true);
     try {
       await SupabaseConfig.adminClient
           .from('absence_records')
           .update({'justified': !absence.justified})
           .eq('id', absence.id);
       ref.invalidate(studentAbsencesProvider(widget.studentId));
+      await ref.read(studentAbsencesProvider(widget.studentId).future);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1694,44 +1700,93 @@ const SizedBox.shrink(),
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 
   Future<void> _deleteAbsence(AbsenceModel absence) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Supprimer l\'absence ?',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text('Cette action est irréversible.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text('Supprimer l\'absence ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Voulez-vous vraiment supprimer l\'absence de "${absence.studentName}" ?'),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child: const Text('Supprimer'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 
     if (confirmed != true) return;
 
+    setState(() => _isActionInProgress = true);
     try {
       await SupabaseConfig.adminClient
           .from('absence_records')
           .delete()
           .eq('id', absence.id);
       ref.invalidate(studentAbsencesProvider(widget.studentId));
+      await ref.read(studentAbsencesProvider(widget.studentId).future);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1750,6 +1805,8 @@ const SizedBox.shrink(),
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 
@@ -1757,12 +1814,14 @@ const SizedBox.shrink(),
   Future<void> _bulkToggleJustified(bool justified) async {
     if (_selectedAbsences.isEmpty) return;
     final ids = _selectedAbsences.toList();
+    setState(() => _isActionInProgress = true);
     try {
       await SupabaseConfig.adminClient
           .from('absence_records')
           .update({'justified': justified})
           .inFilter('id', ids);
       ref.invalidate(studentAbsencesProvider(widget.studentId));
+      await ref.read(studentAbsencesProvider(widget.studentId).future);
       if (mounted) {
         setState(() => _selectedAbsences.clear());
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1786,6 +1845,8 @@ const SizedBox.shrink(),
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 
@@ -1794,39 +1855,86 @@ const SizedBox.shrink(),
     final count = _selectedAbsences.length;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Supprimer $count absence(s) ?',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text('Cette action est irréversible.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text('Supprimer $count absence${count > 1 ? 's' : ''} ?', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Voulez-vous vraiment supprimer $count absence(s) ?'),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: Text('Supprimer $count', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child: const Text('Supprimer'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 
     if (confirmed != true) return;
 
     final ids = _selectedAbsences.toList();
+    setState(() => _isActionInProgress = true);
     try {
       await SupabaseConfig.adminClient
           .from('absence_records')
           .delete()
           .inFilter('id', ids);
       ref.invalidate(studentAbsencesProvider(widget.studentId));
+      await ref.read(studentAbsencesProvider(widget.studentId).future);
       if (mounted) {
         setState(() => _selectedAbsences.clear());
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1846,6 +1954,8 @@ const SizedBox.shrink(),
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 
