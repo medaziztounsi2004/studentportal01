@@ -132,6 +132,34 @@ class SubjectModel {
     'display_order': displayOrder,
     'is_active': isActive,
   };
+
+  SubjectModel copyWith({
+    String? id,
+    String? schoolId,
+    String? name,
+    String? code,
+    String? description,
+    String? nameAr,
+    String? category,
+    String? color,
+    double? defaultCoefficient,
+    int? displayOrder,
+    bool? isActive,
+    DateTime? createdAt,
+  }) => SubjectModel(
+    id: id ?? this.id,
+    schoolId: schoolId ?? this.schoolId,
+    name: name ?? this.name,
+    code: code ?? this.code,
+    description: description ?? this.description,
+    nameAr: nameAr ?? this.nameAr,
+    category: category ?? this.category,
+    color: color ?? this.color,
+    defaultCoefficient: defaultCoefficient ?? this.defaultCoefficient,
+    displayOrder: displayOrder ?? this.displayOrder,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt ?? this.createdAt,
+  );
 }
 
 class EnrollmentModel {

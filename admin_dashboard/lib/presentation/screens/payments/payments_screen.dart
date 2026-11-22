@@ -6092,6 +6092,37 @@ class _StudentPaymentDetailDialogState
   }
 
   Future<void> _markPaymentAsPaid(dynamic paymentId, [Map<String, dynamic>? payment]) async {
+    final payIdStr = paymentId.toString();
+    final nowIso = DateTime.now().toIso8601String();
+
+    // Optimistic UI update - instantaneous
+    for (final p in _payments) {
+      if (p['id']?.toString() == payIdStr) {
+        p['status'] = 'paid';
+        p['paid_at'] = nowIso;
+      }
+    }
+    for (int i = 0; i < widget.student.plans.length; i++) {
+      final plan = widget.student.plans[i];
+      final updatedPayments = plan.payments.map((pay) {
+        if (pay.id == payIdStr) {
+          return pay.copyWith(status: PaymentStatus.paid, paidAt: DateTime.now());
+        }
+        return pay;
+      }).toList();
+      try {
+        widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
+      } catch (_) {}
+    }
+    setState(() {});
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Paiement marqué comme payé'),
+        backgroundColor: Color(0xFF10B981),
+      ),
+    );
+
     try {
       final supabase = Supabase.instance.client;
       if (payment != null && payment['is_synthetic'] == true) {
@@ -6107,8 +6138,8 @@ class _StudentPaymentDetailDialogState
           'school_id': schId,
           'amount': payment['amount'] ?? 0,
           'status': 'paid',
-          'paid_at': DateTime.now().toIso8601String(),
-          'due_date': payment['due_date'] ?? DateTime.now().toIso8601String(),
+          'paid_at': nowIso,
+          'due_date': payment['due_date'] ?? nowIso,
           'method': 'cash',
           'notes': payment['category'] ?? 'Autre paiement',
         });
@@ -6117,37 +6148,10 @@ class _StudentPaymentDetailDialogState
             .from('payments')
             .update({
               'status': 'paid',
-              'paid_at': DateTime.now().toIso8601String(),
+              'paid_at': nowIso,
             })
             .eq('id', paymentId);
       }
-
-      final payIdStr = paymentId.toString();
-      for (final p in _payments) {
-        if (p['id']?.toString() == payIdStr) {
-          p['status'] = 'paid';
-          p['paid_at'] = DateTime.now().toIso8601String();
-        }
-      }
-      for (int i = 0; i < widget.student.plans.length; i++) {
-        final plan = widget.student.plans[i];
-        final updatedPayments = plan.payments.map((pay) {
-          if (pay.id == payIdStr) {
-            return pay.copyWith(status: PaymentStatus.paid, paidAt: DateTime.now());
-          }
-          return pay;
-        }).toList();
-        try {
-          widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
-        } catch (_) {}
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Paiement marqué comme payé'),
-          backgroundColor: Color(0xFF10B981),
-        ),
-      );
 
       await _loadStudentPayments();
       ref.read(paymentsProvider.notifier).refresh();
@@ -6167,6 +6171,36 @@ class _StudentPaymentDetailDialogState
   }
 
   Future<void> _markPaymentAsUnpaid(String paymentId) async {
+    final payIdStr = paymentId.toString();
+
+    // Optimistic UI update - instantaneous
+    for (final p in _payments) {
+      if (p['id']?.toString() == payIdStr) {
+        p['status'] = 'pending';
+        p['paid_at'] = null;
+      }
+    }
+    for (int i = 0; i < widget.student.plans.length; i++) {
+      final plan = widget.student.plans[i];
+      final updatedPayments = plan.payments.map((pay) {
+        if (pay.id == payIdStr) {
+          return pay.copyWith(status: PaymentStatus.pending, paidAt: null);
+        }
+        return pay;
+      }).toList();
+      try {
+        widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
+      } catch (_) {}
+    }
+    setState(() {});
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Paiement marqué comme impayé'),
+        backgroundColor: Color(0xFFF59E0B),
+      ),
+    );
+
     try {
       final supabase = Supabase.instance.client;
       await supabase
@@ -6176,33 +6210,6 @@ class _StudentPaymentDetailDialogState
             'paid_at': null,
           })
           .eq('id', paymentId);
-
-      final payIdStr = paymentId.toString();
-      for (final p in _payments) {
-        if (p['id']?.toString() == payIdStr) {
-          p['status'] = 'pending';
-          p['paid_at'] = null;
-        }
-      }
-      for (int i = 0; i < widget.student.plans.length; i++) {
-        final plan = widget.student.plans[i];
-        final updatedPayments = plan.payments.map((pay) {
-          if (pay.id == payIdStr) {
-            return pay.copyWith(status: PaymentStatus.pending, paidAt: null);
-          }
-          return pay;
-        }).toList();
-        try {
-          widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
-        } catch (_) {}
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Paiement marqué comme impayé'),
-          backgroundColor: Color(0xFFF59E0B),
-        ),
-      );
 
       await _loadStudentPayments();
       ref.read(paymentsProvider.notifier).refresh();
@@ -7175,6 +7182,10 @@ class _StudentPaymentDetailDialogState
           widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
         } catch (_) {}
       }
+
+      setState(() {
+        _selectedPaymentIds.clear();
+      });
 
       // 3. Update Supabase
       if (realIds.isNotEmpty) {

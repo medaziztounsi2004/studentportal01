@@ -176,8 +176,10 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
     state = AsyncValue.data(state.value!.copyWith(searchQuery: query));
   }
 
-  Future<void> refresh() async {
-    state = const AsyncValue.loading();
+  Future<void> refresh({bool showLoading = false}) async {
+    if (showLoading) {
+      state = const AsyncValue.loading();
+    }
     state = AsyncValue.data(await _loadUsers());
   }
 
@@ -394,6 +396,30 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
     String? gender,
     String? nationality,
   }) async {
+    final previousUsers = state.value?.users;
+    if (state.value != null) {
+      state = AsyncValue.data(
+        state.value!.copyWith(
+          users: state.value!.users.map((u) {
+            if (u.id != id) return u;
+            return u.copyWith(
+              fullName: fullName ?? u.fullName,
+              phone: phone ?? u.phone,
+              role: role ?? u.role,
+              studentCode: studentCode ?? u.studentCode,
+              photoUrl: photoUrl ?? u.photoUrl,
+              dateOfBirth: dateOfBirth != null ? DateTime.tryParse(dateOfBirth) : u.dateOfBirth,
+              address: address ?? u.address,
+              niveauCode: niveauCode ?? u.niveauCode,
+              sectionCode: sectionCode ?? u.sectionCode,
+              gender: gender ?? u.gender,
+              nationality: nationality ?? u.nationality,
+            );
+          }).toList(),
+        ),
+      );
+    }
+
     try {
       final updates = <String, dynamic>{
         'updated_at': DateTime.now().toIso8601String(),
@@ -414,18 +440,21 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       // Use admin client to bypass RLS
       await _adminSupabase.from('users').update(updates).eq('id', id);
       debugPrint('UsersProvider: Update successful for $id');
-      await refresh();
+      await refresh(showLoading: false);
       return true;
     } catch (e) {
       debugPrint('UsersProvider: Update failed for $id: $e');
-      state = AsyncValue.data(
-        state.value!.copyWith(
-          error: UserFriendlyError.format(
-            e,
-            fallback: 'Unable to update user details right now. Please try again.',
+      if (previousUsers != null) {
+        state = AsyncValue.data(
+          state.value!.copyWith(
+            users: previousUsers,
+            error: UserFriendlyError.format(
+              e,
+              fallback: 'Unable to update user details right now. Please try again.',
+            ),
           ),
-        ),
-      );
+        );
+      }
       return false;
     }
   }
@@ -554,37 +583,65 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
   }
 
   Future<bool> deleteUser(String id) async {
-    try {
-      final success = await UserManagementService.deleteUser(id);
-      await refresh();
-      return success;
-    } catch (e) {
+    final previousUsers = state.value?.users;
+    if (state.value != null) {
       state = AsyncValue.data(
         state.value!.copyWith(
-          error: UserFriendlyError.format(
-            e,
-            fallback: 'Unable to delete this user right now. Please try again.',
-          ),
+          users: state.value!.users.where((u) => u.id != id).toList(),
         ),
       );
+    }
+    try {
+      final success = await UserManagementService.deleteUser(id);
+      if (!success && previousUsers != null) {
+        state = AsyncValue.data(state.value!.copyWith(users: previousUsers));
+      } else {
+        await refresh(showLoading: false);
+      }
+      return success;
+    } catch (e) {
+      if (previousUsers != null) {
+        state = AsyncValue.data(
+          state.value!.copyWith(
+            users: previousUsers,
+            error: UserFriendlyError.format(
+              e,
+              fallback: 'Unable to delete this user right now. Please try again.',
+            ),
+          ),
+        );
+      }
       return false;
     }
   }
 
   /// Bulk delete users securely through Edge Function
   Future<Map<String, int>> bulkDeleteUsers(List<String> ids) async {
+    final previousUsers = state.value?.users;
+    final idSet = ids.toSet();
+    if (state.value != null) {
+      state = AsyncValue.data(
+        state.value!.copyWith(
+          users: state.value!.users.where((u) => !idSet.contains(u.id)).toList(),
+        ),
+      );
+    }
     try {
       final result = await UserManagementService.bulkDeleteUsers(ids);
-      await refresh();
+      await refresh(showLoading: false);
       return result;
     } catch (e) {
       debugPrint('bulkDeleteUsers failed: $e');
+      if (previousUsers != null) {
+        state = AsyncValue.data(state.value!.copyWith(users: previousUsers));
+      }
       return {'deleted': 0, 'failed': ids.length};
     }
   }
 
   /// Toggle archive status for a single user (and sync enrollments if student)
   Future<bool> toggleUserArchive(String userId, bool newActive) async {
+    final previousUsers = state.value?.users;
     // Optimistic UI update
     if (state.value != null) {
       final currentUsers = state.value!.users;
@@ -602,11 +659,13 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
         userIds: [userId],
         isActive: newActive,
       );
-      await refresh();
+      await refresh(showLoading: false);
       return success;
     } catch (e) {
       debugPrint('UsersNotifier: toggleUserArchive error: $e');
-      await refresh();
+      if (previousUsers != null) {
+        state = AsyncValue.data(state.value!.copyWith(users: previousUsers));
+      }
       return false;
     }
   }
@@ -614,6 +673,7 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
   /// Bulk toggle archive status for multiple users (and sync enrollments)
   Future<bool> bulkToggleArchive(List<String> userIds, bool newActive) async {
     if (userIds.isEmpty) return true;
+    final previousUsers = state.value?.users;
 
     // Optimistic UI update
     if (state.value != null) {
@@ -633,11 +693,13 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
         userIds: userIds,
         isActive: newActive,
       );
-      await refresh();
+      await refresh(showLoading: false);
       return success;
     } catch (e) {
       debugPrint('UsersNotifier: bulkToggleArchive error: $e');
-      await refresh();
+      if (previousUsers != null) {
+        state = AsyncValue.data(state.value!.copyWith(users: previousUsers));
+      }
       return false;
     }
   }

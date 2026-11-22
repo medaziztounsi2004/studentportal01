@@ -84,6 +84,44 @@ class Document {
     this.studentCode,
   });
 
+  Document copyWith({
+    String? id,
+    String? schoolId,
+    String? classId,
+    String? title,
+    String? description,
+    String? category,
+    int? semester,
+    String? fileUrl,
+    String? fileName,
+    int? fileSize,
+    String? mimeType,
+    String? fileType,
+    DateTime? createdAt,
+    String? className,
+    String? studentId,
+    String? studentName,
+    String? studentCode,
+  }) => Document(
+    id: id ?? this.id,
+    schoolId: schoolId ?? this.schoolId,
+    classId: classId ?? this.classId,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    category: category ?? this.category,
+    semester: semester ?? this.semester,
+    fileUrl: fileUrl ?? this.fileUrl,
+    fileName: fileName ?? this.fileName,
+    fileSize: fileSize ?? this.fileSize,
+    mimeType: mimeType ?? this.mimeType,
+    fileType: fileType ?? this.fileType,
+    createdAt: createdAt ?? this.createdAt,
+    className: className ?? this.className,
+    studentId: studentId ?? this.studentId,
+    studentName: studentName ?? this.studentName,
+    studentCode: studentCode ?? this.studentCode,
+  );
+
   bool get isStudentDedicated => studentId != null && studentId!.isNotEmpty;
 
   String get cleanDescription {
@@ -346,38 +384,87 @@ class DocumentsNotifier extends AsyncNotifier<DocumentsState> {
       studentCode: studentCode,
     );
 
-    final updated = await supabase
-        .from('documents')
-        .update({
-          'class_id': classId,
-          'title': title,
-          'description': formattedDesc,
-          'file_url': fileUrl,
-          'category': dbCategory,
-          if (fileName != null && fileName.isNotEmpty) 'file_name': fileName,
-          'file_size': fileSize,
-          'mime_type': mimeType,
-        })
-        .eq('id', id)
-        .select('id');
+    final previous = state.value;
+    state.whenData((s) {
+      final updatedList = s.documents.map((doc) {
+        if (doc.id == id) {
+          return doc.copyWith(
+            title: title,
+            description: formattedDesc,
+            fileUrl: fileUrl,
+            fileName: fileName,
+            fileSize: fileSize,
+            mimeType: mimeType,
+            classId: classId,
+            category: category,
+            semester: semester,
+            studentId: studentId,
+            studentName: studentName,
+            studentCode: studentCode,
+          );
+        }
+        return doc;
+      }).toList();
+      state = AsyncData(s.copyWith(documents: updatedList));
+    });
 
-    if ((updated as List).isEmpty) {
-      throw Exception(
-        'You do not have permission to modify this document, or it no longer exists.',
-      );
+    try {
+      final updated = await supabase
+          .from('documents')
+          .update({
+            'class_id': classId,
+            'title': title,
+            'description': formattedDesc,
+            'file_url': fileUrl,
+            'category': dbCategory,
+            if (fileName != null && fileName.isNotEmpty) 'file_name': fileName,
+            'file_size': fileSize,
+            'mime_type': mimeType,
+          })
+          .eq('id', id)
+          .select('id');
+
+      if ((updated as List).isEmpty) {
+        throw Exception(
+          'You do not have permission to modify this document, or it no longer exists.',
+        );
+      }
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    state = AsyncData(await _load());
   }
 
   Future<void> delete(String id) async {
-    await SupabaseConfig.client.from('documents').delete().eq('id', id);
-    state = AsyncData(await _load());
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.documents.where((doc) => doc.id != id).toList();
+      state = AsyncData(s.copyWith(documents: updated));
+    });
+
+    try {
+      await SupabaseConfig.client.from('documents').delete().eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> bulkDelete(List<String> ids) async {
     if (ids.isEmpty) return;
-    await SupabaseConfig.client.from('documents').delete().filter('id', 'in', ids);
-    state = AsyncData(await _load());
+    final previous = state.value;
+    final idSet = ids.toSet();
+    state.whenData((s) {
+      final updated = s.documents.where((doc) => !idSet.contains(doc.id)).toList();
+      state = AsyncData(s.copyWith(documents: updated));
+    });
+
+    try {
+      await SupabaseConfig.client.from('documents').delete().filter('id', 'in', ids);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 }
 

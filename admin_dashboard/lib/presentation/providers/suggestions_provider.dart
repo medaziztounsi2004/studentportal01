@@ -229,6 +229,50 @@ class Suggestion {
         return const Color(0xFF9CA3AF);
     }
   }
+
+  Suggestion copyWith({
+    String? id,
+    String? studentId,
+    String? studentName,
+    String? studentCode,
+    String? className,
+    String? classId,
+    String? studentLevel,
+    String? studentField,
+    String? studentPhotoUrl,
+    String? studentGender,
+    String? subject,
+    String? content,
+    String? status,
+    String? suggestionType,
+    bool? hasAttachment,
+    bool? isRead,
+    DateTime? readAt,
+    DateTime? createdAt,
+    List<SuggestionAttachment>? attachments,
+    List<SuggestionReply>? replies,
+  }) => Suggestion(
+    id: id ?? this.id,
+    studentId: studentId ?? this.studentId,
+    studentName: studentName ?? this.studentName,
+    studentCode: studentCode ?? this.studentCode,
+    className: className ?? this.className,
+    classId: classId ?? this.classId,
+    studentLevel: studentLevel ?? this.studentLevel,
+    studentField: studentField ?? this.studentField,
+    studentPhotoUrl: studentPhotoUrl ?? this.studentPhotoUrl,
+    studentGender: studentGender ?? this.studentGender,
+    subject: subject ?? this.subject,
+    content: content ?? this.content,
+    status: status ?? this.status,
+    suggestionType: suggestionType ?? this.suggestionType,
+    hasAttachment: hasAttachment ?? this.hasAttachment,
+    isRead: isRead ?? this.isRead,
+    readAt: readAt ?? this.readAt,
+    createdAt: createdAt ?? this.createdAt,
+    attachments: attachments ?? this.attachments,
+    replies: replies ?? this.replies,
+  );
 }
 
 class SuggestionAttachment {
@@ -608,27 +652,73 @@ class SuggestionsNotifier extends AsyncNotifier<SuggestionsState> {
   }
 
   Future<void> updateStatus(String id, String status) async {
-    await SupabaseConfig.client
-        .from('suggestions')
-        .update({'status': status})
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.suggestions.map((item) {
+        if (item.id == id) {
+          return item.copyWith(status: status);
+        }
+        return item;
+      }).toList();
+      state = AsyncData(s.copyWith(suggestions: updated));
+    });
+
+    try {
+      await SupabaseConfig.client
+          .from('suggestions')
+          .update({'status': status})
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> markAsRead(String id) async {
-    await SupabaseConfig.client
-        .from('suggestions')
-        .update({'is_read': true, 'read_at': DateTime.now().toIso8601String()})
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    final now = DateTime.now();
+    state.whenData((s) {
+      final updated = s.suggestions.map((item) {
+        if (item.id == id) {
+          return item.copyWith(isRead: true, readAt: now);
+        }
+        return item;
+      }).toList();
+      state = AsyncData(s.copyWith(suggestions: updated));
+    });
+
+    try {
+      await SupabaseConfig.client
+          .from('suggestions')
+          .update({'is_read': true, 'read_at': now.toIso8601String()})
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> markAsUnread(String id) async {
-    await SupabaseConfig.client
-        .from('suggestions')
-        .update({'is_read': false, 'read_at': null})
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.suggestions.map((item) {
+        if (item.id == id) {
+          return item.copyWith(isRead: false, readAt: null);
+        }
+        return item;
+      }).toList();
+      state = AsyncData(s.copyWith(suggestions: updated));
+    });
+
+    try {
+      await SupabaseConfig.client
+          .from('suggestions')
+          .update({'is_read': false, 'read_at': null})
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> reply(String suggestionId, String content) async {
@@ -636,18 +726,15 @@ class SuggestionsNotifier extends AsyncNotifier<SuggestionsState> {
     final user = supabase.auth.currentUser;
     if (user == null) throw Exception('Non connecté');
 
+    // Optimistically update status to replied
+    await updateStatus(suggestionId, 'replied');
+
     // Insert reply WITHOUT admin_name (column doesn't exist in table)
     await supabase.from('suggestion_replies').insert({
       'suggestion_id': suggestionId,
       'admin_id': user.id,
       'message': content,
     });
-    
-    // Update suggestion status to replied
-    await updateStatus(suggestionId, 'replied');
-
-    // Refresh the list
-    ref.invalidateSelf();
   }
 
   Future<void> deleteReply(String replyId) async {
@@ -667,16 +754,37 @@ class SuggestionsNotifier extends AsyncNotifier<SuggestionsState> {
   }
 
   Future<void> delete(String id) async {
-    await SupabaseConfig.client.from('suggestions').delete().eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.suggestions.where((item) => item.id != id).toList();
+      state = AsyncData(s.copyWith(suggestions: updated));
+    });
+
+    try {
+      await SupabaseConfig.client.from('suggestions').delete().eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> deleteMultiple(List<String> ids) async {
-    await SupabaseConfig.client
-        .from('suggestions')
-        .delete()
-        .inFilter('id', ids);
-    ref.invalidateSelf();
+    final previous = state.value;
+    final idSet = ids.toSet();
+    state.whenData((s) {
+      final updated = s.suggestions.where((item) => !idSet.contains(item.id)).toList();
+      state = AsyncData(s.copyWith(suggestions: updated));
+    });
+
+    try {
+      await SupabaseConfig.client
+          .from('suggestions')
+          .delete()
+          .inFilter('id', ids);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {

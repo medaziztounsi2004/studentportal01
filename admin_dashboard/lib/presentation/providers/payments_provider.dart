@@ -831,6 +831,22 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
   // ═══════════════════════════════════════════════════════════════════════════
 
   Future<void> markAsPaid(String id, {String? method, String? reference}) async {
+    final previous = state.value;
+    state.whenData((s) {
+      final payments = s.payments.map((p) {
+        if (p.id == id) {
+          return p.copyWith(
+            status: PaymentStatus.paid,
+            paidAt: DateTime.now(),
+            method: method,
+            reference: reference,
+          );
+        }
+        return p;
+      }).toList();
+      state = AsyncData(s.copyWith(payments: payments));
+    });
+
     try {
       await SupabaseConfig.client.from('payments').update({
         'status': 'paid',
@@ -838,84 +854,75 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
         if (method != null) 'method': method,
         if (reference != null) 'reference': reference,
       }).eq('id', id);
-      ref.invalidateSelf();
     } catch (e) {
-      // Demo mode - update locally
-      state.whenData((s) {
-        final payments = s.payments.map((p) {
-          if (p.id == id) {
-            return p.copyWith(
-              status: PaymentStatus.paid,
-              paidAt: DateTime.now(),
-              method: method,
-              reference: reference,
-            );
-          }
-          return p;
-        }).toList();
-        state = AsyncData(s.copyWith(payments: payments));
-      });
+      if (previous != null) state = AsyncData(previous);
     }
   }
 
   Future<void> markAsOverdue(String id) async {
+    final previous = state.value;
+    state.whenData((s) {
+      final payments = s.payments.map((p) {
+        if (p.id == id) {
+          return p.copyWith(status: PaymentStatus.overdue);
+        }
+        return p;
+      }).toList();
+      state = AsyncData(s.copyWith(payments: payments));
+    });
+
     try {
       await SupabaseConfig.client.from('payments').update({
         'status': 'overdue',
       }).eq('id', id);
-      ref.invalidateSelf();
     } catch (e) {
-      state.whenData((s) {
-        final payments = s.payments.map((p) {
-          if (p.id == id) {
-            return p.copyWith(status: PaymentStatus.overdue);
-          }
-          return p;
-        }).toList();
-        state = AsyncData(s.copyWith(payments: payments));
-      });
+      if (previous != null) state = AsyncData(previous);
     }
   }
 
   Future<void> markAsUnpaid(String id) async {
+    final previous = state.value;
+    state.whenData((s) {
+      final payments = s.payments.map((p) {
+        if (p.id == id) {
+          return p.copyWith(
+            status: PaymentStatus.pending,
+            paidAt: null,
+          );
+        }
+        return p;
+      }).toList();
+      state = AsyncData(s.copyWith(payments: payments));
+    });
+
     try {
       await SupabaseConfig.client.from('payments').update({
         'status': 'pending',
         'paid_at': null,
       }).eq('id', id);
-      ref.invalidateSelf();
     } catch (e) {
-      state.whenData((s) {
-        final payments = s.payments.map((p) {
-          if (p.id == id) {
-            return p.copyWith(
-              status: PaymentStatus.pending,
-              paidAt: null,
-            );
-          }
-          return p;
-        }).toList();
-        state = AsyncData(s.copyWith(payments: payments));
-      });
+      if (previous != null) state = AsyncData(previous);
     }
   }
 
   Future<void> cancelPayment(String id) async {
+    final previous = state.value;
+    state.whenData((s) {
+      final payments = s.payments.map((p) {
+        if (p.id == id) {
+          return p.copyWith(status: PaymentStatus.cancelled);
+        }
+        return p;
+      }).toList();
+      state = AsyncData(s.copyWith(payments: payments));
+    });
+
     try {
       await SupabaseConfig.client.from('payments').update({
         'status': 'cancelled',
       }).eq('id', id);
-      ref.invalidateSelf();
     } catch (e) {
-      state.whenData((s) {
-        final payments = s.payments.map((p) {
-          if (p.id == id) {
-            return p.copyWith(status: PaymentStatus.cancelled);
-          }
-          return p;
-        }).toList();
-        state = AsyncData(s.copyWith(payments: payments));
-      });
+      if (previous != null) state = AsyncData(previous);
     }
   }
 
@@ -925,39 +932,43 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
     DateTime? dueDate,
     String? notes,
   }) async {
+    final previous = state.value;
+    state.whenData((s) {
+      final payments = s.payments.map((p) {
+        if (p.id == id) {
+          return p.copyWith(
+            amount: amount,
+            dueDate: dueDate,
+            notes: notes,
+          );
+        }
+        return p;
+      }).toList();
+      state = AsyncData(s.copyWith(payments: payments));
+    });
+
     try {
       await SupabaseConfig.client.from('payments').update({
         if (amount != null) 'amount': amount,
         if (dueDate != null) 'due_date': DateFormat('yyyy-MM-dd').format(dueDate),
         if (notes != null) 'notes': notes,
       }).eq('id', id);
-      ref.invalidateSelf();
     } catch (e) {
-      state.whenData((s) {
-        final payments = s.payments.map((p) {
-          if (p.id == id) {
-            return p.copyWith(
-              amount: amount,
-              dueDate: dueDate,
-              notes: notes,
-            );
-          }
-          return p;
-        }).toList();
-        state = AsyncData(s.copyWith(payments: payments));
-      });
+      if (previous != null) state = AsyncData(previous);
     }
   }
 
   Future<void> deletePayment(String id) async {
+    final previous = state.value;
+    state.whenData((s) {
+      final payments = s.payments.where((p) => p.id != id).toList();
+      state = AsyncData(s.copyWith(payments: payments));
+    });
+
     try {
       await SupabaseConfig.client.from('payments').delete().eq('id', id);
-      ref.invalidateSelf();
     } catch (e) {
-      state.whenData((s) {
-        final payments = s.payments.where((p) => p.id != id).toList();
-        state = AsyncData(s.copyWith(payments: payments));
-      });
+      if (previous != null) state = AsyncData(previous);
     }
   }
 

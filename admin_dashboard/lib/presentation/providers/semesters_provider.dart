@@ -33,6 +33,26 @@ class SemesterModel {
     academicYearId: json['academic_year_id'],
     academicYearName: json['academic_years']?['name'],
   );
+
+  SemesterModel copyWith({
+    String? id,
+    String? name,
+    int? number,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool? isCurrent,
+    String? academicYearId,
+    String? academicYearName,
+  }) => SemesterModel(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    number: number ?? this.number,
+    startDate: startDate ?? this.startDate,
+    endDate: endDate ?? this.endDate,
+    isCurrent: isCurrent ?? this.isCurrent,
+    academicYearId: academicYearId ?? this.academicYearId,
+    academicYearName: academicYearName ?? this.academicYearName,
+  );
 }
 
 class AcademicYearModel {
@@ -800,8 +820,8 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       await _rebuildAutoGapVacations(schoolId, currentYear.id);
 
       await _refreshCurrentSemester(schoolId);
-      state = const AsyncLoading();
-      ref.invalidateSelf();
+      final fresh = await _load();
+      state = AsyncData(fresh);
     } finally {
       _isMutating = false;
     }
@@ -969,8 +989,8 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
 
       await _rebuildAutoGapVacations(schoolId, academicYearId);
       await _refreshCurrentSemester(schoolId);
-      state = const AsyncLoading();
-      ref.invalidateSelf();
+      final fresh = await _load();
+      state = AsyncData(fresh);
     } finally {
       _isMutating = false;
     }
@@ -1046,61 +1066,118 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
         }
       }
 
-      await admin
-          .from('semesters')
-          .update({
-            'name': name.trim(),
-            'number': number,
-            'start_date': startDate.toIso8601String().split('T')[0],
-            'end_date': endDate.toIso8601String().split('T')[0],
-          })
-          .eq('id', id);
+      final previous = state.value;
+      state.whenData((s) {
+        final updated = s.semesters.map((sem) {
+          if (sem.id == id) {
+            return sem.copyWith(
+              name: name.trim(),
+              number: number,
+              startDate: startDate,
+              endDate: endDate,
+            );
+          }
+          return sem;
+        }).toList();
+        state = AsyncData(s.copyWith(semesters: updated));
+      });
 
-      await _rebuildAutoGapVacations(schoolId, yearId);
-      await _refreshCurrentSemester(schoolId);
-      state = const AsyncLoading();
-      ref.invalidateSelf();
+      try {
+        await admin
+            .from('semesters')
+            .update({
+              'name': name.trim(),
+              'number': number,
+              'start_date': startDate.toIso8601String().split('T')[0],
+              'end_date': endDate.toIso8601String().split('T')[0],
+            })
+            .eq('id', id);
+
+        await _rebuildAutoGapVacations(schoolId, yearId);
+        await _refreshCurrentSemester(schoolId);
+        final fresh = await _load();
+        state = AsyncData(fresh);
+      } catch (e) {
+        if (previous != null) state = AsyncData(previous);
+        rethrow;
+      }
     } finally {
       _isMutating = false;
     }
   }
 
   Future<void> delete(String id) async {
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.semesters.where((sem) => sem.id != id).toList();
+      state = AsyncData(s.copyWith(semesters: updated));
+    });
+
     final admin = SupabaseConfig.adminClient;
     final user = SupabaseConfig.client.auth.currentUser;
-    if (user == null) throw Exception('Non connecté');
-
-    final semester = await admin
-        .from('semesters')
-        .select('school_id, academic_year_id')
-        .eq('id', id)
-        .maybeSingle();
-
-    await admin.from('semesters').delete().eq('id', id);
-
-    if (semester != null) {
-      final schoolId = semester['school_id'];
-      final yearId = semester['academic_year_id'];
-      await _rebuildAutoGapVacations(schoolId, yearId);
-      await _refreshCurrentSemester(schoolId);
+    if (user == null) {
+      if (previous != null) state = AsyncData(previous);
+      throw Exception('Non connecté');
     }
 
-    state = const AsyncLoading();
-    ref.invalidateSelf();
+    try {
+      final semester = await admin
+          .from('semesters')
+          .select('school_id, academic_year_id')
+          .eq('id', id)
+          .maybeSingle();
+
+      await admin.from('semesters').delete().eq('id', id);
+
+      if (semester != null) {
+        final schoolId = semester['school_id'];
+        final yearId = semester['academic_year_id'];
+        await _rebuildAutoGapVacations(schoolId, yearId);
+        await _refreshCurrentSemester(schoolId);
+      }
+
+      final fresh = await _load();
+      state = AsyncData(fresh);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> deleteVacation(String id) async {
-    final admin = SupabaseConfig.adminClient;
-    await admin.from('vacation_periods').delete().eq('id', id);
-    state = const AsyncLoading();
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.vacationPeriods.where((v) => v.id != id).toList();
+      state = AsyncData(s.copyWith(vacationPeriods: updated));
+    });
+
+    try {
+      final admin = SupabaseConfig.adminClient;
+      await admin.from('vacation_periods').delete().eq('id', id);
+      final fresh = await _load();
+      state = AsyncData(fresh);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> deleteExam(String id) async {
-    final admin = SupabaseConfig.adminClient;
-    await admin.from('exam_periods').delete().eq('id', id);
-    state = const AsyncLoading();
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.examPeriods.where((e) => e.id != id).toList();
+      state = AsyncData(s.copyWith(examPeriods: updated));
+    });
+
+    try {
+      final admin = SupabaseConfig.adminClient;
+      await admin.from('exam_periods').delete().eq('id', id);
+      final fresh = await _load();
+      state = AsyncData(fresh);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> addManualVacation({
@@ -1130,8 +1207,8 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       'end_date': endDate.toIso8601String().split('T')[0],
       'type': 'manual',
     });
-    state = const AsyncLoading();
-    ref.invalidateSelf();
+    final fresh = await _load();
+    state = AsyncData(fresh);
   }
 
   Future<void> addExamPeriod({
@@ -1160,8 +1237,8 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       'start_date': startDate.toIso8601String().split('T')[0],
       'end_date': endDate.toIso8601String().split('T')[0],
     });
-    state = const AsyncLoading();
-    ref.invalidateSelf();
+    final fresh = await _load();
+    state = AsyncData(fresh);
   }
 }
 

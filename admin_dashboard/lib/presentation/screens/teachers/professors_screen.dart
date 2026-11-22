@@ -47,63 +47,133 @@ Color _specialityColor(String? name) {
 
 // ── Provider ───────────────────────────────────────────────────────────────
 
-final professorsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final response = await Supabase.instance.client
-      .from('users')
-      .select('id, full_name, email, phone, photo_url, role, is_active, created_at, gender')
-      .eq('role', 'teacher')
-      .order('full_name', ascending: true);
+class ProfessorsNotifier extends AsyncNotifier<List<Map<String, dynamic>>> {
+  @override
+  Future<List<Map<String, dynamic>>> build() async => _load();
 
-  final professors = List<Map<String, dynamic>>.from(response as List);
+  Future<List<Map<String, dynamic>>> _load() async {
+    final response = await Supabase.instance.client
+        .from('users')
+        .select('id, full_name, email, phone, photo_url, role, is_active, created_at, gender')
+        .eq('role', 'teacher')
+        .order('full_name', ascending: true);
 
-  // Fetch teacher assignments with subjects, classes, and niveaux
-  final teacherIds = professors.map((p) => p['id'] as String).toList();
-  if (teacherIds.isNotEmpty) {
-    try {
-      final assignmentsResp = await Supabase.instance.client
-          .from('teacher_assignments')
-          .select('teacher_id, subject_id, niveau_id, class_id, subjects(name), classes(name, niveaux(code)), niveaux(code)')
-          .inFilter('teacher_id', teacherIds)
-          .eq('is_active', true);
+    final professors = List<Map<String, dynamic>>.from(response as List);
 
-      // Group subjects, classes, niveaux by teacher_id
-      final Map<String, Set<String>> teacherSubjects = {};
-      final Map<String, List<String>> teacherClasses = {};
-      final Map<String, Set<String>> teacherNiveaux = {};
-      for (final a in assignmentsResp as List) {
-        final teacherId = a['teacher_id'] as String?;
-        final subjectName = (a['subjects'] as Map?)?['name'] as String?;
-        final className = (a['classes'] as Map?)?['name'] as String?;
-        // Try direct niveau_id first, fallback to class→niveaux, use code
-        final niveauCode = (a['niveaux'] as Map?)?['code'] as String? ??
-            ((a['classes'] as Map?)?['niveaux'] as Map?)?['code'] as String?;
-        if (teacherId != null) {
-          if (subjectName != null) teacherSubjects.putIfAbsent(teacherId, () => {}).add(subjectName);
-          if (className != null) teacherClasses.putIfAbsent(teacherId, () => []).add(className);
-          if (niveauCode != null) teacherNiveaux.putIfAbsent(teacherId, () => {}).add(niveauCode);
+    // Fetch teacher assignments with subjects, classes, and niveaux
+    final teacherIds = professors.map((p) => p['id'] as String).toList();
+    if (teacherIds.isNotEmpty) {
+      try {
+        final assignmentsResp = await Supabase.instance.client
+            .from('teacher_assignments')
+            .select('teacher_id, subject_id, niveau_id, class_id, subjects(name), classes(name, niveaux(code)), niveaux(code)')
+            .inFilter('teacher_id', teacherIds)
+            .eq('is_active', true);
+
+        // Group subjects, classes, niveaux by teacher_id
+        final Map<String, Set<String>> teacherSubjects = {};
+        final Map<String, List<String>> teacherClasses = {};
+        final Map<String, Set<String>> teacherNiveaux = {};
+        for (final a in assignmentsResp as List) {
+          final teacherId = a['teacher_id'] as String?;
+          final subjectName = (a['subjects'] as Map?)?['name'] as String?;
+          final className = (a['classes'] as Map?)?['name'] as String?;
+          // Try direct niveau_id first, fallback to class→niveaux, use code
+          final niveauCode = (a['niveaux'] as Map?)?['code'] as String? ??
+              ((a['classes'] as Map?)?['niveaux'] as Map?)?['code'] as String?;
+          if (teacherId != null) {
+            if (subjectName != null) teacherSubjects.putIfAbsent(teacherId, () => {}).add(subjectName);
+            if (className != null) teacherClasses.putIfAbsent(teacherId, () => []).add(className);
+            if (niveauCode != null) teacherNiveaux.putIfAbsent(teacherId, () => {}).add(niveauCode);
+          }
+        }
+
+        for (final prof in professors) {
+          final id = prof['id'] as String;
+          final subjects = teacherSubjects[id];
+          prof['speciality'] = subjects != null && subjects.isNotEmpty ? subjects.first : null;
+          prof['all_subjects'] = subjects?.toList() ?? [];
+          prof['classes'] = teacherClasses[id] ?? [];
+          prof['niveaux'] = teacherNiveaux[id]?.toList() ?? [];
+        }
+      } catch (_) {
+        for (final prof in professors) {
+          prof['speciality'] = null;
+          prof['all_subjects'] = <String>[];
+          prof['classes'] = <String>[];
+          prof['niveaux'] = <String>[];
         }
       }
+    }
 
-      for (final prof in professors) {
-        final id = prof['id'] as String;
-        final subjects = teacherSubjects[id];
-        prof['speciality'] = subjects != null && subjects.isNotEmpty ? subjects.first : null;
-        prof['all_subjects'] = subjects?.toList() ?? [];
-        prof['classes'] = teacherClasses[id] ?? [];
-        prof['niveaux'] = teacherNiveaux[id]?.toList() ?? [];
-      }
-    } catch (_) {
-      for (final prof in professors) {
-        prof['speciality'] = null;
-        prof['all_subjects'] = <String>[];
-        prof['classes'] = <String>[];
-        prof['niveaux'] = <String>[];
-      }
+    return professors;
+  }
+
+  Future<void> refresh({bool showLoading = false}) async {
+    if (showLoading) state = const AsyncValue.loading();
+    state = AsyncValue.data(await _load());
+  }
+
+  Future<bool> toggleArchive(List<String> userIds, bool isActive) async {
+    final previous = state.value;
+    final idSet = userIds.toSet();
+    if (state.value != null) {
+      state = AsyncValue.data(
+        state.value!.map((p) {
+          if (idSet.contains(p['id'])) {
+            final copy = Map<String, dynamic>.from(p);
+            copy['is_active'] = isActive;
+            return copy;
+          }
+          return p;
+        }).toList(),
+      );
+    }
+    try {
+      final success = await UserManagementService.toggleArchive(userIds: userIds, isActive: isActive);
+      await refresh(showLoading: false);
+      return success;
+    } catch (e) {
+      if (previous != null) state = AsyncValue.data(previous);
+      return false;
     }
   }
 
-  return professors;
-});
+  Future<bool> delete(String id) async {
+    final previous = state.value;
+    if (state.value != null) {
+      state = AsyncValue.data(state.value!.where((p) => p['id'] != id).toList());
+    }
+    try {
+      final success = await UserManagementService.deleteUser(id);
+      await refresh(showLoading: false);
+      return success;
+    } catch (e) {
+      if (previous != null) state = AsyncValue.data(previous);
+      return false;
+    }
+  }
+
+  Future<bool> bulkDelete(List<String> ids) async {
+    final previous = state.value;
+    final idSet = ids.toSet();
+    if (state.value != null) {
+      state = AsyncValue.data(state.value!.where((p) => !idSet.contains(p['id'])).toList());
+    }
+    try {
+      await UserManagementService.bulkDeleteUsers(ids);
+      await refresh(showLoading: false);
+      return true;
+    } catch (e) {
+      if (previous != null) state = AsyncValue.data(previous);
+      return false;
+    }
+  }
+}
+
+final professorsProvider = AsyncNotifierProvider<ProfessorsNotifier, List<Map<String, dynamic>>>(
+  ProfessorsNotifier.new,
+);
 
 final _subjectsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   // Get school_id from authenticated user
@@ -870,19 +940,10 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () async {
+                  onPressed: () {
                     Navigator.pop(ctx);
-                    try {
-                      final ok = await UserManagementService.toggleArchive(
-                        userIds: [id],
-                        isActive: false,
-                      );
-                      if (!ok) throw Exception('Impossible d\'archiver le professeur.');
-                      ref.invalidate(professorsProvider);
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" archivé'), backgroundColor: AppColors.warning));
-                    } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
-                    }
+                    ref.read(professorsProvider.notifier).toggleArchive([id], false);
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" archivé'), backgroundColor: AppColors.warning));
                   },
                   icon: const Icon(Icons.archive_outlined, size: 16),
                   label: const Text('Archiver', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -930,19 +991,10 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () async {
+                  onPressed: () {
                     Navigator.pop(ctx);
-                    try {
-                      final ok = await UserManagementService.toggleArchive(
-                        userIds: [id],
-                        isActive: true,
-                      );
-                      if (!ok) throw Exception('Impossible de désarchiver le professeur.');
-                      ref.invalidate(professorsProvider);
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désarchivé'), backgroundColor: AppColors.success));
-                    } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
-                    }
+                    ref.read(professorsProvider.notifier).toggleArchive([id], true);
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désarchivé'), backgroundColor: AppColors.success));
                   },
                   icon: const Icon(Icons.unarchive_outlined, size: 16),
                   label: const Text('Désarchiver', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1013,10 +1065,9 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () async {
+                  onPressed: () {
                     Navigator.pop(ctx);
-                    try { await UserManagementService.deleteUser(id); } catch (_) {}
-                    ref.invalidate(professorsProvider);
+                    ref.read(professorsProvider.notifier).delete(id);
                     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" supprimé'), backgroundColor: AppColors.error));
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
@@ -1241,25 +1292,15 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () async {
+                  onPressed: () {
+                    final ids = _selectedProfIds.toList();
+                    setState(() => _selectedProfIds.clear());
                     Navigator.pop(ctx);
-                    try {
-                      final ok = await UserManagementService.toggleArchive(
-                        userIds: _selectedProfIds.toList(),
-                        isActive: false,
+                    ref.read(professorsProvider.notifier).toggleArchive(ids, false);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$count professeur${count > 1 ? 's archivés' : ' archivé'}'), backgroundColor: AppColors.warning),
                       );
-                      if (!ok) throw Exception('Impossible d\'archiver les professeurs.');
-                      setState(() => _selectedProfIds.clear());
-                      ref.invalidate(professorsProvider);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$count professeur${count > 1 ? 's archivés' : ' archivé'}'), backgroundColor: AppColors.warning),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
-                      }
                     }
                   },
                   icon: const Icon(Icons.archive_outlined, size: 16),
@@ -1315,21 +1356,15 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () async {
+                  onPressed: () {
+                    final ids = _selectedProfIds.toList();
+                    setState(() => _selectedProfIds.clear());
                     Navigator.pop(ctx);
-                    try {
-                      await UserManagementService.bulkDeleteUsers(_selectedProfIds.toList());
-                      setState(() => _selectedProfIds.clear());
-                      ref.invalidate(professorsProvider);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$count professeur${count > 1 ? 's supprimés' : ' supprimé'}'), backgroundColor: AppColors.error),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
-                      }
+                    ref.read(professorsProvider.notifier).bulkDelete(ids);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$count professeur${count > 1 ? 's supprimés' : ' supprimé'}'), backgroundColor: AppColors.error),
+                      );
                     }
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),

@@ -138,8 +138,18 @@ class TimetableNotifier extends AsyncNotifier<TimetableState> {
   }
 
   Future<void> delete(String id) async {
-    await SupabaseConfig.client.from('timetable_slots').delete().eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.slots.where((slot) => slot.id != id).toList();
+      state = AsyncData(s.copyWith(slots: updated));
+    });
+
+    try {
+      await SupabaseConfig.client.from('timetable_slots').delete().eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 }
 

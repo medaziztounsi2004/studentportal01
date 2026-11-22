@@ -178,41 +178,45 @@ class BuildingNotifier extends AsyncNotifier<BuildingState> {
   }
 
   Future<void> deleteBuilding(String id) async {
-    final client = SupabaseConfig.adminClient;
-    final fallbackClient = SupabaseConfig.client;
-    try {
-      final floors = await client.from('floors').select('id').eq('building_id', id);
-      final floorIds = (floors as List).map((f) => f['id'].toString()).toList();
-      if (floorIds.isNotEmpty) {
-        await client.from('rooms').update({'is_active': false}).filter('floor_id', 'in', floorIds);
-        await client.from('floors').update({'is_active': false}).eq('building_id', id);
-      }
-    } catch (_) {
-      try {
-        final floors = await fallbackClient.from('floors').select('id').eq('building_id', id);
-        final floorIds = (floors as List).map((f) => f['id'].toString()).toList();
-        if (floorIds.isNotEmpty) {
-          await fallbackClient.from('rooms').update({'is_active': false}).filter('floor_id', 'in', floorIds);
-          await fallbackClient.from('floors').update({'is_active': false}).eq('building_id', id);
-        }
-      } catch (_) {}
-    }
-    try {
-      await client.from('buildings').update({'is_active': false}).eq('id', id);
-    } catch (_) {
-      try { await fallbackClient.from('buildings').update({'is_active': false}).eq('id', id); } catch (_) {}
-    }
-    try {
-      await client.from('buildings').delete().eq('id', id);
-    } catch (_) {}
-
-    final cur = state.asData?.value;
-    if (cur != null) {
+    final previous = state.value;
+    state.whenData((cur) {
       state = AsyncData(cur.copyWith(
         buildings: cur.buildings.where((b) => b.id != id).toList(),
       ));
+    });
+
+    final client = SupabaseConfig.adminClient;
+    final fallbackClient = SupabaseConfig.client;
+    try {
+      try {
+        final floors = await client.from('floors').select('id').eq('building_id', id);
+        final floorIds = (floors as List).map((f) => f['id'].toString()).toList();
+        if (floorIds.isNotEmpty) {
+          await client.from('rooms').update({'is_active': false}).filter('floor_id', 'in', floorIds);
+          await client.from('floors').update({'is_active': false}).eq('building_id', id);
+        }
+      } catch (_) {
+        try {
+          final floors = await fallbackClient.from('floors').select('id').eq('building_id', id);
+          final floorIds = (floors as List).map((f) => f['id'].toString()).toList();
+          if (floorIds.isNotEmpty) {
+            await fallbackClient.from('rooms').update({'is_active': false}).filter('floor_id', 'in', floorIds);
+            await fallbackClient.from('floors').update({'is_active': false}).eq('building_id', id);
+          }
+        } catch (_) {}
+      }
+      try {
+        await client.from('buildings').update({'is_active': false}).eq('id', id);
+      } catch (_) {
+        try { await fallbackClient.from('buildings').update({'is_active': false}).eq('id', id); } catch (_) {}
+      }
+      try {
+        await client.from('buildings').delete().eq('id', id);
+      } catch (_) {}
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    ref.invalidateSelf();
   }
 
   // ==================== FLOOR CRUD ====================
@@ -230,34 +234,38 @@ class BuildingNotifier extends AsyncNotifier<BuildingState> {
   }
 
   Future<void> deleteFloor(String id) async {
-    final client = SupabaseConfig.adminClient;
-    final fallbackClient = SupabaseConfig.client;
-    try {
-      await client.from('rooms').update({'is_active': false}).eq('floor_id', id);
-    } catch (_) {
-      try { await fallbackClient.from('rooms').update({'is_active': false}).eq('floor_id', id); } catch (_) {}
-    }
-    try {
-      await client.from('rooms').delete().eq('floor_id', id);
-    } catch (_) {}
-    try {
-      await client.from('floors').update({'is_active': false}).eq('id', id);
-    } catch (_) {
-      try { await fallbackClient.from('floors').update({'is_active': false}).eq('id', id); } catch (_) {}
-    }
-    try {
-      await client.from('floors').delete().eq('id', id);
-    } catch (_) {}
-
-    final cur = state.asData?.value;
-    if (cur != null) {
+    final previous = state.value;
+    state.whenData((cur) {
       final updatedBuildings = cur.buildings.map((b) {
         final remainingFloors = b.floors.where((f) => f.id != id).toList();
         return b.copyWith(floors: remainingFloors);
       }).toList();
       state = AsyncData(cur.copyWith(buildings: updatedBuildings));
+    });
+
+    final client = SupabaseConfig.adminClient;
+    final fallbackClient = SupabaseConfig.client;
+    try {
+      try {
+        await client.from('rooms').update({'is_active': false}).eq('floor_id', id);
+      } catch (_) {
+        try { await fallbackClient.from('rooms').update({'is_active': false}).eq('floor_id', id); } catch (_) {}
+      }
+      try {
+        await client.from('rooms').delete().eq('floor_id', id);
+      } catch (_) {}
+      try {
+        await client.from('floors').update({'is_active': false}).eq('id', id);
+      } catch (_) {
+        try { await fallbackClient.from('floors').update({'is_active': false}).eq('id', id); } catch (_) {}
+      }
+      try {
+        await client.from('floors').delete().eq('id', id);
+      } catch (_) {}
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    ref.invalidateSelf();
   }
 
   // ==================== ROOM CRUD ====================
@@ -275,19 +283,8 @@ class BuildingNotifier extends AsyncNotifier<BuildingState> {
   }
 
   Future<void> deleteRoom(String id) async {
-    final client = SupabaseConfig.adminClient;
-    final fallbackClient = SupabaseConfig.client;
-    try {
-      await client.from('rooms').update({'is_active': false}).eq('id', id);
-    } catch (_) {
-      try { await fallbackClient.from('rooms').update({'is_active': false}).eq('id', id); } catch (_) {}
-    }
-    try {
-      await client.from('rooms').delete().eq('id', id);
-    } catch (_) {}
-
-    final cur = state.asData?.value;
-    if (cur != null) {
+    final previous = state.value;
+    state.whenData((cur) {
       final updatedBuildings = cur.buildings.map((b) {
         final updatedFloors = b.floors.map((f) {
           final remainingRooms = f.rooms.where((r) => r.id != id).toList();
@@ -307,7 +304,22 @@ class BuildingNotifier extends AsyncNotifier<BuildingState> {
         buildings: updatedBuildings,
         allRooms: cur.allRooms.where((r) => r.id != id).toList(),
       ));
+    });
+
+    final client = SupabaseConfig.adminClient;
+    final fallbackClient = SupabaseConfig.client;
+    try {
+      try {
+        await client.from('rooms').update({'is_active': false}).eq('id', id);
+      } catch (_) {
+        try { await fallbackClient.from('rooms').update({'is_active': false}).eq('id', id); } catch (_) {}
+      }
+      try {
+        await client.from('rooms').delete().eq('id', id);
+      } catch (_) {}
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    ref.invalidateSelf();
   }
 }

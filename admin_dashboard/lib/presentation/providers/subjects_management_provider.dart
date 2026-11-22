@@ -676,8 +676,18 @@ class SubjectsManagementNotifier
   }
 
   Future<void> deleteSubject(String id) async {
-    await Supabase.instance.client.from('subjects').delete().eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.subjects.where((sub) => sub.id != id).toList();
+      state = AsyncData(s.copyWith(subjects: updated));
+    });
+
+    try {
+      await Supabase.instance.client.from('subjects').delete().eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   // ==================== CURRICULUM CRUD (replacing subject_assignments) ====================
@@ -705,11 +715,21 @@ class SubjectsManagementNotifier
   }
 
   Future<void> deleteAssignment(String id) async {
-    await Supabase.instance.client
-        .from('curriculum')
-        .update({'is_active': false})
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.assignments.where((a) => a.id != id).toList();
+      state = AsyncData(s.copyWith(assignments: updated));
+    });
+
+    try {
+      await Supabase.instance.client
+          .from('curriculum')
+          .update({'is_active': false})
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   // ==================== EXAM CONFIG CRUD ====================
@@ -834,33 +854,65 @@ class SubjectsManagementNotifier
 
   /// Delete a teacher assignment
   Future<void> deleteTeacherAssignment(String id) async {
-    await Supabase.instance.client
-        .from('teacher_assignments')
-        .delete()
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.teacherAssignments.where((ta) => ta.id != id).toList();
+      state = AsyncData(s.copyWith(teacherAssignments: updated));
+    });
+
+    try {
+      await Supabase.instance.client
+          .from('teacher_assignments')
+          .delete()
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   /// Delete all assignments for a teacher
   Future<void> deleteAllTeacherAssignments(String teacherId) async {
-    final schoolId = await _getSchoolId();
-    await Supabase.instance.client
-        .from('teacher_assignments')
-        .delete()
-        .eq('teacher_id', teacherId)
-        .eq('school_id', schoolId);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.teacherAssignments.where((ta) => ta.teacherId != teacherId).toList();
+      state = AsyncData(s.copyWith(teacherAssignments: updated));
+    });
+
+    try {
+      final schoolId = await _getSchoolId();
+      await Supabase.instance.client
+          .from('teacher_assignments')
+          .delete()
+          .eq('teacher_id', teacherId)
+          .eq('school_id', schoolId);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   /// Remove specific subject from a teacher
   Future<void> removeTeacherSubject(String teacherId, String subjectId) async {
-    final schoolId = await _getSchoolId();
-    await Supabase.instance.client
-        .from('teacher_assignments')
-        .delete()
-        .eq('teacher_id', teacherId)
-        .eq('subject_id', subjectId)
-        .eq('school_id', schoolId);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.teacherAssignments
+          .where((ta) => !(ta.teacherId == teacherId && ta.subjectId == subjectId))
+          .toList();
+      state = AsyncData(s.copyWith(teacherAssignments: updated));
+    });
+
+    try {
+      final schoolId = await _getSchoolId();
+      await Supabase.instance.client
+          .from('teacher_assignments')
+          .delete()
+          .eq('teacher_id', teacherId)
+          .eq('subject_id', subjectId)
+          .eq('school_id', schoolId);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 }

@@ -195,22 +195,54 @@ class ClassesNotifier extends AsyncNotifier<ClassesState> {
     String? room,
     int? capacity,
   }) async {
-    await SupabaseConfig.client
-        .from('classes')
-        .update({
-          'name': name,
-          'niveau_id': gradeLevelId,
-          'section_id': sectionId,
-          'room': room,
-          'capacity': capacity,
-        })
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.classes.map((c) {
+        if (c.id == id) {
+          return c.copyWith(
+            name: name,
+            groupId: groupId ?? c.groupId,
+            gradeLevelId: gradeLevelId ?? c.gradeLevelId,
+            sectionId: sectionId ?? c.sectionId,
+            room: room ?? c.room,
+            capacity: capacity ?? c.capacity,
+          );
+        }
+        return c;
+      }).toList();
+      state = AsyncData(s.copyWith(classes: updated));
+    });
+
+    try {
+      await SupabaseConfig.client
+          .from('classes')
+          .update({
+            'name': name,
+            'niveau_id': gradeLevelId,
+            'section_id': sectionId,
+            'room': room,
+            'capacity': capacity,
+          })
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> delete(String id) async {
-    await SupabaseConfig.client.from('classes').delete().eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.classes.where((c) => c.id != id).toList();
+      state = AsyncData(s.copyWith(classes: updated));
+    });
+
+    try {
+      await SupabaseConfig.client.from('classes').delete().eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 }
 

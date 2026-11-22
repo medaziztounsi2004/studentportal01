@@ -871,8 +871,18 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
 
   /// Delete a single absence
   Future<void> delete(String id) async {
-    await SupabaseConfig.client.from('absence_records').delete().eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updatedList = s.absences.where((a) => a.id != id).toList();
+      state = AsyncData(s.copyWith(absences: updatedList));
+    });
+
+    try {
+      await SupabaseConfig.client.from('absence_records').delete().eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   /// Delete selected absences
@@ -880,12 +890,22 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
     final currentState = state.asData?.value;
     if (currentState == null || currentState.selectedIds.isEmpty) return 0;
 
-    final supabase = SupabaseConfig.client;
-    final ids = currentState.selectedIds.toList();
+    final previous = state.value;
+    final ids = currentState.selectedIds.toSet();
 
-    await supabase.from('absence_records').delete().inFilter('id', ids);
-    ref.invalidateSelf();
-    return ids.length;
+    state.whenData((s) {
+      final updatedList = s.absences.where((a) => !ids.contains(a.id)).toList();
+      state = AsyncData(s.copyWith(absences: updatedList, selectedIds: {}));
+    });
+
+    try {
+      final supabase = SupabaseConfig.client;
+      await supabase.from('absence_records').delete().inFilter('id', ids.toList());
+      return ids.length;
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   /// Get students for a specific class (for bulk absence creation)

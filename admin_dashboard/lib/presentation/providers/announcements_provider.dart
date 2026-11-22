@@ -50,6 +50,44 @@ class AnnouncementModel {
     this.payload = const {},
   });
 
+  AnnouncementModel copyWith({
+    String? id,
+    String? title,
+    String? content,
+    String? targetRole,
+    String? targetClassId,
+    bool? isPinned,
+    bool? isImportant,
+    String? scope,
+    DateTime? createdAt,
+    String? authorName,
+    String? announcementType,
+    String? senderType,
+    String? senderLabel,
+    String? senderAvatarText,
+    bool? hasAttachment,
+    String? className,
+    Map<String, dynamic>? payload,
+  }) => AnnouncementModel(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    content: content ?? this.content,
+    targetRole: targetRole ?? this.targetRole,
+    targetClassId: targetClassId ?? this.targetClassId,
+    isPinned: isPinned ?? this.isPinned,
+    isImportant: isImportant ?? this.isImportant,
+    scope: scope ?? this.scope,
+    createdAt: createdAt ?? this.createdAt,
+    authorName: authorName ?? this.authorName,
+    announcementType: announcementType ?? this.announcementType,
+    senderType: senderType ?? this.senderType,
+    senderLabel: senderLabel ?? this.senderLabel,
+    senderAvatarText: senderAvatarText ?? this.senderAvatarText,
+    hasAttachment: hasAttachment ?? this.hasAttachment,
+    className: className ?? this.className,
+    payload: payload ?? this.payload,
+  );
+
   factory AnnouncementModel.fromJson(Map<String, dynamic> json) {
     Map<String, dynamic> payload = const {};
     if (json['payload'] is Map) {
@@ -671,27 +709,43 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
   }
 
   Future<void> delete(String id, {String scope = 'global'}) async {
-    state = const AsyncLoading();
-    final supabase = SupabaseConfig.client;
+    final previous = state.value;
+    state.whenData((s) {
+      state = AsyncData(s.copyWith(
+        announcements: s.announcements.where((a) => a.id != id).toList(),
+      ));
+    });
 
+    final supabase = SupabaseConfig.client;
     final updateData = {'deleted_at': DateTime.now().toIso8601String()};
 
-    if (scope == 'class' || scope == 'student') {
-      await supabase
-          .from('announcements_class')
-          .update(updateData)
-          .eq('id', id);
-    } else {
-      await supabase
-          .from('announcements_global')
-          .update(updateData)
-          .eq('id', id);
+    try {
+      if (scope == 'class' || scope == 'student') {
+        await supabase
+            .from('announcements_class')
+            .update(updateData)
+            .eq('id', id);
+      } else {
+        await supabase
+            .from('announcements_global')
+            .update(updateData)
+            .eq('id', id);
+      }
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    ref.invalidateSelf();
   }
 
   Future<void> bulkDelete(List<AnnouncementModel> announcements) async {
-    state = const AsyncLoading();
+    final previous = state.value;
+    final ids = announcements.map((a) => a.id).toSet();
+    state.whenData((s) {
+      state = AsyncData(s.copyWith(
+        announcements: s.announcements.where((a) => !ids.contains(a.id)).toList(),
+      ));
+    });
+
     final supabase = SupabaseConfig.client;
     final now = DateTime.now().toIso8601String();
 
@@ -704,28 +758,42 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
         .map((a) => a.id)
         .toList();
 
-    if (globalIds.isNotEmpty) {
-      await supabase
-          .from('announcements_global')
-          .update({'deleted_at': now})
-          .inFilter('id', globalIds);
+    try {
+      if (globalIds.isNotEmpty) {
+        await supabase
+            .from('announcements_global')
+            .update({'deleted_at': now})
+            .inFilter('id', globalIds);
+      }
+      if (classOrStudentIds.isNotEmpty) {
+        await supabase
+            .from('announcements_class')
+            .update({'deleted_at': now})
+            .inFilter('id', classOrStudentIds);
+      }
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    if (classOrStudentIds.isNotEmpty) {
-      await supabase
-          .from('announcements_class')
-          .update({'deleted_at': now})
-          .inFilter('id', classOrStudentIds);
-    }
-    ref.invalidateSelf();
   }
 
   Future<void> bulkTogglePin(
     List<AnnouncementModel> announcements,
     bool pinned,
   ) async {
-    state = const AsyncLoading();
-    final supabase = SupabaseConfig.client;
+    final previous = state.value;
+    final ids = announcements.map((a) => a.id).toSet();
+    state.whenData((s) {
+      final updated = s.announcements.map((a) {
+        if (ids.contains(a.id)) {
+          return a.copyWith(isPinned: pinned);
+        }
+        return a;
+      }).toList();
+      state = AsyncData(s.copyWith(announcements: updated));
+    });
 
+    final supabase = SupabaseConfig.client;
     final globalIds = announcements
         .where((a) => a.scope == 'global')
         .map((a) => a.id)
@@ -735,28 +803,42 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
         .map((a) => a.id)
         .toList();
 
-    if (globalIds.isNotEmpty) {
-      await supabase
-          .from('announcements_global')
-          .update({'is_pinned': pinned})
-          .inFilter('id', globalIds);
+    try {
+      if (globalIds.isNotEmpty) {
+        await supabase
+            .from('announcements_global')
+            .update({'is_pinned': pinned})
+            .inFilter('id', globalIds);
+      }
+      if (classOrStudentIds.isNotEmpty) {
+        await supabase
+            .from('announcements_class')
+            .update({'is_pinned': pinned})
+            .inFilter('id', classOrStudentIds);
+      }
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    if (classOrStudentIds.isNotEmpty) {
-      await supabase
-          .from('announcements_class')
-          .update({'is_pinned': pinned})
-          .inFilter('id', classOrStudentIds);
-    }
-    ref.invalidateSelf();
   }
 
   Future<void> bulkToggleImportant(
     List<AnnouncementModel> announcements,
     bool important,
   ) async {
-    state = const AsyncLoading();
-    final supabase = SupabaseConfig.client;
+    final previous = state.value;
+    final ids = announcements.map((a) => a.id).toSet();
+    state.whenData((s) {
+      final updated = s.announcements.map((a) {
+        if (ids.contains(a.id)) {
+          return a.copyWith(isImportant: important);
+        }
+        return a;
+      }).toList();
+      state = AsyncData(s.copyWith(announcements: updated));
+    });
 
+    final supabase = SupabaseConfig.client;
     final globalIds = announcements
         .where((a) => a.scope == 'global')
         .map((a) => a.id)
@@ -766,19 +848,23 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
         .map((a) => a.id)
         .toList();
 
-    if (globalIds.isNotEmpty) {
-      await supabase
-          .from('announcements_global')
-          .update({'is_important': important})
-          .inFilter('id', globalIds);
+    try {
+      if (globalIds.isNotEmpty) {
+        await supabase
+            .from('announcements_global')
+            .update({'is_important': important})
+            .inFilter('id', globalIds);
+      }
+      if (classOrStudentIds.isNotEmpty) {
+        await supabase
+            .from('announcements_class')
+            .update({'is_important': important})
+            .inFilter('id', classOrStudentIds);
+      }
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    if (classOrStudentIds.isNotEmpty) {
-      await supabase
-          .from('announcements_class')
-          .update({'is_important': important})
-          .inFilter('id', classOrStudentIds);
-    }
-    ref.invalidateSelf();
   }
 
   Future<void> togglePin(
@@ -786,20 +872,35 @@ class AnnouncementsNotifier extends AsyncNotifier<AnnouncementsState> {
     bool pinned, {
     String scope = 'global',
   }) async {
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.announcements.map((a) {
+        if (a.id == id) {
+          return a.copyWith(isPinned: !pinned);
+        }
+        return a;
+      }).toList();
+      state = AsyncData(s.copyWith(announcements: updated));
+    });
+
     final supabase = SupabaseConfig.client;
 
-    if (scope == 'class' || scope == 'student') {
-      await supabase
-          .from('announcements_class')
-          .update({'is_pinned': !pinned})
-          .eq('id', id);
-    } else {
-      await supabase
-          .from('announcements_global')
-          .update({'is_pinned': !pinned})
-          .eq('id', id);
+    try {
+      if (scope == 'class' || scope == 'student') {
+        await supabase
+            .from('announcements_class')
+            .update({'is_pinned': !pinned})
+            .eq('id', id);
+      } else {
+        await supabase
+            .from('announcements_global')
+            .update({'is_pinned': !pinned})
+            .eq('id', id);
+      }
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
     }
-    ref.invalidateSelf();
   }
 }
 

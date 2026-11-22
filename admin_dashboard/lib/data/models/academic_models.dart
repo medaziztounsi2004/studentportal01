@@ -159,6 +159,24 @@ class SectionModel {
     'description': description,
     'is_active': isActive,
   };
+
+  SectionModel copyWith({
+    String? id,
+    String? schoolId,
+    String? name,
+    String? code,
+    String? description,
+    bool? isActive,
+    DateTime? createdAt,
+  }) => SectionModel(
+    id: id ?? this.id,
+    schoolId: schoolId ?? this.schoolId,
+    name: name ?? this.name,
+    code: code ?? this.code,
+    description: description ?? this.description,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt ?? this.createdAt,
+  );
 }
 
 // ==================== EXAM TYPE MODEL ====================
@@ -200,6 +218,24 @@ class ExamTypeModel {
     'description': description,
     'is_active': isActive,
   };
+
+  ExamTypeModel copyWith({
+    String? id,
+    String? schoolId,
+    String? name,
+    String? code,
+    String? description,
+    bool? isActive,
+    DateTime? createdAt,
+  }) => ExamTypeModel(
+    id: id ?? this.id,
+    schoolId: schoolId ?? this.schoolId,
+    name: name ?? this.name,
+    code: code ?? this.code,
+    description: description ?? this.description,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt ?? this.createdAt,
+  );
 }
 
 // ==================== SUBJECT ASSIGNMENT MODEL ====================

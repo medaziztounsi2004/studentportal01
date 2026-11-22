@@ -96,6 +96,38 @@ class TimetableSlotAdmin {
       examPeriodId: json['exam_period_id']?.toString(),
     );
   }
+
+  TimetableSlotAdmin copyWith({
+    String? id,
+    String? subjectOfferingId,
+    int? dayOfWeek,
+    String? startTime,
+    String? endTime,
+    String? room,
+    String? subjectName,
+    String? subjectCode,
+    String? className,
+    String? teacherName,
+    String? teacherPhotoUrl,
+    String? timetableType,
+    String? examPeriodId,
+  }) {
+    return TimetableSlotAdmin(
+      id: id ?? this.id,
+      subjectOfferingId: subjectOfferingId ?? this.subjectOfferingId,
+      dayOfWeek: dayOfWeek ?? this.dayOfWeek,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      room: room ?? this.room,
+      subjectName: subjectName ?? this.subjectName,
+      subjectCode: subjectCode ?? this.subjectCode,
+      className: className ?? this.className,
+      teacherName: teacherName ?? this.teacherName,
+      teacherPhotoUrl: teacherPhotoUrl ?? this.teacherPhotoUrl,
+      timetableType: timetableType ?? this.timetableType,
+      examPeriodId: examPeriodId ?? this.examPeriodId,
+    );
+  }
 }
 
 class ClassInfo {
@@ -386,157 +418,202 @@ final classSubjectOfferingsProvider =
 
 // Timetable slots for selected class
 // Timetable slots for selected class (with semester filter)
-final classTimetableSlotsProvider =
-    FutureProvider.family.autoDispose<List<TimetableSlotAdmin>, String>((ref, classId) async {
-      ref.keepAlive();
-      final supabase = SupabaseConfig.adminClient;
-      final semesterId = ref.watch(currentSemesterIdProvider);
-      final timetableType = ref.watch(timetableTypeFilterProvider);
-      final examPeriodId = ref.watch(selectedExamPeriodFilterProvider);
+class ClassTimetableSlotsNotifier
+    extends StateNotifier<AsyncValue<List<TimetableSlotAdmin>>> {
+  final Ref ref;
+  final String classId;
 
-      try {
-        // Query subject_offerings for this class, filtered by the effective semester
-        var offeringsQuery = supabase
-            .from('subject_offerings')
-            .select('id, subject_id, teacher_id, subjects(name, code)')
-            .eq('class_id', classId);
+  ClassTimetableSlotsNotifier(this.ref, this.classId)
+      : super(const AsyncValue.loading()) {
+    load();
+  }
 
-        if (semesterId != null) {
-          offeringsQuery = offeringsQuery.eq('semester_id', semesterId);
-        }
+  Future<void> load() async {
+    final supabase = SupabaseConfig.adminClient;
+    final semesterId = ref.watch(currentSemesterIdProvider);
+    final timetableType = ref.watch(timetableTypeFilterProvider);
+    final examPeriodId = ref.watch(selectedExamPeriodFilterProvider);
 
-        final offeringsResp = await offeringsQuery;
+    try {
+      // Query subject_offerings for this class, filtered by the effective semester
+      var offeringsQuery = supabase
+          .from('subject_offerings')
+          .select('id, subject_id, teacher_id, subjects(name, code)')
+          .eq('class_id', classId);
 
-        final offerings = offeringsResp as List;
-        if (offerings.isEmpty) return [];
-
-        final offeringIds = offerings.map((o) => o['id'] as String).toList();
-
-        // Get timetable slots for these offerings, filtered by type
-        var slotsQuery = supabase
-            .from('timetable_slots')
-            .select('*')
-            .inFilter('subject_offering_id', offeringIds)
-            .eq('timetable_type', timetableType);
-
-        if (timetableType == 'exam' && examPeriodId != null) {
-          slotsQuery = slotsQuery.eq('exam_period_id', examPeriodId);
-        }
-
-        final slotsResp = await slotsQuery
-            .order('day_of_week')
-            .order('start_time');
-
-        final slots = slotsResp as List;
-        if (slots.isEmpty) return [];
-
-        // Build lookup maps
-        final Map<String, dynamic> offeringsMap = {};
-        final Map<String, String> offeringSubjectIdMap = {};
-        for (var o in offerings) {
-          offeringsMap[o['id']] = o;
-          offeringSubjectIdMap[o['id'] as String] = (o['subject_id'] as String?) ?? '';
-        }
-
-        // Fetch teacher_assignments to resolve teachers (subject_offerings.teacher_id may be NULL)
-        final Map<String, String> subjectClassTeacherMap = {};
-        final Map<String, String> subjectClassTeacherPhotoMap = {};
-        try {
-          final teacherAssResp = await supabase
-              .from('teacher_assignments')
-              .select('subject_id, class_id, users!teacher_id(full_name, photo_url)')
-              .eq('is_active', true);
-
-          for (final ta in (teacherAssResp as List)) {
-            final subjectId = ta['subject_id'] as String?;
-            final clsId = ta['class_id'] as String?;
-            final teacherData = ta['users'] as Map<String, dynamic>?;
-            if (subjectId != null && clsId != null) {
-              subjectClassTeacherMap['${subjectId}_$clsId'] = teacherData?['full_name'] as String? ?? '';
-              subjectClassTeacherPhotoMap['${subjectId}_$clsId'] = teacherData?['photo_url'] as String? ?? '';
-            }
-          }
-        } catch (_) {}
-
-        // Get class name
-        final classData = await supabase
-            .from('classes')
-            .select('id, name')
-            .eq('id', classId)
-            .maybeSingle();
-
-        return slots.map((slot) {
-          final offering = offeringsMap[slot['subject_offering_id']];
-          final subject = offering?['subjects'];
-          final subjectId = offering?['subject_id'] as String?;
-
-          // Resolve teacher: teacher_assignments → timetable_slots.teacher_name
-          String teacherName = subjectClassTeacherMap['${subjectId}_$classId'] ?? '';
-          String teacherPhoto = subjectClassTeacherPhotoMap['${subjectId}_$classId'] ?? '';
-          if (teacherName.isEmpty) {
-            teacherName = (slot['teacher_name'] as String?) ?? '';
-          }
-
-          // Shorten room: extract just the room name from "Bloc A – Principal · 2ème étage · Salle 204"
-          String rawRoom = (slot['room'] as String?) ?? '';
-          String shortRoom = rawRoom;
-          if (rawRoom.contains('·')) {
-            final parts = rawRoom.split('·').map((s) => s.trim()).toList();
-            shortRoom = parts.last; // last part is the room name
-          }
-
-          int parseDayOfWeek(dynamic value) {
-            if (value is int) return value;
-            if (value is String) {
-              switch (value.toLowerCase()) {
-                case 'monday':
-                  return 1;
-                case 'tuesday':
-                  return 2;
-                case 'wednesday':
-                  return 3;
-                case 'thursday':
-                  return 4;
-                case 'friday':
-                  return 5;
-                case 'saturday':
-                  return 6;
-                case 'sunday':
-                  return 7;
-                default:
-                  return 1;
-              }
-            }
-            return 1;
-          }
-
-          return TimetableSlotAdmin(
-            id: slot['id']?.toString() ?? '',
-            subjectOfferingId: slot['subject_offering_id']?.toString() ?? '',
-            dayOfWeek: parseDayOfWeek(slot['day_of_week']),
-            startTime: slot['start_time']?.toString() ?? '08:00',
-            endTime: slot['end_time']?.toString() ?? '09:00',
-            room: shortRoom.isNotEmpty ? shortRoom : rawRoom,
-            subjectName: subject?['name']?.toString(),
-            subjectCode: subject?['code']?.toString(),
-            className: classData?['name']?.toString(),
-            teacherName: teacherName.isNotEmpty ? teacherName : null,
-            teacherPhotoUrl: teacherPhoto.isNotEmpty ? teacherPhoto : null,
-          );
-        }).toList();
-      } catch (e) {
-        debugPrint('classTimetableSlotsProvider error: $e');
-        return [];
+      if (semesterId != null) {
+        offeringsQuery = offeringsQuery.eq('semester_id', semesterId);
       }
+
+      final offeringsResp = await offeringsQuery;
+
+      final offerings = offeringsResp as List;
+      if (offerings.isEmpty) {
+        state = const AsyncValue.data([]);
+        return;
+      }
+
+      final offeringIds = offerings.map((o) => o['id'] as String).toList();
+
+      // Get timetable slots for these offerings, filtered by type
+      var slotsQuery = supabase
+          .from('timetable_slots')
+          .select('*')
+          .inFilter('subject_offering_id', offeringIds)
+          .eq('timetable_type', timetableType);
+
+      if (timetableType == 'exam' && examPeriodId != null) {
+        slotsQuery = slotsQuery.eq('exam_period_id', examPeriodId);
+      }
+
+      final slotsResp = await slotsQuery
+          .order('day_of_week')
+          .order('start_time');
+
+      final slots = slotsResp as List;
+      if (slots.isEmpty) {
+        state = const AsyncValue.data([]);
+        return;
+      }
+
+      // Build lookup maps
+      final Map<String, dynamic> offeringsMap = {};
+      final Map<String, String> offeringSubjectIdMap = {};
+      for (var o in offerings) {
+        offeringsMap[o['id']] = o;
+        offeringSubjectIdMap[o['id'] as String] = (o['subject_id'] as String?) ?? '';
+      }
+
+      // Fetch teacher_assignments to resolve teachers (subject_offerings.teacher_id may be NULL)
+      final Map<String, String> subjectClassTeacherMap = {};
+      final Map<String, String> subjectClassTeacherPhotoMap = {};
+      try {
+        final teacherAssResp = await supabase
+            .from('teacher_assignments')
+            .select('subject_id, class_id, users!teacher_id(full_name, photo_url)')
+            .eq('is_active', true);
+
+        for (final ta in (teacherAssResp as List)) {
+          final subjectId = ta['subject_id'] as String?;
+          final clsId = ta['class_id'] as String?;
+          final teacherData = ta['users'] as Map<String, dynamic>?;
+          if (subjectId != null && clsId != null) {
+            subjectClassTeacherMap['${subjectId}_$clsId'] = teacherData?['full_name'] as String? ?? '';
+            subjectClassTeacherPhotoMap['${subjectId}_$clsId'] = teacherData?['photo_url'] as String? ?? '';
+          }
+        }
+      } catch (_) {}
+
+      // Get class name
+      final classData = await supabase
+          .from('classes')
+          .select('id, name')
+          .eq('id', classId)
+          .maybeSingle();
+
+      final list = slots.map((slot) {
+        final offering = offeringsMap[slot['subject_offering_id']];
+        final subject = offering?['subjects'];
+        final subjectId = offering?['subject_id'] as String?;
+
+        // Resolve teacher: teacher_assignments → timetable_slots.teacher_name
+        String teacherName = subjectClassTeacherMap['${subjectId}_$classId'] ?? '';
+        String teacherPhoto = subjectClassTeacherPhotoMap['${subjectId}_$classId'] ?? '';
+        if (teacherName.isEmpty) {
+          teacherName = (slot['teacher_name'] as String?) ?? '';
+        }
+
+        // Shorten room: extract just the room name from "Bloc A – Principal · 2ème étage · Salle 204"
+        String rawRoom = (slot['room'] as String?) ?? '';
+        String shortRoom = rawRoom;
+        if (rawRoom.contains('·')) {
+          final parts = rawRoom.split('·').map((s) => s.trim()).toList();
+          shortRoom = parts.last; // last part is the room name
+        }
+
+        int parseDayOfWeek(dynamic value) {
+          if (value is int) return value;
+          if (value is String) {
+            switch (value.toLowerCase()) {
+              case 'monday':
+                return 1;
+              case 'tuesday':
+                return 2;
+              case 'wednesday':
+                return 3;
+              case 'thursday':
+                return 4;
+              case 'friday':
+                return 5;
+              case 'saturday':
+                return 6;
+              case 'sunday':
+                return 7;
+              default:
+                return 1;
+            }
+          }
+          return 1;
+        }
+
+        return TimetableSlotAdmin(
+          id: slot['id']?.toString() ?? '',
+          subjectOfferingId: slot['subject_offering_id']?.toString() ?? '',
+          dayOfWeek: parseDayOfWeek(slot['day_of_week']),
+          startTime: slot['start_time']?.toString() ?? '08:00',
+          endTime: slot['end_time']?.toString() ?? '09:00',
+          room: shortRoom.isNotEmpty ? shortRoom : rawRoom,
+          subjectName: subject?['name']?.toString(),
+          subjectCode: subject?['code']?.toString(),
+          className: classData?['name']?.toString(),
+          teacherName: teacherName.isNotEmpty ? teacherName : null,
+          teacherPhotoUrl: teacherPhoto.isNotEmpty ? teacherPhoto : null,
+        );
+      }).toList();
+
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      debugPrint('classTimetableSlotsProvider error: $e');
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  void removeSlot(String slotId) {
+    state.whenData((list) {
+      state = AsyncValue.data(list.where((s) => s.id != slotId).toList());
     });
+  }
+
+  void updateSlot(String slotId, int dayOfWeek, String startTime, String endTime, String? room) {
+    state.whenData((list) {
+      state = AsyncValue.data(list.map((s) {
+        if (s.id == slotId) {
+          return s.copyWith(
+            dayOfWeek: dayOfWeek,
+            startTime: startTime,
+            endTime: endTime,
+            room: room ?? s.room,
+          );
+        }
+        return s;
+      }).toList());
+    });
+  }
+}
+
+final classTimetableSlotsProvider = StateNotifierProvider.family
+    .autoDispose<ClassTimetableSlotsNotifier, AsyncValue<List<TimetableSlotAdmin>>, String>(
+  (ref, classId) {
+    ref.keepAlive();
+    return ClassTimetableSlotsNotifier(ref, classId);
+  },
+);
 
 // Provider to calculate scheduled hours per offering
 final scheduledHoursPerOfferingProvider =
-    FutureProvider.family.autoDispose<Map<String, double>, String>((ref, classId) async {
+    Provider.family.autoDispose<Map<String, double>, String>((ref, classId) {
   ref.keepAlive();
-      final slots = await ref.watch(
-        classTimetableSlotsProvider(classId).future,
-      );
+  final slots = ref.watch(classTimetableSlotsProvider(classId)).value ?? [];
 
       // Group slots by subject_offering_id and calculate total hours
       final hoursMap = <String, double>{};
@@ -4027,6 +4104,21 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
       }
     }
 
+    if (selectedClass != null) {
+      ref.read(classTimetableSlotsProvider(selectedClass.id).notifier).updateSlot(
+        slotId,
+        dayOfWeek,
+        startTime,
+        endTime,
+        room,
+      );
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cours modifié'), backgroundColor: AppColors.success),
+      );
+    }
+
     try {
       await SupabaseConfig.adminClient.from('timetable_slots').update({
         'day_of_week': _dayToEnum(dayOfWeek),
@@ -4034,13 +4126,10 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
         'end_time': endTime,
         'room': room,
       }).eq('id', slotId);
-      ref.invalidate(classTimetableSlotsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cours modifié'), backgroundColor: AppColors.success),
-        );
-      }
     } catch (e) {
+      if (selectedClass != null) {
+        ref.invalidate(classTimetableSlotsProvider(selectedClass.id));
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
@@ -4050,21 +4139,28 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
   }
 
   Future<void> _deleteSlot(TimetableSlotAdmin slot) async {
+    final selectedClass = ref.read(selectedClassProvider);
+    if (selectedClass != null) {
+      ref.read(classTimetableSlotsProvider(selectedClass.id).notifier).removeSlot(slot.id);
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cours supprimé'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
+
     try {
       await SupabaseConfig.client
           .from('timetable_slots')
           .delete()
           .eq('id', slot.id);
-      ref.invalidate(classTimetableSlotsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cours supprimé'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
     } catch (e) {
+      if (selectedClass != null) {
+        ref.invalidate(classTimetableSlotsProvider(selectedClass.id));
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
@@ -4583,10 +4679,9 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
     }
 
     // Get scheduled hours for offerings
-    final scheduledHoursAsync = ref.read(
+    final scheduledHours = ref.read(
       scheduledHoursPerOfferingProvider(selectedClass.id),
     );
-    final scheduledHours = scheduledHoursAsync.asData?.value ?? {};
 
     SubjectOfferingInfo? selectedOffering = offerings.isNotEmpty
         ? offerings.first

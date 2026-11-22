@@ -25,7 +25,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   final _searchController = TextEditingController();
   bool _showFilters = false;
   bool _isSelectionMode = false;
-  bool _isPerformingAction = false;
   String _sortKey = 'date_desc';
 
   // Filter drawer cascade state
@@ -109,13 +108,11 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                     if (_isSelectionMode)
                       _buildSelectionBar(context, absencesAsync),
                     Expanded(
-                      child: _isPerformingAction
-                          ? const TableSkeletonLoader()
-                          : absencesAsync.when(
-                              loading: () => const TableSkeletonLoader(),
-                              error: (e, _) => _buildErrorState(e),
-                              data: (state) => _buildContent(context, state),
-                            ),
+                      child: absencesAsync.when(
+                        loading: () => const TableSkeletonLoader(),
+                        error: (e, _) => _buildErrorState(e),
+                        data: (state) => _buildContent(context, state),
+                      ),
                     ),
                   ],
                 ),
@@ -365,7 +362,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
           if (selectedCount > 0) ...[
             _buildGradientActionButton(
               onPressed: () async {
-                setState(() => _isPerformingAction = true);
                 try {
                   final count = await ref
                       .read(absencesProvider.notifier)
@@ -380,9 +376,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                       ),
                     );
                   }
-                } finally {
-                  if (mounted) setState(() => _isPerformingAction = false);
-                }
+                } catch (_) {}
               },
               icon: Icons.check_circle_rounded,
               label: 'Justifier',
@@ -392,7 +386,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
             const SizedBox(width: 8),
             _buildGradientActionButton(
               onPressed: () async {
-                setState(() => _isPerformingAction = true);
                 try {
                   final count = await ref
                       .read(absencesProvider.notifier)
@@ -407,9 +400,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                       ),
                     );
                   }
-                } finally {
-                  if (mounted) setState(() => _isPerformingAction = false);
-                }
+                } catch (_) {}
               },
               icon: Icons.cancel_rounded,
               label: 'Non justifier',
@@ -924,15 +915,12 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
               label: 'Justifier',
               color: Colors.white70,
               onPressed: () async {
-                setState(() => _isPerformingAction = true);
                 try {
                   final counted = await ref.read(absencesProvider.notifier).bulkToggleJustified(true);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$counted absence(s) marquée(s) justifiée(s)', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.success));
                   }
-                } finally {
-                  if (mounted) setState(() => _isPerformingAction = false);
-                }
+                } catch (_) {}
               },
             ),
             _buildSelectionAction(
@@ -940,15 +928,12 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
               label: 'Non justifier',
               color: Colors.white70,
               onPressed: () async {
-                setState(() => _isPerformingAction = true);
                 try {
                   final counted = await ref.read(absencesProvider.notifier).bulkToggleJustified(false);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$counted absence(s) marquée(s) non justifiée(s)', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.warning));
                   }
-                } finally {
-                  if (mounted) setState(() => _isPerformingAction = false);
-                }
+                } catch (_) {}
               },
             ),
             _buildSelectionAction(
@@ -1763,12 +1748,9 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                 ElevatedButton.icon(
                   onPressed: () async {
                     if (ctx.mounted) Navigator.pop(ctx);
-                    setState(() => _isPerformingAction = true);
                     try {
                       await ref.read(absencesProvider.notifier).delete(absence.id);
-                    } finally {
-                      if (mounted) setState(() => _isPerformingAction = false);
-                    }
+                    } catch (_) {}
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
                   label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1828,15 +1810,12 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                 ElevatedButton.icon(
                   onPressed: () async {
                     if (ctx.mounted) Navigator.pop(ctx);
-                    setState(() => _isPerformingAction = true);
                     try {
                       final deleted = await ref.read(absencesProvider.notifier).deleteSelected();
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$deleted absence(s) supprimée(s)'), backgroundColor: AppColors.error));
                       }
-                    } finally {
-                      if (mounted) setState(() => _isPerformingAction = false);
-                    }
+                    } catch (_) {}
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
                   label: Text('Supprimer $count', style: const TextStyle(fontWeight: FontWeight.w700)),

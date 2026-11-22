@@ -692,30 +692,30 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                     _optimisticAccountStatus = nextStatus;
                     _isTogglingAccountStatus = true;
                   });
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          nextStatus == 'paused_unpaid'
+                              ? 'Accès élève suspendu pour impayé.'
+                              : 'Accès élève réactivé.',
+                        ),
+                        backgroundColor: nextStatus == 'paused_unpaid'
+                            ? AppColors.warning
+                            : AppColors.success,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
                   try {
                     final ok = await UserManagementService.setAccountStatus(
                       userId: widget.userId,
                       accountStatus: nextStatus,
                     );
                     if (!mounted) return;
-                    if (ok) {
-                      ref.invalidate(userProfileDataProvider(widget.userId));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            nextStatus == 'paused_unpaid'
-                                ? 'Accès élève suspendu pour impayé.'
-                                : 'Accès élève réactivé.',
-                          ),
-                          backgroundColor: nextStatus == 'paused_unpaid'
-                              ? AppColors.warning
-                              : AppColors.success,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    } else {
+                    if (!ok) {
                       // Revert optimistic update on failure
                       setState(() {
                         _optimisticAccountStatus = isPaused ? 'paused_unpaid' : 'active';
@@ -2493,26 +2493,37 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
 
   Future<void> _bulkMarkPaid() async {
     final ids = _selectedPaymentIds.toList();
+    final now = DateTime.now().toIso8601String();
+    setState(() {
+      for (var p in _payments) {
+        if (ids.contains(p['id'])) {
+          p['status'] = 'paid';
+          p['paid_at'] = now;
+        }
+      }
+      _selectedPaymentIds.clear();
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Paiements marqués comme payés'),
+          backgroundColor: Color(0xFF10B981),
+        ),
+      );
+    }
+
     try {
       final supabase = Supabase.instance.client;
       await supabase
           .from('payments')
           .update({
             'status': 'paid',
-            'paid_at': DateTime.now().toIso8601String(),
+            'paid_at': now,
           })
           .filter('id', 'in', '(${ids.join(',')})');
-      if (mounted) {
-        setState(() => _selectedPaymentIds.clear());
-        await _loadStudentPayments();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Paiements marqués comme payés'),
-            backgroundColor: Color(0xFF10B981),
-          ),
-        );
-      }
+      _loadStudentPayments();
     } catch (e) {
+      _loadStudentPayments();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
@@ -2523,23 +2534,32 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
 
   Future<void> _bulkCancel() async {
     final ids = _selectedPaymentIds.toList();
+    setState(() {
+      for (var p in _payments) {
+        if (ids.contains(p['id'])) {
+          p['status'] = 'cancelled';
+        }
+      }
+      _selectedPaymentIds.clear();
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Paiements annulés'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+    }
+
     try {
       final supabase = Supabase.instance.client;
       await supabase
           .from('payments')
           .update({'status': 'cancelled'})
           .filter('id', 'in', '(${ids.join(',')})');
-      if (mounted) {
-        setState(() => _selectedPaymentIds.clear());
-        await _loadStudentPayments();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Paiements annulés'),
-            backgroundColor: AppColors.warning,
-          ),
-        );
-      }
+      _loadStudentPayments();
     } catch (e) {
+      _loadStudentPayments();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
@@ -2578,20 +2598,25 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
 
     if (confirmed != true) return;
 
+    setState(() {
+      _payments.removeWhere((p) => ids.contains(p['id']));
+      _selectedPaymentIds.clear();
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Paiements supprimés'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+
     try {
       final supabase = Supabase.instance.client;
       await supabase.from('payments').delete().filter('id', 'in', '(${ids.join(',')})');
-      if (mounted) {
-        setState(() => _selectedPaymentIds.clear());
-        await _loadStudentPayments();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Paiements supprimés'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      _loadStudentPayments();
     } catch (e) {
+      _loadStudentPayments();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
@@ -3140,15 +3165,12 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
       final supabase = Supabase.instance.client;
       switch (action) {
         case 'mark_paid':
-          await supabase
-              .from('payments')
-              .update({
-                'status': 'paid',
-                'paid_at': DateTime.now().toIso8601String(),
-              })
-              .eq('id', paymentId);
+          final now = DateTime.now().toIso8601String();
+          setState(() {
+            payment['status'] = 'paid';
+            payment['paid_at'] = now;
+          });
           if (mounted) {
-            await _loadStudentPayments();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Paiement marqué comme payé'),
@@ -3156,6 +3178,14 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
               ),
             );
           }
+          await supabase
+              .from('payments')
+              .update({
+                'status': 'paid',
+                'paid_at': now,
+              })
+              .eq('id', paymentId);
+          _loadStudentPayments();
           break;
         case 'edit':
           if (mounted) {
@@ -3177,12 +3207,10 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
             ),
           );
           if (confirm == true) {
-            await supabase
-                .from('payments')
-                .update({'status': 'cancelled'})
-                .eq('id', paymentId);
+            setState(() {
+              payment['status'] = 'cancelled';
+            });
             if (mounted) {
-              await _loadStudentPayments();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Paiement annulé'),
@@ -3190,10 +3218,16 @@ class _StudentPaymentsSheetState extends State<_StudentPaymentsSheet> {
                 ),
               );
             }
+            await supabase
+                .from('payments')
+                .update({'status': 'cancelled'})
+                .eq('id', paymentId);
+            _loadStudentPayments();
           }
           break;
       }
     } catch (e) {
+      _loadStudentPayments();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),

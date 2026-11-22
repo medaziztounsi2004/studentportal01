@@ -43,13 +43,38 @@ class SubjectsNotifier extends AsyncNotifier<SubjectsState> {
   }
 
   Future<void> updateSubject({required String id, required String name, String? code, String? description}) async {
-    await SupabaseConfig.client.from('subjects').update({'name': name, 'code': code, 'description': description}).eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.subjects.map((sub) {
+        if (sub.id == id) {
+          return sub.copyWith(name: name, code: code, description: description);
+        }
+        return sub;
+      }).toList();
+      state = AsyncData(s.copyWith(subjects: updated));
+    });
+
+    try {
+      await SupabaseConfig.client.from('subjects').update({'name': name, 'code': code, 'description': description}).eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> delete(String id) async {
-    await SupabaseConfig.client.from('subjects').delete().eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.subjects.where((sub) => sub.id != id).toList();
+      state = AsyncData(s.copyWith(subjects: updated));
+    });
+
+    try {
+      await SupabaseConfig.client.from('subjects').delete().eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 }
 

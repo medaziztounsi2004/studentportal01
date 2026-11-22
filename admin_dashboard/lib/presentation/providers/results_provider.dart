@@ -568,6 +568,26 @@ class ResultsProvider extends ChangeNotifier {
     required double? value,
     String status = 'graded',
   }) async {
+    // 1. Instant optimistic update
+    final studentGrades = _gradesByEnrollmentId[enrollmentId] ?? [];
+    final existingIdx = studentGrades.indexWhere(
+      (g) => g['subject_offering_id'] == subjectOfferingId && g['evaluation_component_id'] == componentId,
+    );
+    if (existingIdx >= 0) {
+      studentGrades[existingIdx]['value'] = value;
+      studentGrades[existingIdx]['status'] = status;
+    } else {
+      studentGrades.add({
+        'enrollment_id': enrollmentId,
+        'subject_offering_id': subjectOfferingId,
+        'evaluation_component_id': componentId,
+        'value': value,
+        'status': status,
+      });
+    }
+    _gradesByEnrollmentId[enrollmentId] = studentGrades;
+    notifyListeners();
+
     try {
       await _repository.saveGrade(
         enrollmentId: enrollmentId,
@@ -578,7 +598,7 @@ class ResultsProvider extends ChangeNotifier {
         status: status,
       );
 
-      // Recalculate results
+      // Recalculate results silently
       await calculateResults();
       await loadClassGrades();
     } catch (e) {

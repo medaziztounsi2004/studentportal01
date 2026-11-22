@@ -234,11 +234,21 @@ class GradeLevelsNotifier extends AsyncNotifier<GradeLevelsState> {
   }
 
   Future<void> deleteGradeLevel(String id) async {
-    await SupabaseConfig.adminClient
-        .from('niveaux')
-        .update({'is_active': false})
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.gradeLevels.where((g) => g.id != id).toList();
+      state = AsyncData(s.copyWith(gradeLevels: updated));
+    });
+
+    try {
+      await SupabaseConfig.adminClient
+          .from('niveaux')
+          .update({'is_active': false})
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   // ==================== SECTION CRUD ====================
@@ -248,19 +258,39 @@ class GradeLevelsNotifier extends AsyncNotifier<GradeLevelsState> {
   }
 
   Future<void> updateSection(String id, SectionModel section) async {
-    await SupabaseConfig.adminClient
-        .from('sections')
-        .update(section.toJson())
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.sections.map((sec) => sec.id == id ? section : sec).toList();
+      state = AsyncData(s.copyWith(sections: updated));
+    });
+
+    try {
+      await SupabaseConfig.adminClient
+          .from('sections')
+          .update(section.toJson())
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> deleteSection(String id) async {
-    await SupabaseConfig.adminClient
-        .from('sections')
-        .update({'is_active': false})
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.sections.where((sec) => sec.id != id).toList();
+      state = AsyncData(s.copyWith(sections: updated));
+    });
+
+    try {
+      await SupabaseConfig.adminClient
+          .from('sections')
+          .update({'is_active': false})
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   // ==================== NIVEAU-SECTION MAPPING ====================
@@ -273,12 +303,28 @@ class GradeLevelsNotifier extends AsyncNotifier<GradeLevelsState> {
   }
 
   Future<void> removeSectionFromGrade(String gradeId, String sectionId) async {
-    await SupabaseConfig.adminClient
-        .from('niveau_sections')
-        .delete()
-        .eq('niveau_id', gradeId)
-        .eq('section_id', sectionId);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updatedGrades = s.gradeLevels.map((g) {
+        if (g.id == gradeId) {
+          final updatedSecs = g.sections.where((sec) => sec.id != sectionId).toList();
+          return g.copyWith(sections: updatedSecs);
+        }
+        return g;
+      }).toList();
+      state = AsyncData(s.copyWith(gradeLevels: updatedGrades));
+    });
+
+    try {
+      await SupabaseConfig.adminClient
+          .from('niveau_sections')
+          .delete()
+          .eq('niveau_id', gradeId)
+          .eq('section_id', sectionId);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   // ==================== EXAM TYPE CRUD ====================
@@ -288,19 +334,39 @@ class GradeLevelsNotifier extends AsyncNotifier<GradeLevelsState> {
   }
 
   Future<void> updateExamType(String id, ExamTypeModel examType) async {
-    await SupabaseConfig.adminClient
-        .from('exam_types')
-        .update(examType.toJson())
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.examTypes.map((e) => e.id == id ? examType : e).toList();
+      state = AsyncData(s.copyWith(examTypes: updated));
+    });
+
+    try {
+      await SupabaseConfig.adminClient
+          .from('exam_types')
+          .update(examType.toJson())
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   Future<void> deleteExamType(String id) async {
-    await SupabaseConfig.adminClient
-        .from('exam_types')
-        .update({'is_active': false})
-        .eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updated = s.examTypes.where((e) => e.id != id).toList();
+      state = AsyncData(s.copyWith(examTypes: updated));
+    });
+
+    try {
+      await SupabaseConfig.adminClient
+          .from('exam_types')
+          .update({'is_active': false})
+          .eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 
   // ==================== CLASS CRUD ====================
@@ -337,7 +403,20 @@ class GradeLevelsNotifier extends AsyncNotifier<GradeLevelsState> {
   }
 
   Future<void> deleteClass(String id) async {
-    await SupabaseConfig.adminClient.from('classes').delete().eq('id', id);
-    ref.invalidateSelf();
+    final previous = state.value;
+    state.whenData((s) {
+      final updatedGrades = s.gradeLevels.map((g) {
+        final updatedClasses = g.classes.where((c) => c.id != id).toList();
+        return g.copyWith(classes: updatedClasses);
+      }).toList();
+      state = AsyncData(s.copyWith(gradeLevels: updatedGrades));
+    });
+
+    try {
+      await SupabaseConfig.adminClient.from('classes').delete().eq('id', id);
+    } catch (e) {
+      if (previous != null) state = AsyncData(previous);
+      rethrow;
+    }
   }
 }
