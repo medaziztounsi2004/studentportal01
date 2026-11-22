@@ -10,6 +10,8 @@ class SchoolModel {
   final String? secondaryColor;
   final String? bio;
   final DateTime createdAt;
+  final bool isActive;
+  final bool isSuspended;
 
   SchoolModel({
     required this.id,
@@ -23,9 +25,13 @@ class SchoolModel {
     this.secondaryColor,
     this.bio,
     required this.createdAt,
+    this.isActive = true,
+    this.isSuspended = false,
   });
 
   factory SchoolModel.fromJson(Map<String, dynamic> json) {
+    final bool active = (json['is_active'] as bool?) ?? true;
+    final bool suspended = (json['is_suspended'] as bool?) ?? !active;
     return SchoolModel(
       id: json['id'] as String,
       name: json['name'] as String? ?? '',
@@ -40,6 +46,8 @@ class SchoolModel {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
+      isActive: active,
+      isSuspended: suspended,
     );
   }
 
@@ -56,6 +64,8 @@ class SchoolModel {
       'secondary_color': secondaryColor,
       'bio': bio,
       'created_at': createdAt.toIso8601String(),
+      'is_active': isActive,
+      'is_suspended': isSuspended,
     };
   }
 }

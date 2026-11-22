@@ -56,6 +56,9 @@ class AuthState {
       schoolSuspended: schoolSuspended ?? this.schoolSuspended,
     );
   }
+
+  bool get isAccessLocked =>
+      schoolSuspended || (user != null && user!.isSuspended);
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
@@ -65,6 +68,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   final _supabase = Supabase.instance.client;
   RealtimeChannel? _userChannel;
+  RealtimeChannel? _schoolChannel;
 
   void _init() {
     debugPrint('AuthNotifier: Initializing...');
@@ -147,6 +151,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final school = cachedSchoolMap != null
             ? SchoolModel.fromJson(cachedSchoolMap)
             : null;
+        final cachedSchoolSuspended =
+            OfflineCacheService.instance.getBool('cached_school_suspended') ??
+            (school != null && (!school.isActive || school.isSuspended));
 
         state = AuthState(
           isLoading: false,
@@ -154,6 +161,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           user: user,
           enrollment: enrollment,
           school: school,
+          schoolSuspended: cachedSchoolSuspended,
         );
         debugPrint('AuthNotifier: Loaded cached user on startup: ${user.fullName}');
       }
@@ -192,46 +200,63 @@ class AuthNotifier extends StateNotifier<AuthState> {
               final newData = payload.newRecord;
               if (newData.isNotEmpty && state.user != null) {
                 try {
-                  final updatedUser = UserModel.fromJson(newData);
+                  final merged = {
+                    ...state.user!.toJson(),
+                    ...newData,
+                  };
+                  final updatedUser = UserModel.fromJson(merged);
                   state = state.copyWith(user: updatedUser);
-                  debugPrint('AuthNotifier: User updated in real-time: ${updatedUser.fullName}');
+                  OfflineCacheService.instance.setJson('cached_user', updatedUser.toJson());
+                  debugPrint('AuthNotifier: User updated in real-time: ${updatedUser.fullName}, suspended=${updatedUser.isSuspended}');
                 } catch (e) {
                   debugPrint('AuthNotifier: Error parsing real-time update: $e');
-                  // Fallback: refresh from database
                   _loadUserData();
                 }
               }
             },
           )
-          .subscribe((status, error) async {
-            debugPrint('AuthNotifier: Realtime subscription status: $status, error: $error');
-            if (status == RealtimeSubscribeStatus.channelError && error != null) {
-              final errStr = error.toString().toLowerCase();
-              if (errStr.contains('jwt') || errStr.contains('expired') || errStr.contains('token')) {
-                debugPrint('AuthNotifier: Realtime token expired, refreshing session...');
-                try {
-                  final response = await _supabase.auth.refreshSession();
-                  if (response.session != null) {
-                    debugPrint('AuthNotifier: Session refreshed successfully');
-                  }
-                } catch (e) {
-                  debugPrint('AuthNotifier: Failed to refresh session: $e');
-                }
-              }
-            }
-          });
+          .subscribe();
+
+      // Also subscribe to school changes if schoolId is known
+      final schoolId = state.user?.schoolId;
+      if (schoolId != null) {
+        _schoolChannel = _supabase
+            .channel('school_changes_$schoolId')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.update,
+              schema: 'public',
+              table: 'schools',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'id',
+                value: schoolId,
+              ),
+              callback: (payload) {
+                final newSchool = payload.newRecord;
+                final bool isActive = (newSchool['is_active'] as bool?) ?? true;
+                debugPrint('AuthNotifier: Realtime school update: is_active=$isActive');
+                state = state.copyWith(schoolSuspended: !isActive);
+                OfflineCacheService.instance.setBool('cached_school_suspended', !isActive);
+              },
+            )
+            .subscribe();
+      }
     } catch (e) {
       debugPrint('AuthNotifier: Error setting up realtime subscription: $e');
-      // Don't fail - realtime is optional
     }
   }
 
   /// Unsubscribe from real-time changes
   void _unsubscribeFromUserChanges() {
     if (_userChannel != null) {
-      debugPrint('AuthNotifier: Unsubscribing from real-time updates');
+      debugPrint('AuthNotifier: Unsubscribing from real-time user updates');
       _supabase.removeChannel(_userChannel!);
       _userChannel = null;
+    }
+    if (_schoolChannel != null) {
+      debugPrint('AuthNotifier: Unsubscribing from real-time school updates');
+      _supabase.removeChannel(_schoolChannel!);
+      _schoolChannel = null;
     }
   }
 
@@ -259,7 +284,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       try {
         userResponse = await _supabase
             .from('users')
-            .select('id, school_id, role, full_name, email, phone, photo_url, student_code, date_of_birth, address, created_at, updated_at, niveau, niveau_code, section_code, niveau_id, section_id, initial_password, account_status')
+            .select('id, school_id, role, full_name, email, phone, photo_url, student_code, date_of_birth, address, created_at, updated_at, niveau, niveau_code, section_code, niveau_id, section_id, initial_password, account_status, is_active')
             .eq('id', userId)
             .maybeSingle();
       } catch (e) {
@@ -281,22 +306,40 @@ class AuthNotifier extends StateNotifier<AuthState> {
         if (cachedUserMap != null) {
           final cachedEnrollmentMap = OfflineCacheService.instance.getMap('cached_enrollment');
           final cachedSchoolMap = OfflineCacheService.instance.getMap('cached_school');
+          final cachedUser = UserModel.fromJson(cachedUserMap);
+          final cachedSchool = cachedSchoolMap != null
+              ? SchoolModel.fromJson(cachedSchoolMap)
+              : state.school;
+          final cachedSchoolSuspended =
+              OfflineCacheService.instance.getBool('cached_school_suspended') ??
+              (cachedSchool != null && (!cachedSchool.isActive || cachedSchool.isSuspended)) ||
+              state.schoolSuspended;
+
+          // CRITICAL SECURITY GUARD:
+          // If the student or school was already suspended, NEVER allow an offline fallback
+          // to reactivate them into the app!
+          final wasLocked = state.isAccessLocked ||
+              cachedUser.isSuspended ||
+              cachedSchoolSuspended;
+
+          final effectiveUser = wasLocked && !cachedUser.isSuspended
+              ? cachedUser.copyWith(accountStatus: 'paused_unpaid', isActive: false)
+              : cachedUser;
 
           state = state.copyWith(
             isLoading: false,
             isAuthenticated: true,
-            user: UserModel.fromJson(cachedUserMap),
+            user: effectiveUser,
             enrollment: cachedEnrollmentMap != null
                 ? EnrollmentModel.fromJson(cachedEnrollmentMap)
                 : state.enrollment,
-            school: cachedSchoolMap != null
-                ? SchoolModel.fromJson(cachedSchoolMap)
-                : state.school,
+            school: cachedSchool,
             errorMessage: null,
             accessDenied: false,
+            schoolSuspended: wasLocked ? (cachedSchoolSuspended || state.schoolSuspended) : false,
           );
           ConnectivityService.instance.reportNetworkError('Server unreachable / offline');
-          debugPrint('AuthProvider: Used offline cache for user profile');
+          debugPrint('AuthProvider: Used offline cache for user profile (wasLocked=$wasLocked)');
           return;
         }
 
@@ -460,13 +503,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
               .eq('id', user.schoolId!)
               .maybeSingle();
           if (schoolResp != null) {
-            school = SchoolModel.fromJson(schoolResp);
             final isActiveSchool = schoolResp['is_active'] as bool? ?? true;
             final subs = schoolResp['school_subscriptions'] as List?;
             final subStatus = (subs != null && subs.isNotEmpty)
                 ? (subs.first as Map)['status']?.toString()
                 : null;
             schoolSuspended = !isActiveSchool || subStatus == 'suspended';
+            school = SchoolModel.fromJson({
+              ...schoolResp,
+              'is_active': isActiveSchool,
+              'is_suspended': schoolSuspended,
+            });
             debugPrint('AuthProvider: School loaded: ${school.name}, code=${school.code}, suspended=$schoolSuspended');
           }
         } catch (e) {
@@ -487,6 +534,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Save to persistent offline cache
       OfflineCacheService.instance.setJson('cached_user', user.toJson());
+      OfflineCacheService.instance.setBool('cached_school_suspended', schoolSuspended);
       if (enrollment != null) {
         OfflineCacheService.instance.setJson('cached_enrollment', enrollment.toJson());
       }
@@ -507,21 +555,39 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (cachedUserMap != null) {
         final cachedEnrollmentMap = OfflineCacheService.instance.getMap('cached_enrollment');
         final cachedSchoolMap = OfflineCacheService.instance.getMap('cached_school');
+        final cachedUser = UserModel.fromJson(cachedUserMap);
+        final cachedSchool = cachedSchoolMap != null
+            ? SchoolModel.fromJson(cachedSchoolMap)
+            : state.school;
+        final cachedSchoolSuspended =
+            OfflineCacheService.instance.getBool('cached_school_suspended') ??
+            (cachedSchool != null && (!cachedSchool.isActive || cachedSchool.isSuspended)) ||
+            state.schoolSuspended;
+
+        // CRITICAL SECURITY GUARD:
+        // If the student or school was already suspended, NEVER allow an offline fallback
+        // to reactivate them into the app!
+        final wasLocked = state.isAccessLocked ||
+            cachedUser.isSuspended ||
+            cachedSchoolSuspended;
+
+        final effectiveUser = wasLocked && !cachedUser.isSuspended
+            ? cachedUser.copyWith(accountStatus: 'paused_unpaid', isActive: false)
+            : cachedUser;
 
         state = state.copyWith(
           isLoading: false,
           isAuthenticated: true,
-          user: UserModel.fromJson(cachedUserMap),
+          user: effectiveUser,
           enrollment: cachedEnrollmentMap != null
               ? EnrollmentModel.fromJson(cachedEnrollmentMap)
               : state.enrollment,
-          school: cachedSchoolMap != null
-              ? SchoolModel.fromJson(cachedSchoolMap)
-              : state.school,
+          school: cachedSchool,
           errorMessage: null,
           accessDenied: false,
+          schoolSuspended: wasLocked ? (cachedSchoolSuspended || state.schoolSuspended) : false,
         );
-        debugPrint('AuthProvider: Preserved session from offline cache after error');
+        debugPrint('AuthProvider: Preserved session from offline cache after error (wasLocked=$wasLocked)');
         return;
       }
 
@@ -577,12 +643,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(errorMessage: null, accessDenied: false);
   }
 
-  Future<void> refreshUserData() async {
+  Future<bool> refreshUserData() async {
     debugPrint('AuthProvider: Refreshing user data...');
     // Force a fresh fetch by setting loading state
     state = state.copyWith(isLoading: true);
     await _loadUserData();
-    debugPrint('AuthProvider: Refresh complete. User: ${state.user?.fullName}, studentCode: ${state.user?.studentCode}');
+    final isLocked = state.isAccessLocked;
+    debugPrint('AuthProvider: Refresh complete. isAccessLocked=$isLocked');
+    return !isLocked;
   }
 
   Future<bool> updateProfilePhoto(String photoUrl) async {

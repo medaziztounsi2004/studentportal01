@@ -205,9 +205,8 @@ class StudentPortalApp extends ConsumerWidget {
           );
 
           Widget body = child ?? const SizedBox.shrink();
-          if (authState.isAuthenticated &&
-              (authState.schoolSuspended ||
-                  authState.user?.accountStatus == 'paused_unpaid')) {
+          final isAccessLocked = authState.isAuthenticated && authState.isAccessLocked;
+          if (isAccessLocked) {
             body = _AccessLockedScreen(
               isSchoolSuspended: authState.schoolSuspended,
               onRefresh: () => ref.read(authProvider.notifier).refreshUserData(),
@@ -240,9 +239,9 @@ class StudentPortalApp extends ConsumerWidget {
   }
 }
 
-class _AccessLockedScreen extends StatelessWidget {
+class _AccessLockedScreen extends StatefulWidget {
   final bool isSchoolSuspended;
-  final VoidCallback onRefresh;
+  final Future<bool> Function() onRefresh;
   final VoidCallback onSignOut;
 
   const _AccessLockedScreen({
@@ -250,6 +249,50 @@ class _AccessLockedScreen extends StatelessWidget {
     required this.onRefresh,
     required this.onSignOut,
   });
+
+  @override
+  State<_AccessLockedScreen> createState() => _AccessLockedScreenState();
+}
+
+class _AccessLockedScreenState extends State<_AccessLockedScreen> {
+  bool _isChecking = false;
+  String? _feedbackMessage;
+  bool _isError = false;
+
+  Future<void> _handleRefresh() async {
+    if (_isChecking) return;
+    setState(() {
+      _isChecking = true;
+      _feedbackMessage = null;
+    });
+
+    try {
+      final isUnlocked = await widget.onRefresh();
+      if (mounted) {
+        if (!isUnlocked) {
+          setState(() {
+            _isChecking = false;
+            _isError = true;
+            _feedbackMessage = widget.isSchoolSuspended
+                ? 'L\'accès de l\'établissement est toujours suspendu.'
+                : 'Votre compte est toujours suspendu par l\'administration.';
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isChecking = false;
+          _isError = true;
+          _feedbackMessage = 'Connexion impossible. Vérifiez votre réseau.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isChecking = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -291,7 +334,7 @@ class _AccessLockedScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    isSchoolSuspended
+                    widget.isSchoolSuspended
                         ? 'Accès établissement suspendu'
                         : 'Accès temporairement suspendu',
                     textAlign: TextAlign.center,
@@ -303,37 +346,86 @@ class _AccessLockedScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    isSchoolSuspended
-                        ? 'Les services de votre établissement sont temporairement suspendus. Veuillez contacter la direction de votre école.'
-                        : 'Votre accès aux notes, emplois du temps, absences et documents est mis en pause en raison de frais de scolarité impayés. Veuillez régulariser auprès de l\'administration.',
+                    widget.isSchoolSuspended
+                        ? 'L\'accès de votre établissement est suspendu. Veuillez contacter la direction.'
+                        : 'Votre compte est temporairement suspendu. Veuillez contacter l\'administration.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 14,
-                      height: 1.45,
+                      height: 1.4,
                       color: Color(0xFF64748B),
                     ),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
-                    height: 46,
-                    child: ElevatedButton.icon(
-                      onPressed: onRefresh,
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: const Text('Vérifier mon accès'),
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _isChecking ? null : _handleRefresh,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF6D4CF6),
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: const Color(0xFF8B5CF6),
+                        disabledForegroundColor: Colors.white,
                         elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_isChecking) ...[
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Vérification en cours...',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ] else ...[
+                            const Icon(Icons.refresh_rounded, size: 18, color: Colors.white),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Vérifier mon accès',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
+                  if (_feedbackMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _feedbackMessage!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: _isError ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   TextButton(
-                    onPressed: onSignOut,
+                    onPressed: widget.onSignOut,
                     child: const Text(
                       'Se déconnecter',
                       style: TextStyle(color: Color(0xFF64748B)),

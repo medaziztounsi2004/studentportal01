@@ -80,6 +80,30 @@ class OfflineCacheService {
     }
   }
 
+  /// Saves a boolean to local storage
+  Future<bool> setBool(String key, bool value) async {
+    try {
+      final p = _prefs ?? await SharedPreferences.getInstance();
+      _prefs = p;
+      return await p.setBool('cache_$key', value);
+    } catch (e) {
+      debugPrint('OfflineCacheService.setBool error for key $key: $e');
+      return false;
+    }
+  }
+
+  /// Retrieves a boolean from local storage
+  bool? getBool(String key) {
+    try {
+      final p = _prefs;
+      if (p == null) return null;
+      return p.getBool('cache_$key');
+    } catch (e) {
+      debugPrint('OfflineCacheService.getBool error for key $key: $e');
+      return null;
+    }
+  }
+
   /// Checks if a key exists in cache
   bool has(String key) {
     return _prefs?.containsKey('cache_$key') ?? false;

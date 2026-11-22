@@ -18,6 +18,7 @@ class UserModel {
   final String? sectionId;
   final String? initialPassword;
   final String accountStatus;
+  final bool isActive;
 
   UserModel({
     required this.id,
@@ -39,7 +40,13 @@ class UserModel {
     this.sectionId,
     this.initialPassword,
     this.accountStatus = 'active',
+    this.isActive = true,
   });
+
+  bool get isSuspended =>
+      !isActive ||
+      accountStatus == 'paused_unpaid' ||
+      accountStatus == 'suspended';
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     // Handle datetime parsing safely
@@ -76,6 +83,7 @@ class UserModel {
       sectionId: json['section_id'] as String?,
       initialPassword: json['initial_password'] as String?,
       accountStatus: (json['account_status'] as String?) ?? 'active',
+      isActive: (json['is_active'] as bool?) ?? true,
     );
   }
 
@@ -100,6 +108,7 @@ class UserModel {
       'section_id': sectionId,
       'initial_password': initialPassword,
       'account_status': accountStatus,
+      'is_active': isActive,
     };
   }
 
@@ -123,6 +132,7 @@ class UserModel {
     String? sectionId,
     String? initialPassword,
     String? accountStatus,
+    bool? isActive,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -144,6 +154,7 @@ class UserModel {
       sectionId: sectionId ?? this.sectionId,
       initialPassword: initialPassword ?? this.initialPassword,
       accountStatus: accountStatus ?? this.accountStatus,
+      isActive: isActive ?? this.isActive,
     );
   }
 }
