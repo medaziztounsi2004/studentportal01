@@ -333,23 +333,7 @@ class _ClassFormDialogState extends ConsumerState<ClassFormDialog> {
             GradeLevelModel(id: '', name: '', code: '', levelType: 'college'),
       );
       if (grade.levelType == 'college') {
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F9FA),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.grey.shade400, size: 16),
-              const SizedBox(width: 8),
-              const Text(
-                'Les classes du collège n\'ont pas de filière',
-                style: TextStyle(color: Color(0xFF9B9DAB), fontSize: 13),
-              ),
-            ],
-          ),
-        );
+        return const SizedBox.shrink();
       }
     }
 

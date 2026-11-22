@@ -2464,27 +2464,6 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
                   ],
                 ),
               ),
-            ] else ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: AppColors.primary),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Les classes du collège n\'ont pas de filière.',
-                        style: TextStyle(color: AppColors.primary, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ],
         ),

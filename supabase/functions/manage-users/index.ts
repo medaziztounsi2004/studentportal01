@@ -14,7 +14,8 @@ interface RequestBody {
     | "reset_password"
     | "bulk_delete_users"
     | "set_account_status"
-    | "approve_password_reset";
+    | "approve_password_reset"
+    | "toggle_archive";
   email?: string;
   password?: string;
   role?: string;
@@ -37,6 +38,7 @@ interface RequestBody {
   new_password?: string;
   force_password_change?: boolean;
   account_status?: "active" | "paused_unpaid";
+  is_active?: boolean;
   request_id?: string;
   admin_notes?: string;
 }
@@ -514,6 +516,37 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, account_status: accountStatus }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // ACTION: TOGGLE ARCHIVE (is_active)
+    // ------------------------------------------------------------------------
+    if (action === "toggle_archive") {
+      const targetUserIds = body.user_ids || (body.user_id ? [body.user_id] : []);
+      const isActive = body.is_active ?? false;
+      if (targetUserIds.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "user_id or user_ids is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: result, error: rpcError } = await adminClient.rpc("toggle_user_active_status", {
+        p_user_ids: targetUserIds,
+        p_is_active: isActive,
+      });
+
+      if (rpcError) {
+        return new Response(
+          JSON.stringify({ error: rpcError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, is_active: isActive, result }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

@@ -1123,38 +1123,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                       return Expanded(
                         flex: (cat.percentage.toInt()).clamp(5, 100),
-                        child: InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedCategoryIndex = (_selectedCategoryIndex == idx) ? null : idx;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(6),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOutCubic,
-                            height: isSelected ? 24 : 14, // Zooms in when clicked!
-                            margin: EdgeInsets.symmetric(horizontal: isSelected ? 2 : 1.5),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Color(cat.colorValue)
-                                  : (hasSelection
-                                      ? Color(cat.colorValue).withValues(alpha: 0.35)
-                                      : Color(cat.colorValue)),
-                              borderRadius: BorderRadius.circular(6),
-                              border: isSelected
-                                  ? Border.all(color: Colors.white, width: 2)
-                                  : null,
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: Color(cat.colorValue).withValues(alpha: 0.45),
-                                        blurRadius: 8,
-                                        spreadRadius: 1,
-                                        offset: const Offset(0, 1),
-                                      ),
-                                    ]
-                                  : null,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _selectedCategoryIndex = (_selectedCategoryIndex == idx) ? null : idx;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(6),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOutCubic,
+                              height: isSelected ? 24 : 14, // Zooms in when clicked!
+                              margin: EdgeInsets.symmetric(horizontal: isSelected ? 2 : 1.5),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Color(cat.colorValue)
+                                    : (hasSelection
+                                        ? Color(cat.colorValue).withValues(alpha: 0.35)
+                                        : Color(cat.colorValue)),
+                                borderRadius: BorderRadius.circular(6),
+                                border: isSelected
+                                    ? Border.all(color: Colors.white, width: 2)
+                                    : null,
+                                boxShadow: null,
+                              ),
                             ),
                           ),
                         ),
@@ -1199,9 +1193,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ? Color(cat.colorValue).withValues(alpha: 0.12)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
-                        border: isSelected
-                            ? Border.all(color: Color(cat.colorValue).withValues(alpha: 0.4))
-                            : null,
+                        border: null,
                       ),
                       child: Row(
                         children: [
@@ -1315,57 +1307,60 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                PieChart(
-                  PieChartData(
-                    pieTouchData: PieTouchData(
-                      touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                        if (!event.isInterestedForInteractions ||
-                            pieTouchResponse == null ||
-                            pieTouchResponse.touchedSection == null) {
-                          return;
-                        }
-                        if (event is FlTapUpEvent) {
-                          final idx = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                          if (idx >= 0 && idx < filieres.length) {
-                            setState(() {
-                              _selectedFiliereIndex = (_selectedFiliereIndex == idx) ? null : idx;
-                            });
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: PieChart(
+                    PieChartData(
+                      pieTouchData: PieTouchData(
+                        touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                          if (!event.isInterestedForInteractions ||
+                              pieTouchResponse == null ||
+                              pieTouchResponse.touchedSection == null) {
+                            return;
                           }
-                        }
-                      },
-                    ),
-                    sectionsSpace: 3,
-                    centerSpaceRadius: 40,
-                    startDegreeOffset: -90,
-                    sections: filieres.isEmpty
-                        ? [
-                            PieChartSectionData(
-                              value: 100,
-                              color: const Color(0xFFF1F5F9),
-                              radius: 18,
-                              showTitle: false,
-                            )
-                          ]
-                        : filieres.asMap().entries.map((entry) {
-                            final idx = entry.key;
-                            final f = entry.value;
-                            final isSelected = _selectedFiliereIndex == idx;
-                            final hasSelection = _selectedFiliereIndex != null;
+                          if (event is FlTapUpEvent) {
+                            final idx = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                            if (idx >= 0 && idx < filieres.length) {
+                              setState(() {
+                                _selectedFiliereIndex = (_selectedFiliereIndex == idx) ? null : idx;
+                              });
+                            }
+                          }
+                        },
+                      ),
+                      sectionsSpace: 3,
+                      centerSpaceRadius: 40,
+                      startDegreeOffset: -90,
+                      sections: filieres.isEmpty
+                          ? [
+                              PieChartSectionData(
+                                value: 100,
+                                color: const Color(0xFFF1F5F9),
+                                radius: 18,
+                                showTitle: false,
+                              )
+                            ]
+                          : filieres.asMap().entries.map((entry) {
+                              final idx = entry.key;
+                              final f = entry.value;
+                              final isSelected = _selectedFiliereIndex == idx;
+                              final hasSelection = _selectedFiliereIndex != null;
 
-                            return PieChartSectionData(
-                              value: f.percentage > 0 ? f.percentage : 1,
-                              color: isSelected
-                                  ? Color(f.colorValue)
-                                  : (hasSelection
-                                      ? Color(f.colorValue).withValues(alpha: 0.35)
-                                      : Color(f.colorValue)),
-                              radius: isSelected ? 26 : 18, // Zooms in when clicked!
-                              borderSide: isSelected
-                                  ? const BorderSide(color: Colors.white, width: 2.5)
-                                  : BorderSide.none,
-                              showTitle: false,
-                            );
-                          }).toList(),
+                              return PieChartSectionData(
+                                value: f.percentage > 0 ? f.percentage : 1,
+                                color: isSelected
+                                    ? Color(f.colorValue)
+                                    : (hasSelection
+                                        ? Color(f.colorValue).withValues(alpha: 0.35)
+                                        : Color(f.colorValue)),
+                                radius: isSelected ? 26 : 18, // Zooms in when clicked!
+                                borderSide: isSelected
+                                    ? const BorderSide(color: Colors.white, width: 2.5)
+                                    : BorderSide.none,
+                                showTitle: false,
+                              );
+                            }).toList(),
+                    ),
                   ),
                 ),
 
@@ -1434,7 +1429,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Clean 2x2 List WITHOUT grey pill background
+          // Responsive List with clean items
           if (filieres.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
@@ -1446,13 +1441,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             )
           else
-            Column(
-              children: [
-                for (int i = 0; i < filieres.length; i += 2) ...[
-                  Row(
+            LayoutBuilder(
+              builder: (context, boxConstraints) {
+                final isCompact = boxConstraints.maxWidth < 310;
+                if (isCompact) {
+                  return Column(
                     children: [
-                      Expanded(
-                        child: _buildCleanFiliereItem(
+                      for (int i = 0; i < filieres.length; i++) ...[
+                        _buildCleanFiliereItem(
                           filieres[i],
                           isSelected: _selectedFiliereIndex == i,
                           onTap: () {
@@ -1462,27 +1458,50 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             });
                           },
                         ),
-                      ),
-                      if (i + 1 < filieres.length) ...[
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _buildCleanFiliereItem(
-                            filieres[i + 1],
-                            isSelected: _selectedFiliereIndex == (i + 1),
-                            onTap: () {
-                              setState(() {
-                                _selectedFiliereIndex =
-                                    (_selectedFiliereIndex == (i + 1)) ? null : (i + 1);
-                              });
-                            },
-                          ),
-                        ),
+                        if (i + 1 < filieres.length) const SizedBox(height: 4),
                       ],
                     ],
-                  ),
-                  if (i + 2 < filieres.length) const SizedBox(height: 4),
-                ],
-              ],
+                  );
+                }
+                return Column(
+                  children: [
+                    for (int i = 0; i < filieres.length; i += 2) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildCleanFiliereItem(
+                              filieres[i],
+                              isSelected: _selectedFiliereIndex == i,
+                              onTap: () {
+                                setState(() {
+                                  _selectedFiliereIndex =
+                                      (_selectedFiliereIndex == i) ? null : i;
+                                });
+                              },
+                            ),
+                          ),
+                          if (i + 1 < filieres.length) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildCleanFiliereItem(
+                                filieres[i + 1],
+                                isSelected: _selectedFiliereIndex == (i + 1),
+                                onTap: () {
+                                  setState(() {
+                                    _selectedFiliereIndex =
+                                        (_selectedFiliereIndex == (i + 1)) ? null : (i + 1);
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (i + 2 < filieres.length) const SizedBox(height: 4),
+                    ],
+                  ],
+                );
+              },
             ),
         ],
       ),
@@ -1505,9 +1524,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ? Color(item.colorValue).withValues(alpha: 0.12)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isSelected
-              ? Border.all(color: Color(item.colorValue).withValues(alpha: 0.4), width: 1)
-              : null,
+          border: null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

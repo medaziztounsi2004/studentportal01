@@ -598,22 +598,12 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
     }
 
     try {
-      final now = DateTime.now().toIso8601String();
-      await _adminSupabase.from('users').update({
-        'is_active': newActive,
-        'updated_at': now,
-      }).eq('id', userId);
-
-      try {
-        await _adminSupabase.from('enrollments').update({
-          'is_active': newActive,
-        }).eq('user_id', userId);
-      } catch (enrollErr) {
-        debugPrint('UsersNotifier: enrollments archive update warning: $enrollErr');
-      }
-
+      final success = await UserManagementService.toggleArchive(
+        userIds: [userId],
+        isActive: newActive,
+      );
       await refresh();
-      return true;
+      return success;
     } catch (e) {
       debugPrint('UsersNotifier: toggleUserArchive error: $e');
       await refresh();
@@ -639,22 +629,12 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
     }
 
     try {
-      final now = DateTime.now().toIso8601String();
-      await _adminSupabase.from('users').update({
-        'is_active': newActive,
-        'updated_at': now,
-      }).inFilter('id', userIds);
-
-      try {
-        await _adminSupabase.from('enrollments').update({
-          'is_active': newActive,
-        }).inFilter('user_id', userIds);
-      } catch (enrollErr) {
-        debugPrint('UsersNotifier: enrollments bulk archive update warning: $enrollErr');
-      }
-
+      final success = await UserManagementService.toggleArchive(
+        userIds: userIds,
+        isActive: newActive,
+      );
       await refresh();
-      return true;
+      return success;
     } catch (e) {
       debugPrint('UsersNotifier: bulkToggleArchive error: $e');
       await refresh();

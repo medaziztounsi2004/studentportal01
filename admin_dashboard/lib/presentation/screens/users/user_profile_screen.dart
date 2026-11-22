@@ -363,6 +363,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   bool _showPassword = false;
   bool _isResettingPassword = false;
   bool _isTogglingAccountStatus = false;
+  String? _optimisticAccountStatus;
   int _selectedMonthOffset = 0;
   int _activityPage = 1;
   int _activityPerPage = 10;
@@ -662,7 +663,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   }
 
   Widget _buildAccountStatusButton(Map<String, dynamic> user) {
-    final status = (user['account_status'] as String? ?? 'active').toLowerCase();
+    final status = (_optimisticAccountStatus ?? user['account_status'] as String? ?? 'active').toLowerCase();
     final isPaused = status == 'paused_unpaid';
 
     return Container(
@@ -685,9 +686,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           onTap: _isTogglingAccountStatus
               ? null
               : () async {
-                  setState(() => _isTogglingAccountStatus = true);
+                  final nextStatus = isPaused ? 'active' : 'paused_unpaid';
+                  // Instant optimistic UI update
+                  setState(() {
+                    _optimisticAccountStatus = nextStatus;
+                    _isTogglingAccountStatus = true;
+                  });
                   try {
-                    final nextStatus = isPaused ? 'active' : 'paused_unpaid';
                     final ok = await UserManagementService.setAccountStatus(
                       userId: widget.userId,
                       accountStatus: nextStatus,
@@ -705,15 +710,30 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                           backgroundColor: nextStatus == 'paused_unpaid'
                               ? AppColors.warning
                               : AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+                          duration: const Duration(seconds: 2),
                         ),
                       );
                     } else {
+                      // Revert optimistic update on failure
+                      setState(() {
+                        _optimisticAccountStatus = isPaused ? 'paused_unpaid' : 'active';
+                      });
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Impossible de modifier le statut d\'accès.'),
+                        SnackBar(
+                          content: const Text('Impossible de modifier le statut d\'accès.'),
                           backgroundColor: AppColors.error,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                         ),
                       );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      setState(() {
+                        _optimisticAccountStatus = isPaused ? 'paused_unpaid' : 'active';
+                      });
                     }
                   } finally {
                     if (mounted) setState(() => _isTogglingAccountStatus = false);
@@ -724,26 +744,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_isTogglingAccountStatus) ...[
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        isPaused ? const Color(0xFFDC2626) : const Color(0xFF15803D),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ] else ...[
-                  Icon(
-                    isPaused ? Icons.lock_outline_rounded : Icons.verified_user_outlined,
-                    size: 16,
-                    color: isPaused ? const Color(0xFFDC2626) : const Color(0xFF15803D),
-                  ),
-                  const SizedBox(width: 7),
-                ],
+                Icon(
+                  isPaused ? Icons.lock_outline_rounded : Icons.verified_user_outlined,
+                  size: 16,
+                  color: isPaused ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                ),
+                const SizedBox(width: 7),
                 Text(
                   isPaused ? 'Suspendu (Impayé) — Réactiver' : 'Accès actif',
                   style: TextStyle(

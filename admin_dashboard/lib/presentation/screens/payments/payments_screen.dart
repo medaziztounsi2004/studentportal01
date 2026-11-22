@@ -4933,23 +4933,21 @@ class _StudentPaymentDetailDialogState
         }
       }
 
-      // Also query by enrollment_id to catch payments without payment_plan_id
-      if (enrollmentIds.isNotEmpty) {
-        try {
-          final enrPayments = await SupabaseConfig.adminClient
-              .from('payments')
-              .select('*, payment_plans(id, plan_type, category, enrollment_id)')
-              .inFilter('enrollment_id', enrollmentIds)
-              .order('due_date', ascending: true) as List<dynamic>;
-          for (final ep in enrPayments) {
-            final epId = ep['id']?.toString();
-            if (epId != null && !paymentsResponse.any((p) => p['id']?.toString() == epId)) {
-              paymentsResponse.add(ep);
-            }
+      // Also query by student_id to catch payments without payment_plan_id
+      try {
+        final stPayments = await SupabaseConfig.adminClient
+            .from('payments')
+            .select('*, payment_plans(id, plan_type, category)')
+            .eq('student_id', widget.student.studentId)
+            .order('due_date', ascending: true) as List<dynamic>;
+        for (final sp in stPayments) {
+          final spId = sp['id']?.toString();
+          if (spId != null && !paymentsResponse.any((p) => p['id']?.toString() == spId)) {
+            paymentsResponse.add(sp);
           }
-        } catch (e) {
-          debugPrint('Error loading payments by enrollment_id: $e');
         }
+      } catch (e) {
+        debugPrint('Error loading payments by student_id: $e');
       }
 
       // Also query directly by known seed payment IDs to ensure the freshest DB data
@@ -6099,20 +6097,21 @@ class _StudentPaymentDetailDialogState
       if (payment != null && payment['is_synthetic'] == true) {
         final enrollments = await supabase
             .from('enrollments')
-            .select('id')
+            .select('id, school_id')
             .eq('user_id', widget.student.studentId);
-        final enrollId = (enrollments as List).isNotEmpty ? enrollments.first['id'] : null;
-        if (enrollId != null) {
-          await supabase.from('payments').insert({
-            'enrollment_id': enrollId,
-            'amount': payment['amount'] ?? 0,
-            'status': 'paid',
-            'paid_at': DateTime.now().toIso8601String(),
-            'due_date': payment['due_date'] ?? DateTime.now().toIso8601String(),
-            'payment_method': 'cash',
-            'notes': payment['category'] ?? 'Autre paiement',
-          });
-        }
+        final schId = (enrollments as List).isNotEmpty
+            ? (enrollments.first['school_id'] ?? '11111111-1111-1111-1111-111111111111')
+            : '11111111-1111-1111-1111-111111111111';
+        await supabase.from('payments').insert({
+          'student_id': widget.student.studentId,
+          'school_id': schId,
+          'amount': payment['amount'] ?? 0,
+          'status': 'paid',
+          'paid_at': DateTime.now().toIso8601String(),
+          'due_date': payment['due_date'] ?? DateTime.now().toIso8601String(),
+          'method': 'cash',
+          'notes': payment['category'] ?? 'Autre paiement',
+        });
       } else {
         await supabase
             .from('payments')
@@ -6452,19 +6451,20 @@ class _StudentPaymentDetailDialogState
         if (paymentId.startsWith('pricing_')) {
           final enrollments = await SupabaseConfig.adminClient
               .from('enrollments')
-              .select('id')
+              .select('id, school_id')
               .eq('user_id', widget.student.studentId);
-          final enrollId = (enrollments as List).isNotEmpty ? enrollments.first['id'] : null;
-          if (enrollId != null) {
-            await SupabaseConfig.adminClient.from('payments').insert({
-              'enrollment_id': enrollId,
-              'amount': result['amount'],
-              'status': 'pending',
-              'due_date': result['due_date'],
-              'payment_method': 'cash',
-              'notes': payment['category'] ?? 'Autre paiement',
-            });
-          }
+          final schId = (enrollments as List).isNotEmpty
+              ? (enrollments.first['school_id'] ?? '11111111-1111-1111-1111-111111111111')
+              : '11111111-1111-1111-1111-111111111111';
+          await SupabaseConfig.adminClient.from('payments').insert({
+            'student_id': widget.student.studentId,
+            'school_id': schId,
+            'amount': result['amount'],
+            'status': 'pending',
+            'due_date': result['due_date'],
+            'method': 'cash',
+            'notes': payment['category'] ?? 'Autre paiement',
+          });
         } else {
           await SupabaseConfig.adminClient.from('payments').update({
             'amount': result['amount'],
@@ -7200,27 +7200,28 @@ class _StudentPaymentDetailDialogState
         try {
           final enrollments = await SupabaseConfig.adminClient
               .from('enrollments')
-              .select('id')
+              .select('id, school_id')
               .eq('user_id', widget.student.studentId);
-          final enrollId = (enrollments as List).isNotEmpty ? enrollments.first['id'] : null;
-          if (enrollId != null) {
-            final toInsert = syntheticIds.map((sId) {
-              final p = _payments.firstWhere(
-                (item) => item['id'] == sId,
-                orElse: () => <String, dynamic>{},
-              );
-              return {
-                'enrollment_id': enrollId,
-                'amount': p['amount'] ?? 0,
-                'status': 'paid',
-                'paid_at': nowIso,
-                'due_date': p['due_date'] ?? nowIso,
-                'payment_method': 'cash',
-                'notes': p['category'] ?? 'Autre paiement',
-              };
-            }).toList();
-            await SupabaseConfig.adminClient.from('payments').insert(toInsert);
-          }
+          final schId = (enrollments as List).isNotEmpty
+              ? (enrollments.first['school_id'] ?? '11111111-1111-1111-1111-111111111111')
+              : '11111111-1111-1111-1111-111111111111';
+          final toInsert = syntheticIds.map((sId) {
+            final p = _payments.firstWhere(
+              (item) => item['id'] == sId,
+              orElse: () => <String, dynamic>{},
+            );
+            return {
+              'student_id': widget.student.studentId,
+              'school_id': schId,
+              'amount': p['amount'] ?? 0,
+              'status': 'paid',
+              'paid_at': nowIso,
+              'due_date': p['due_date'] ?? nowIso,
+              'method': 'cash',
+              'notes': p['category'] ?? 'Autre paiement',
+            };
+          }).toList();
+          await SupabaseConfig.adminClient.from('payments').insert(toInsert);
         } catch (e) {
           debugPrint('Error inserting synthetic payments: $e');
         }

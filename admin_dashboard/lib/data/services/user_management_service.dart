@@ -188,6 +188,61 @@ class UserManagementService {
     }
   }
 
+  /// Toggle archive (is_active) status for one or more users
+  static Future<bool> toggleArchive({
+    required List<String> userIds,
+    required bool isActive,
+  }) async {
+    if (userIds.isEmpty) return true;
+
+    // 1. Primary: Direct RPC with SECURITY DEFINER
+    try {
+      final res = await _client.rpc('toggle_user_active_status', params: {
+        'p_user_ids': userIds,
+        'p_is_active': isActive,
+      });
+      if (res != null && (res['success'] == true || res is Map)) {
+        return true;
+      }
+    } catch (e) {
+      debugPrint('UserManagementService.toggleArchive RPC warning: $e');
+    }
+
+    // 2. Secondary: Edge Function with service_role privileges
+    try {
+      final response = await _client.functions.invoke(
+        'manage-users',
+        body: {
+          'action': 'toggle_archive',
+          'user_ids': userIds,
+          'is_active': isActive,
+        },
+      );
+      if (response.status == 200 && response.data?['success'] == true) {
+        return true;
+      }
+    } catch (e) {
+      debugPrint('UserManagementService.toggleArchive Edge Function warning: $e');
+    }
+
+    // 3. Fallback: Direct table update
+    try {
+      await _client.from('users').update({
+        'is_active': isActive,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).inFilter('id', userIds);
+      try {
+        await _client.from('enrollments').update({
+          'is_active': isActive,
+        }).inFilter('user_id', userIds);
+      } catch (_) {}
+      return true;
+    } catch (e) {
+      debugPrint('UserManagementService.toggleArchive table update error: $e');
+      return false;
+    }
+  }
+
   /// Deletes a user by ID
   static Future<bool> deleteUser(String userId) async {
     try {

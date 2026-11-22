@@ -873,7 +873,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                   onPressed: () async {
                     Navigator.pop(ctx);
                     try {
-                      await SupabaseConfig.adminClient.from('users').update({'is_active': false}).eq('id', id);
+                      final ok = await UserManagementService.toggleArchive(
+                        userIds: [id],
+                        isActive: false,
+                      );
+                      if (!ok) throw Exception('Impossible d\'archiver le professeur.');
                       ref.invalidate(professorsProvider);
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" archivé'), backgroundColor: AppColors.warning));
                     } catch (e) {
@@ -929,7 +933,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                   onPressed: () async {
                     Navigator.pop(ctx);
                     try {
-                      await SupabaseConfig.adminClient.from('users').update({'is_active': true}).eq('id', id);
+                      final ok = await UserManagementService.toggleArchive(
+                        userIds: [id],
+                        isActive: true,
+                      );
+                      if (!ok) throw Exception('Impossible de désarchiver le professeur.');
                       ref.invalidate(professorsProvider);
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désarchivé'), backgroundColor: AppColors.success));
                     } catch (e) {
@@ -1236,9 +1244,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                   onPressed: () async {
                     Navigator.pop(ctx);
                     try {
-                      for (final id in _selectedProfIds) {
-                        await SupabaseConfig.adminClient.from('users').update({'is_active': false}).eq('id', id);
-                      }
+                      final ok = await UserManagementService.toggleArchive(
+                        userIds: _selectedProfIds.toList(),
+                        isActive: false,
+                      );
+                      if (!ok) throw Exception('Impossible d\'archiver les professeurs.');
                       setState(() => _selectedProfIds.clear());
                       ref.invalidate(professorsProvider);
                       if (mounted) {

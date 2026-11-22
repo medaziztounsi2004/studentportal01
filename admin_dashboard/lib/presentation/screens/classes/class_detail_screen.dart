@@ -2746,26 +2746,8 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                           Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary), overflow: TextOverflow.ellipsis),
                                           const SizedBox(height: 2),
-                                          Text(email, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary), overflow: TextOverflow.ellipsis),
+                                          Text(subName ?? 'Enseignant', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary), overflow: TextOverflow.ellipsis),
                                         ])),
-                                        if (subName != null) ...[
-                                          Container(
-                                            margin: const EdgeInsets.only(right: 12),
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: subColor.withOpacity(0.12),
-                                              borderRadius: BorderRadius.circular(9999),
-                                            ),
-                                            child: Text(
-                                              subName,
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                                color: subColor,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
                                         // Add button
                                         InkWell(
                                           onTap: () async {
@@ -4442,18 +4424,8 @@ class _ManageTeachersDialogState extends State<_ManageTeachersDialog> {
                                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                           Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
                                           const SizedBox(height: 2),
-                                          Text(email, style: TextStyle(fontSize: 11, color: AppColors.textTertiary), overflow: TextOverflow.ellipsis),
+                                          Text(subjectName ?? 'Enseignant', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary), overflow: TextOverflow.ellipsis),
                                         ])),
-                                        if (subjectName != null && subjectName.isNotEmpty)
-                                          Builder(builder: (_) {
-                                            final specColor = _subjectColor(subjectName);
-                                            return Container(
-                                              margin: const EdgeInsets.only(right: 10),
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                              decoration: BoxDecoration(color: specColor.withOpacity(0.10), borderRadius: BorderRadius.circular(6), border: Border.all(color: specColor.withOpacity(0.25))),
-                                              child: Text(subjectName, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: specColor)),
-                                            );
-                                          }),
                                         if (isAssigned)
                                           Container(
                                             width: 38, height: 38,
