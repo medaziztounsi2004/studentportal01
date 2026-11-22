@@ -877,6 +877,29 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
     }
   }
 
+  Future<void> markAsUnpaid(String id) async {
+    try {
+      await SupabaseConfig.client.from('payments').update({
+        'status': 'pending',
+        'paid_at': null,
+      }).eq('id', id);
+      ref.invalidateSelf();
+    } catch (e) {
+      state.whenData((s) {
+        final payments = s.payments.map((p) {
+          if (p.id == id) {
+            return p.copyWith(
+              status: PaymentStatus.pending,
+              paidAt: null,
+            );
+          }
+          return p;
+        }).toList();
+        state = AsyncData(s.copyWith(payments: payments));
+      });
+    }
+  }
+
   Future<void> cancelPayment(String id) async {
     try {
       await SupabaseConfig.client.from('payments').update({
@@ -962,6 +985,12 @@ class PaymentsNotifier extends AsyncNotifier<PaymentsState> {
   Future<void> bulkMarkAsPaid(List<String> ids, {String? method}) async {
     for (final id in ids) {
       await markAsPaid(id, method: method);
+    }
+  }
+
+  Future<void> bulkMarkAsUnpaid(List<String> ids) async {
+    for (final id in ids) {
+      await markAsUnpaid(id);
     }
   }
 

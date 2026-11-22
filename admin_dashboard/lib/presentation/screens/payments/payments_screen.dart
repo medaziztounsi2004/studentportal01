@@ -4906,9 +4906,53 @@ class _StudentPaymentDetailDialogState
         }
       }
 
+      // Also query by enrollment_id to catch payments without payment_plan_id
+      if (enrollmentIds.isNotEmpty) {
+        try {
+          final enrPayments = await SupabaseConfig.adminClient
+              .from('payments')
+              .select('*, payment_plans(id, plan_type, category, enrollment_id)')
+              .inFilter('enrollment_id', enrollmentIds)
+              .order('due_date', ascending: true) as List<dynamic>;
+          for (final ep in enrPayments) {
+            final epId = ep['id']?.toString();
+            if (epId != null && !paymentsResponse.any((p) => p['id']?.toString() == epId)) {
+              paymentsResponse.add(ep);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading payments by enrollment_id: $e');
+        }
+      }
+
+      // Also query directly by known seed payment IDs to ensure the freshest DB data
+      final seedRealIds = seedPayments
+          .map((p) => p['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty && !id.startsWith('pricing_'))
+          .toList();
+      if (seedRealIds.isNotEmpty) {
+        try {
+          final idPayments = await SupabaseConfig.adminClient
+              .from('payments')
+              .select('*, payment_plans(id, plan_type, category, enrollment_id)')
+              .inFilter('id', seedRealIds) as List<dynamic>;
+          for (final ip in idPayments) {
+            final ipId = ip['id']?.toString();
+            final existingIdx = paymentsResponse.indexWhere((p) => p['id']?.toString() == ipId);
+            if (existingIdx >= 0) {
+              paymentsResponse[existingIdx] = ip;
+            } else {
+              paymentsResponse.add(ip);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading payments by id: $e');
+        }
+      }
+
       final seenIds = <String>{};
       final uniquePayments = <Map<String, dynamic>>[];
-      for (final p in [...seedPayments, ...paymentsResponse]) {
+      for (final p in [...paymentsResponse, ...seedPayments]) {
         final id = p['id']?.toString() ?? '';
         if (id.isNotEmpty && !seenIds.contains(id)) {
           seenIds.add(id);
@@ -6035,6 +6079,26 @@ class _StudentPaymentDetailDialogState
             .eq('id', paymentId);
       }
 
+      final payIdStr = paymentId.toString();
+      for (final p in _payments) {
+        if (p['id']?.toString() == payIdStr) {
+          p['status'] = 'paid';
+          p['paid_at'] = DateTime.now().toIso8601String();
+        }
+      }
+      for (int i = 0; i < widget.student.plans.length; i++) {
+        final plan = widget.student.plans[i];
+        final updatedPayments = plan.payments.map((pay) {
+          if (pay.id == payIdStr) {
+            return pay.copyWith(status: PaymentStatus.paid, paidAt: DateTime.now());
+          }
+          return pay;
+        }).toList();
+        try {
+          widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
+        } catch (_) {}
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Paiement marqué comme payé'),
@@ -6069,6 +6133,26 @@ class _StudentPaymentDetailDialogState
             'paid_at': null,
           })
           .eq('id', paymentId);
+
+      final payIdStr = paymentId.toString();
+      for (final p in _payments) {
+        if (p['id']?.toString() == payIdStr) {
+          p['status'] = 'pending';
+          p['paid_at'] = null;
+        }
+      }
+      for (int i = 0; i < widget.student.plans.length; i++) {
+        final plan = widget.student.plans[i];
+        final updatedPayments = plan.payments.map((pay) {
+          if (pay.id == payIdStr) {
+            return pay.copyWith(status: PaymentStatus.pending, paidAt: null);
+          }
+          return pay;
+        }).toList();
+        try {
+          widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
+        } catch (_) {}
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -7020,47 +7104,117 @@ class _StudentPaymentDetailDialogState
     try {
       final realIds = ids.where((id) => !id.startsWith('pricing_')).toList();
       final syntheticIds = ids.where((id) => id.startsWith('pricing_')).toList();
+      final nowIso = DateTime.now().toIso8601String();
+      final now = DateTime.now();
 
+      // 1. Optimistic update in-memory _payments
+      for (final p in _payments) {
+        if (ids.contains(p['id']?.toString())) {
+          p['status'] = 'paid';
+          p['paid_at'] = nowIso;
+        }
+      }
+
+      // 2. Update widget.student.plans in memory
+      for (int i = 0; i < widget.student.plans.length; i++) {
+        final plan = widget.student.plans[i];
+        final updatedPayments = plan.payments.map((pay) {
+          if (ids.contains(pay.id)) {
+            return pay.copyWith(
+              status: PaymentStatus.paid,
+              paidAt: now,
+            );
+          }
+          return pay;
+        }).toList();
+        try {
+          widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
+        } catch (_) {}
+      }
+
+      // 3. Update Supabase
       if (realIds.isNotEmpty) {
-        await SupabaseConfig.adminClient
-            .from('payments')
-            .update({'status': 'paid', 'paid_at': DateTime.now().toIso8601String()})
-            .inFilter('id', realIds);
+        try {
+          await SupabaseConfig.adminClient
+              .from('payments')
+              .update({'status': 'paid', 'paid_at': nowIso})
+              .inFilter('id', realIds);
+        } catch (e) {
+          debugPrint('Error updating payments with adminClient: $e');
+          try {
+            await Supabase.instance.client
+                .from('payments')
+                .update({'status': 'paid', 'paid_at': nowIso})
+                .inFilter('id', realIds);
+          } catch (e2) {
+            debugPrint('Fallback Supabase client error: $e2');
+          }
+        }
       }
 
       if (syntheticIds.isNotEmpty) {
-        final enrollments = await SupabaseConfig.adminClient
-            .from('enrollments')
-            .select('id')
-            .eq('user_id', widget.student.studentId);
-        final enrollId = (enrollments as List).isNotEmpty ? enrollments.first['id'] : null;
-        if (enrollId != null) {
-          final toInsert = syntheticIds.map((sId) {
-            final p = _payments.firstWhere(
-              (item) => item['id'] == sId,
-              orElse: () => <String, dynamic>{},
-            );
-            return {
-              'enrollment_id': enrollId,
-              'amount': p['amount'] ?? 0,
-              'status': 'paid',
-              'paid_at': DateTime.now().toIso8601String(),
-              'due_date': p['due_date'] ?? DateTime.now().toIso8601String(),
-              'payment_method': 'cash',
-              'notes': p['category'] ?? 'Autre paiement',
-            };
-          }).toList();
-          await SupabaseConfig.adminClient.from('payments').insert(toInsert);
+        try {
+          final enrollments = await SupabaseConfig.adminClient
+              .from('enrollments')
+              .select('id')
+              .eq('user_id', widget.student.studentId);
+          final enrollId = (enrollments as List).isNotEmpty ? enrollments.first['id'] : null;
+          if (enrollId != null) {
+            final toInsert = syntheticIds.map((sId) {
+              final p = _payments.firstWhere(
+                (item) => item['id'] == sId,
+                orElse: () => <String, dynamic>{},
+              );
+              return {
+                'enrollment_id': enrollId,
+                'amount': p['amount'] ?? 0,
+                'status': 'paid',
+                'paid_at': nowIso,
+                'due_date': p['due_date'] ?? nowIso,
+                'payment_method': 'cash',
+                'notes': p['category'] ?? 'Autre paiement',
+              };
+            }).toList();
+            await SupabaseConfig.adminClient.from('payments').insert(toInsert);
+          }
+        } catch (e) {
+          debugPrint('Error inserting synthetic payments: $e');
         }
       }
 
       setState(() {
         _selectedPaymentIds.clear();
       });
+
       await _loadStudentPayments();
-      ref.invalidate(paymentsProvider);
+
+      try {
+        await ref.read(paymentsProvider.notifier).bulkMarkAsPaid(realIds);
+      } catch (_) {
+        ref.invalidate(paymentsProvider);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${ids.length} paiement${ids.length > 1 ? 's' : ''} marqué${ids.length > 1 ? 's' : ''} comme payé${ids.length > 1 ? 's' : ''}'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Error bulk marking paid: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -7073,20 +7227,85 @@ class _StudentPaymentDetailDialogState
     setState(() => _isLoading = true);
     try {
       final realIds = ids.where((id) => !id.startsWith('pricing_')).toList();
+
+      // 1. Optimistic update in-memory _payments
+      for (final p in _payments) {
+        if (ids.contains(p['id']?.toString())) {
+          p['status'] = 'pending';
+          p['paid_at'] = null;
+        }
+      }
+
+      // 2. Update widget.student.plans in memory
+      for (int i = 0; i < widget.student.plans.length; i++) {
+        final plan = widget.student.plans[i];
+        final updatedPayments = plan.payments.map((pay) {
+          if (ids.contains(pay.id)) {
+            return pay.copyWith(
+              status: PaymentStatus.pending,
+              paidAt: null,
+            );
+          }
+          return pay;
+        }).toList();
+        try {
+          widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
+        } catch (_) {}
+      }
+
+      // 3. Update Supabase
       if (realIds.isNotEmpty) {
-        await SupabaseConfig.adminClient
-            .from('payments')
-            .update({'status': 'pending', 'paid_at': null})
-            .inFilter('id', realIds);
+        try {
+          await SupabaseConfig.adminClient
+              .from('payments')
+              .update({'status': 'pending', 'paid_at': null})
+              .inFilter('id', realIds);
+        } catch (e) {
+          debugPrint('Error updating payments with adminClient: $e');
+          try {
+            await Supabase.instance.client
+                .from('payments')
+                .update({'status': 'pending', 'paid_at': null})
+                .inFilter('id', realIds);
+          } catch (e2) {
+            debugPrint('Fallback Supabase client error: $e2');
+          }
+        }
       }
 
       setState(() {
         _selectedPaymentIds.clear();
       });
+
       await _loadStudentPayments();
-      ref.invalidate(paymentsProvider);
+
+      try {
+        await ref.read(paymentsProvider.notifier).bulkMarkAsUnpaid(realIds);
+      } catch (_) {
+        ref.invalidate(paymentsProvider);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${ids.length} paiement${ids.length > 1 ? 's' : ''} marqué${ids.length > 1 ? 's' : ''} comme impayé${ids.length > 1 ? 's' : ''}'),
+            backgroundColor: const Color(0xFFF59E0B),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Error bulk marking unpaid: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -7159,19 +7378,70 @@ class _StudentPaymentDetailDialogState
 
     if (confirm != true) return;
 
+    final ids = _selectedPaymentIds.toList();
     setState(() => _isLoading = true);
     try {
-      final realIds = _selectedPaymentIds.where((id) => !id.startsWith('pricing_')).toList();
-      if (realIds.isNotEmpty) {
-        await SupabaseConfig.adminClient.from('payments').delete().inFilter('id', realIds);
+      final realIds = ids.where((id) => !id.startsWith('pricing_')).toList();
+
+      // 1. Remove from local _payments
+      _payments.removeWhere((p) => ids.contains(p['id']?.toString()));
+
+      // 2. Remove from widget.student.plans in memory
+      for (int i = 0; i < widget.student.plans.length; i++) {
+        final plan = widget.student.plans[i];
+        final updatedPayments = plan.payments.where((pay) => !ids.contains(pay.id)).toList();
+        try {
+          widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
+        } catch (_) {}
       }
+
+      // 3. Delete from Supabase
+      if (realIds.isNotEmpty) {
+        try {
+          await SupabaseConfig.adminClient.from('payments').delete().inFilter('id', realIds);
+        } catch (e) {
+          debugPrint('Error deleting payments with adminClient: $e');
+          try {
+            await Supabase.instance.client.from('payments').delete().inFilter('id', realIds);
+          } catch (e2) {
+            debugPrint('Fallback Supabase client error: $e2');
+          }
+        }
+      }
+
       setState(() {
         _selectedPaymentIds.clear();
       });
+
       await _loadStudentPayments();
-      ref.invalidate(paymentsProvider);
+
+      try {
+        await ref.read(paymentsProvider.notifier).refresh();
+      } catch (_) {
+        ref.invalidate(paymentsProvider);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$count paiement${count > 1 ? 's' : ''} supprimé${count > 1 ? 's' : ''}'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Error bulk deleting: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
