@@ -585,6 +585,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     final isLoading = professorsAsync.isLoading;
     final totalCount = allProfs.length;
     final activeCount = allProfs.where((p) => p['is_active'] == true).length;
+    final inactiveCount = allProfs.where((p) => p['is_active'] != true).length;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
@@ -604,6 +605,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               children: [
                 _buildStatusChip('Tous', totalCount, _statusFilter == null, () => setState(() { _statusFilter = null; _currentPage = 1; }), isLoading: isLoading),
                 _buildStatusChip('Actifs', activeCount, _statusFilter == 'active', () => setState(() { _statusFilter = 'active'; _currentPage = 1; }), isLoading: isLoading),
+                _buildStatusChip('Inactifs', inactiveCount, _statusFilter == 'archived', () => setState(() { _statusFilter = 'archived'; _currentPage = 1; }), isLoading: isLoading),
               ],
             ),
           ),
@@ -698,7 +700,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                       items: const [
                         DropdownMenuItem(value: null, child: Text('Tous')),
                         DropdownMenuItem(value: 'active', child: Text('Actifs')),
-                        DropdownMenuItem(value: 'archived', child: Text('Archivés')),
+                        DropdownMenuItem(value: 'archived', child: Text('Inactifs')),
                       ],
                       onChanged: (v) => setState(() {
                         _statusFilter = v;

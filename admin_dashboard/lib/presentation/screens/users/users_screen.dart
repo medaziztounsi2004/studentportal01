@@ -512,7 +512,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
 
     final totalCount = currentTabUsers.length;
     final activeCount = currentTabUsers.where((u) => u.isActive).length;
-    final archivedCount = currentTabUsers.where((u) => !u.isActive).length;
+    final suspendedCount = currentTabUsers.where((u) => !u.isActive).length;
 
     // Show active filter chips
     final activeFilterChips = <Widget>[];
@@ -586,6 +586,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   children: [
                     _buildStatusChip('Tous', totalCount, _statusFilter == null, () => setState(() { _statusFilter = null; _currentPage = 1; })),
                     _buildStatusChip('Actifs', activeCount, _statusFilter == 'active', () => setState(() { _statusFilter = 'active'; _currentPage = 1; })),
+                    _buildStatusChip('Suspendus', suspendedCount, _statusFilter == 'archived', () => setState(() { _statusFilter = 'archived'; _currentPage = 1; })),
                   ],
                 ),
               ),
@@ -1532,7 +1533,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       items: const [
                         DropdownMenuItem(value: null, child: Text('Tous')),
                         DropdownMenuItem(value: 'active', child: Text('Actifs')),
-                        DropdownMenuItem(value: 'archived', child: Text('Archivés')),
+                        DropdownMenuItem(value: 'archived', child: Text('Suspendus')),
                       ],
                       onChanged: (v) => setState(() {
                         _statusFilter = v;
