@@ -3847,157 +3847,67 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
   void _showDeleteSlotConfirmation(TimetableSlotAdmin slot) {
     final color = _getSubjectColor(slot.subjectCode ?? 'default');
 
-    showGeneralDialog(
+    showDialog(
       context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Close',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 300),
-      transitionBuilder: (ctx, a1, a2, child) {
-        final curve = CurvedAnimation(parent: a1, curve: Curves.easeOutCubic);
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16 * a1.value, sigmaY: 16 * a1.value),
-          child: FadeTransition(
-            opacity: curve,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.92, end: 1.0).animate(curve),
-              child: child,
-            ),
-          ),
-        );
-      },
-      pageBuilder: (ctx, _, __) {
-        return Center(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: 400,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(color: const Color(0xFF111827).withOpacity(0.12), blurRadius: 48, offset: const Offset(0, 16)),
-                ],
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+              const SizedBox(width: 12),
+              const Text('Supprimer le cours ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Cette action est irréversible. Le cours sélectionné sera définitivement supprimé de l\'emploi du temps.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
                   children: [
-                    // Header
                     Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(24, 22, 18, 20),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        border: Border(bottom: BorderSide(color: Color(0xFFF0F0F5))),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48, height: 48,
-                            decoration: BoxDecoration(
-                              color: AppColors.error.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(Icons.delete_outline, color: AppColors.error, size: 24),
-                          ),
-                          const SizedBox(width: 14),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Supprimer le cours', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
-                                SizedBox(height: 2),
-                                Text('Cette action est irréversible', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            icon: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(8)),
-                              child: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Content
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: color.withOpacity(0.15)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40, height: 40,
-                              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
-                              child: Center(child: Text(slot.subjectCode ?? '?', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(slot.subjectName ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${_dayLabels[slot.dayOfWeek - 1]} • ${_formatTime(slot.startTime)} - ${_formatTime(slot.endTime)}${slot.room != null ? ' • ${slot.room}' : ''}',
-                                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                      child: Center(
+                        child: Text(
+                          slot.subjectCode ?? '?',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
                         ),
                       ),
                     ),
-                    // Footer
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                      child: Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: SizedBox(
-                              height: 48,
-                              child: OutlinedButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF374151),
-                                  backgroundColor: Colors.white,
-                                  side: const BorderSide(color: Color(0xFFD1D5DB)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: SizedBox(
-                              height: 48,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  _deleteSlot(slot);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.error,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                child: const Text('Supprimer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                              ),
-                            ),
+                          Text(slot.subjectName ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_dayLabels[slot.dayOfWeek - 1]} • ${_formatTime(slot.startTime)} - ${_formatTime(slot.endTime)}${slot.room != null ? ' • ${slot.room}' : ''}',
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -4005,10 +3915,42 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                   ],
                 ),
               ),
-            ),
+            ],
           ),
-        );
-      },
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _deleteSlot(slot);
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 

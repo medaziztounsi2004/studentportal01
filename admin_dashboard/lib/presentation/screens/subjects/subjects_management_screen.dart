@@ -362,27 +362,64 @@ class _SubjectsManagementScreenState
               () async {
                 final confirm = await showDialog<bool>(
                   context: context,
-                  builder: (dCtx) => AlertDialog(
-                    title: const Text('Confirmer la suppression'),
-                    content: Text(
-                      'Voulez-vous vraiment supprimer $count matière(s) sélectionnée(s) ?',
+                  barrierColor: Colors.black.withOpacity(0.08),
+                  builder: (dCtx) => BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                    child: AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      title: Row(
+                        children: [
+                          Container(
+                            width: 36, height: 36,
+                            decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                            child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text('Supprimer en masse ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                        ],
+                      ),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Voulez-vous vraiment supprimer $count matière(s) sélectionnée(s) ?'),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Cette action est irréversible.',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                      actions: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dCtx, false),
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFF6B7280),
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              ),
+                              child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: () => Navigator.pop(dCtx, true),
+                              icon: const Icon(Icons.delete_outline, size: 16),
+                              label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.error,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(dCtx, false),
-                        child: const Text('Annuler'),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.error,
-                        ),
-                        onPressed: () => Navigator.pop(dCtx, true),
-                        child: const Text(
-                          'Supprimer',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
                   ),
                 );
                 if (confirm == true) {
@@ -3689,7 +3726,7 @@ class _SubjectsManagementScreenState
                                           ),
                                           child: Center(
                                             child: Text(
-                                              '',
+                                              '${selectedDetailIds.length}',
                                               style: const TextStyle(
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w700,
@@ -3718,27 +3755,65 @@ class _SubjectsManagementScreenState
                                     () async {
                                       final confirm = await showDialog<bool>(
                                         context: ctx,
-                                        builder: (dCtx) => AlertDialog(
-                                          title: const Text('Confirmer la suppression'),
-                                          content: Text(
-                                            'Voulez-vous vraiment supprimer  affectation(s) sélectionnée(s) ?',
+                                        builder: (dCtx) => BackdropFilter(
+                                          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                                          child: AlertDialog(
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                            title: Row(
+                                              children: [
+                                                Container(
+                                                  width: 36,
+                                                  height: 36,
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.errorSoft,
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Text(
+                                                  'Supprimer ${selectedDetailIds.length} affectation${selectedDetailIds.length > 1 ? 's' : ''} ?',
+                                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                                                ),
+                                              ],
+                                            ),
+                                            content: Text(
+                                              'Cette action est irréversible. ${selectedDetailIds.length} affectation${selectedDetailIds.length > 1 ? 's seront supprimées' : ' sera supprimée'} définitivement.',
+                                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                            ),
+                                            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                                            actions: [
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.end,
+                                                children: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(dCtx, false),
+                                                    style: TextButton.styleFrom(
+                                                      foregroundColor: const Color(0xFF6B7280),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                    ),
+                                                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  ElevatedButton.icon(
+                                                    onPressed: () => Navigator.pop(dCtx, true),
+                                                    icon: const Icon(Icons.delete_outline, size: 16),
+                                                    label: Text(
+                                                      'Supprimer ${selectedDetailIds.length}',
+                                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                                    ),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: AppColors.error,
+                                                      foregroundColor: Colors.white,
+                                                      elevation: 0,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
                                           ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () => Navigator.pop(dCtx, false),
-                                              child: const Text('Annuler'),
-                                            ),
-                                            ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: AppColors.error,
-                                              ),
-                                              onPressed: () => Navigator.pop(dCtx, true),
-                                              child: const Text(
-                                                'Supprimer',
-                                                style: TextStyle(color: Colors.white),
-                                              ),
-                                            ),
-                                          ],
                                         ),
                                       );
                                       if (confirm == true) {
@@ -6331,33 +6406,69 @@ class _SubjectsManagementScreenState
   void _confirmDeleteSubject(SubjectModel subject) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text('Voulez-vous vraiment supprimer "${subject.name}" ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text('Supprimer la matière ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await ref
-                    .read(subjectsManagementProvider.notifier)
-                    .deleteSubject(subject.id);
-                if (ctx.mounted) Navigator.pop(ctx);
-                _showSuccess('Matière supprimée');
-              } catch (e) {
-                _showError(UserFriendlyError.format(e));
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text(
-              'Supprimer',
-              style: TextStyle(color: Colors.white),
+          content: Text(
+            'Voulez-vous vraiment supprimer "${subject.name}" ? Cette action est irréversible.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await ref
+                          .read(subjectsManagementProvider.notifier)
+                          .deleteSubject(subject.id);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _showSuccess('Matière supprimée');
+                    } catch (e) {
+                      _showError(UserFriendlyError.format(e));
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -6365,75 +6476,150 @@ class _SubjectsManagementScreenState
   void _confirmDeleteAssignment(SubjectAssignmentModel assignment) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text(
-          'Voulez-vous vraiment supprimer l\'affectation de "${assignment.subjectName}" ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              const Text('Supprimer l\'affectation ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await ref
-                    .read(subjectsManagementProvider.notifier)
-                    .deleteAssignment(assignment.id);
-                if (ctx.mounted) Navigator.pop(ctx);
-                _showSuccess('Affectation supprimée');
-              } catch (e) {
-                _showError(UserFriendlyError.format(e));
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text(
-              'Supprimer',
-              style: TextStyle(color: Colors.white),
+          content: Text(
+            'Voulez-vous vraiment supprimer l\'affectation de "${assignment.subjectName}" ? Cette action est irréversible.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await ref
+                          .read(subjectsManagementProvider.notifier)
+                          .deleteAssignment(assignment.id);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _showSuccess('Affectation supprimée');
+                    } catch (e) {
+                      _showError(UserFriendlyError.format(e));
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   void _confirmBulkDelete() {
+    final count = _selectedAssignmentIds.length;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text(
-          'Voulez-vous vraiment supprimer ${_selectedAssignmentIds.length} affectation(s) ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Supprimer $count affectation${count > 1 ? 's' : ''} ?',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                final notifier = ref.read(subjectsManagementProvider.notifier);
-                for (final id in _selectedAssignmentIds) {
-                  await notifier.deleteAssignment(id);
-                }
-                if (ctx.mounted) Navigator.pop(ctx);
-                _clearSelection();
-                _showSuccess(
-                  '${_selectedAssignmentIds.length} affectation(s) supprimée(s)',
-                );
-              } catch (e) {
-                _showError(UserFriendlyError.format(e));
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text(
-              'Supprimer',
-              style: TextStyle(color: Colors.white),
+          content: Text(
+            'Cette action est irréversible. $count affectation${count > 1 ? 's seront supprimées' : ' sera supprimée'} définitivement.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final notifier = ref.read(subjectsManagementProvider.notifier);
+                      for (final id in _selectedAssignmentIds) {
+                        await notifier.deleteAssignment(id);
+                      }
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _clearSelection();
+                      _showSuccess(
+                        '$count affectation${count > 1 ? 's' : ''} supprimée${count > 1 ? 's' : ''}',
+                      );
+                    } catch (e) {
+                      _showError(UserFriendlyError.format(e));
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: Text(
+                    'Supprimer $count',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

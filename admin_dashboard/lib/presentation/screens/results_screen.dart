@@ -9,7 +9,6 @@ import '../../core/theme/app_theme.dart';
 import '../providers/results_provider.dart';
 import '../providers/semesters_provider.dart';
 import '../widgets/results/grading_config_dialog.dart';
-import '../widgets/results/bulk_grade_entry_dialog.dart';
 import '../widgets/results/single_student_grade_entry.dart';
 import '../widgets/admin_sidebar.dart';
 import '../widgets/skeleton_loader.dart';
@@ -19,7 +18,6 @@ import '../widgets/user_avatar.dart';
 enum ResultsViewState {
   overview, // Show students/class overview
   gradeEntry, // Grade entry mode for selected student
-  bulkGradeEntry, // Grade entry mode for multiple selected students
 }
 
 /// Modern Results Management Screen
@@ -40,9 +38,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   /// Currently selected student for grade entry
   Map<String, dynamic>? _selectedStudentForGradeEntry;
-
-  /// Students selected for bulk grade entry (full enrollment objects)
-  List<Map<String, dynamic>> _bulkStudentObjects = [];
 
   // Pagination state
   int _currentPage = 1;
@@ -79,7 +74,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
   void _backToOverview() {
     setState(() {
       _selectedStudentForGradeEntry = null;
-      _bulkStudentObjects = [];
       _selectedStudentsForBulk.clear();
       _viewState = ResultsViewState.overview;
       _searchController.clear();
@@ -602,38 +596,12 @@ class _ResultsScreenState extends State<ResultsScreen> {
     switch (_viewState) {
       case ResultsViewState.gradeEntry:
         return _buildGradeEntryView(context, provider);
-      case ResultsViewState.bulkGradeEntry:
-        return _buildBulkGradeEntryView(context, provider);
       case ResultsViewState.overview:
         return _buildOverviewView(context, provider);
     }
   }
 
-  /// Bulk grade entry view — for multiple selected students
-  Widget _buildBulkGradeEntryView(BuildContext context, ResultsProvider provider) {
-    if (provider.selectedSemesterId == null) {
-      return _buildEmptyState(
-        'Sélectionnez un semestre',
-        Icons.warning_amber,
-        subtitle: 'Choisissez un semestre dans le panneau de filtres pour accéder à la saisie',
-      );
-    }
 
-    return BulkGradeEntryDialog(
-      selectedStudents: _bulkStudentObjects,
-      subjectOfferings: provider.subjectOfferings,
-      levelId: provider.selectedNiveauId,
-      semesterId: provider.selectedSemesterId,
-      onBack: () {
-        setState(() {
-          _bulkStudentObjects = [];
-          _selectedStudentsForBulk.clear();
-          _viewState = ResultsViewState.overview;
-        });
-      },
-      onRefresh: () => provider.loadSubjectOfferings(),
-    );
-  }
 
   /// Grade entry view - For a single selected student
   Widget _buildGradeEntryView(BuildContext context, ResultsProvider provider) {
@@ -1099,20 +1067,21 @@ class _ResultsScreenState extends State<ResultsScreen> {
                           final selectedObjs = provider.enrolledStudents
                               .where((s) => _selectedStudentsForBulk.contains(s['id'].toString()))
                               .toList();
-                          setState(() {
-                            _bulkStudentObjects = selectedObjs;
-                            _viewState = ResultsViewState.bulkGradeEntry;
-                          });
+                          if (selectedObjs.isNotEmpty) {
+                            final target = selectedObjs.first;
+                            setState(() => _selectedStudentsForBulk.clear());
+                            _navigateToStudentGradeEntry(provider, target);
+                          }
                         },
                         borderRadius: BorderRadius.circular(8),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.edit_note, size: 16, color: Colors.white70),
-                              const SizedBox(width: 6),
-                              const Text('Saisie groupée', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white70)),
+                            children: const [
+                              Icon(Icons.edit_note, size: 16, color: Colors.white70),
+                              SizedBox(width: 6),
+                              Text('Saisie des notes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white70)),
                             ],
                           ),
                         ),

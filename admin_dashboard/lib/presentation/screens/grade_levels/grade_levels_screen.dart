@@ -1808,7 +1808,12 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Voulez-vous vraiment supprimer "$itemName" ? Cette action est irréversible.'),
+              Text('Voulez-vous vraiment supprimer "$itemName" ?'),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
             ],
           ),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
@@ -1888,23 +1893,10 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Voulez-vous vraiment supprimer $count $itemType ?'),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.errorSoft,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.error.withOpacity(0.2)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Cette action est irréversible !', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ],
           ),

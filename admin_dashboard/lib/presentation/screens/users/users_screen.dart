@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border, TextSpan, BorderStyle;
 import '../../../core/theme/app_theme.dart';
+import '../../../core/config/supabase_config.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/users_provider.dart';
@@ -1200,6 +1201,10 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   // ═══════════════════════════════════════════════════
   Widget _buildFloatingSelectionBar(BuildContext context, AsyncValue<UsersState> usersAsync) {
     final count = _selectedUserIds.length;
+    final allUsers = usersAsync.whenOrNull(data: (s) => s.users) ?? [];
+    final selectedUsers = allUsers.where((u) => _selectedUserIds.contains(u.id)).toList();
+    final allArchived = selectedUsers.isNotEmpty && selectedUsers.every((u) => !u.isActive);
+    final hasStudents = selectedUsers.any((u) => u.role == 'student');
 
     return Material(
       elevation: 12,
@@ -1235,10 +1240,25 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               ),
             ),
             // Actions
-            _buildSelectionAction(Icons.ios_share_rounded, 'Exporter', Colors.white70, () => _bulkExport()),
-            _buildSelectionAction(Icons.archive_outlined, 'Archiver', Colors.white70, () {}),
-            _buildSelectionAction(Icons.school_rounded, 'Changer classe', Colors.white70, () {}),
-            _buildSelectionAction(Icons.delete_outline, 'Supprimer', const Color(0xFFFCA5A5), () => _bulkDelete(context)),
+            _buildSelectionAction(
+              allArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
+              allArchived ? 'Désarchiver' : 'Archiver',
+              Colors.white70,
+              () => _bulkToggleArchive(allArchived),
+            ),
+            if (hasStudents)
+              _buildSelectionAction(
+                Icons.school_rounded,
+                'Changer classe',
+                Colors.white70,
+                () => _showChangeClassDialog(context, selectedUsers.where((u) => u.role == 'student').toList()),
+              ),
+            _buildSelectionAction(
+              Icons.delete_outline,
+              'Supprimer',
+              const Color(0xFFFCA5A5),
+              () => _bulkDelete(context),
+            ),
             // Close button
             Container(
               margin: const EdgeInsets.only(left: 4),
@@ -1966,12 +1986,25 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               SizedBox(
                 height: 40,
                 child: ElevatedButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
                     Navigator.pop(ctx);
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Utilisateur archiv\u00e9'), backgroundColor: AppColors.success),
-                    );
+                    final willArchive = user.isActive;
+                    try {
+                      await SupabaseConfig.adminClient.from('users').update({'is_active': !willArchive}).eq('id', user.id);
+                      ref.invalidate(usersProvider);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(willArchive ? 'Utilisateur archivé' : 'Utilisateur désarchivé'),
+                            backgroundColor: willArchive ? AppColors.warning : AppColors.success,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
+                      }
+                    }
                   },
                   icon: const Icon(Icons.archive_outlined, size: 16),
                   label: const Text('Archiver', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -2015,7 +2048,12 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Voulez-vous vraiment supprimer "${u.fullName}" ? Cette action est irréversible.'),
+            Text('Voulez-vous vraiment supprimer "${u.fullName}" ?'),
+            const SizedBox(height: 6),
+            const Text(
+              'Cette action est irréversible.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
           ],
         ),
         actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
@@ -2065,6 +2103,255 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   // ═══════════════════════════════════════════════════
   // BULK ACTIONS
   // ═══════════════════════════════════════════════════
+  Future<void> _bulkToggleArchive(bool currentlyArchived) async {
+    final newActive = currentlyArchived;
+    try {
+      await SupabaseConfig.adminClient
+          .from('users')
+          .update({'is_active': newActive})
+          .inFilter('id', _selectedUserIds.toList());
+      ref.invalidate(usersProvider);
+      final count = _selectedUserIds.length;
+      setState(() => _selectedUserIds.clear());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newActive ? '$count utilisateur(s) désarchivé(s)' : '$count utilisateur(s) archivé(s)'),
+            backgroundColor: newActive ? AppColors.success : AppColors.warning,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _showChangeClassDialog(BuildContext ctx, List<UserModel> students) async {
+    if (students.isEmpty) return;
+
+    final usersState = ref.read(usersProvider);
+    final allClasses = usersState.whenOrNull(data: (s) => s.classes) ?? [];
+    if (allClasses.isEmpty) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(content: Text('Aucune classe disponible')),
+      );
+      return;
+    }
+
+    String? selectedClassId;
+    String search = '';
+
+    await showDialog(
+      context: ctx,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (dCtx) {
+        return StatefulBuilder(builder: (dCtx, setInner) {
+          final filtered = allClasses.where((c) {
+            if (search.isEmpty) return true;
+            final q = search.toLowerCase();
+            return c.name.toLowerCase().contains(q) || (c.gradeLevelName?.toLowerCase().contains(q) ?? false);
+          }).toList();
+
+          return BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 480,
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(dCtx).size.height * 0.8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 30,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                        decoration: const BoxDecoration(
+                          border: Border(bottom: BorderSide(color: Color(0xFFF1F1F5))),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEEECFB),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.school_rounded, color: Color(0xFF6D4CF6), size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    students.length == 1 ? 'Changer la classe' : 'Changer la classe (${students.length} étudiants)',
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    students.length == 1 ? students.first.fullName : '${students.length} étudiants sélectionnés',
+                                    style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.pop(dCtx),
+                              icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF9CA3AF)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Search
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                        child: TextField(
+                          onChanged: (v) => setInner(() => search = v),
+                          style: const TextStyle(fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'Rechercher une classe...',
+                            hintStyle: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                            prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.textTertiary),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E4EA))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E4EA))),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6D4CF6))),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      // Classes list
+                      Flexible(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          shrinkWrap: true,
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) {
+                            final c = filtered[i];
+                            final isSelected = selectedClassId == c.id;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: InkWell(
+                                onTap: () => setInner(() => selectedClassId = c.id),
+                                borderRadius: BorderRadius.circular(10),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFFEEECFB) : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: BoxDecoration(
+                                          color: isSelected ? const Color(0xFF6D4CF6).withOpacity(0.12) : const Color(0xFFE2E8F0),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Icon(Icons.class_rounded, size: 16, color: isSelected ? const Color(0xFF6D4CF6) : AppColors.textTertiary),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          c.name,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                            color: isSelected ? const Color(0xFF6D4CF6) : AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Icon(Icons.check_circle_rounded, size: 20, color: Color(0xFF6D4CF6)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      // Footer
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                          border: Border(top: BorderSide(color: Color(0xFFF1F1F5))),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dCtx),
+                              child: const Text('Annuler', style: TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w600)),
+                            ),
+                            const SizedBox(width: 12),
+                            ElevatedButton(
+                              onPressed: selectedClassId == null
+                                  ? null
+                                  : () async {
+                                      Navigator.pop(dCtx);
+                                      try {
+                                        final studentIds = students.map((s) => s.id).toList();
+                                        await SupabaseConfig.adminClient
+                                            .from('enrollments')
+                                            .update({'class_id': selectedClassId})
+                                            .inFilter('student_id', studentIds);
+                                        ref.invalidate(usersProvider);
+                                        setState(() => _selectedUserIds.clear());
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Classe mise à jour avec succès'), backgroundColor: AppColors.success),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
+                                          );
+                                        }
+                                      }
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6D4CF6),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: const Text('Valider', style: TextStyle(fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
   void _bulkDelete(BuildContext context) {
     final count = _selectedUserIds.length;
     showDialog(
@@ -2090,23 +2377,10 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Voulez-vous vraiment supprimer $count utilisateur(s) ?'),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.errorSoft,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.error.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text('Cette action est irréversible !', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 6),
+            const Text(
+              'Cette action est irréversible.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
           ],
         ),
@@ -2186,51 +2460,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     );
   }
 
-  Future<void> _bulkExport() async {
-    final usersState = ref.read(usersProvider);
-    final allUsers = usersState.whenOrNull(data: (s) => s.users) ?? [];
-    final selectedUsers = allUsers.where((u) => _selectedUserIds.contains(u.id)).toList();
-    if (selectedUsers.isEmpty) return;
 
-    final excel = Excel.createExcel();
-    final sheet = excel['Utilisateurs'];
-
-    sheet.cell(CellIndex.indexByString('A1')).value = TextCellValue('ID');
-    sheet.cell(CellIndex.indexByString('B1')).value = TextCellValue('Nom complet');
-    sheet.cell(CellIndex.indexByString('C1')).value = TextCellValue('Email');
-    sheet.cell(CellIndex.indexByString('D1')).value = TextCellValue('Téléphone');
-    sheet.cell(CellIndex.indexByString('E1')).value = TextCellValue('Rôle');
-    sheet.cell(CellIndex.indexByString('F1')).value = TextCellValue('Code étudiant');
-
-    for (var i = 0; i < selectedUsers.length; i++) {
-      final u = selectedUsers[i];
-      final row = i + 2;
-      sheet.cell(CellIndex.indexByString('A$row')).value = TextCellValue(u.id);
-      sheet.cell(CellIndex.indexByString('B$row')).value = TextCellValue(u.fullName);
-      sheet.cell(CellIndex.indexByString('C$row')).value = TextCellValue(u.email);
-      sheet.cell(CellIndex.indexByString('D$row')).value = TextCellValue(u.phone ?? '');
-      sheet.cell(CellIndex.indexByString('E$row')).value = TextCellValue(u.role);
-      sheet.cell(CellIndex.indexByString('F$row')).value = TextCellValue(u.studentCode ?? '');
-    }
-
-    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
-
-    final bytes = excel.encode();
-    if (bytes != null && mounted) {
-      await FilePicker.platform.saveFile(
-        dialogTitle: 'Exporter les utilisateurs',
-        fileName: 'utilisateurs_export_${DateTime.now().millisecondsSinceEpoch}.xlsx',
-        type: FileType.custom,
-        allowedExtensions: ['xlsx'],
-        bytes: Uint8List.fromList(bytes),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${selectedUsers.length} utilisateur(s) exporté(s)'), backgroundColor: AppColors.success),
-        );
-      }
-    }
-  }
 
   // ═══════════════════════════════════════════════════
   // IMPORT METHODS

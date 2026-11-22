@@ -804,7 +804,60 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
               const Text('Archiver ce professeur ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
-          content: Text('Le professeur "$name" sera archivé et désactivé.'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    UserAvatar(
+                      name: name,
+                      photoUrl: prof['photo_url'] as String?,
+                      radius: 18,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            (prof['speciality'] as String?) ?? 'Enseignant',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.slate500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Ce professeur sera archivé et désactivé.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
           actions: [
             Row(
@@ -1081,6 +1134,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
 
   void _bulkArchive(BuildContext context) {
     final count = _selectedProfIds.length;
+    final profsAsync = ref.read(professorsProvider);
+    final allProfs = profsAsync.value ?? [];
+    final selectedProfs = allProfs.where((p) => _selectedProfIds.contains(p['id'])).toList();
+    final singleProf = selectedProfs.length == 1 ? selectedProfs.first : null;
+
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.08),
@@ -1096,10 +1154,70 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                 child: const Icon(Icons.archive_outlined, color: AppColors.warning, size: 18),
               ),
               const SizedBox(width: 12),
-              Text('Archiver $count professeur${count > 1 ? 's' : ''} ?', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              Text(
+                count == 1 && singleProf != null
+                    ? 'Archiver ce professeur ?'
+                    : 'Archiver $count professeur${count > 1 ? 's' : ''} ?',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
             ],
           ),
-          content: Text('$count professeur${count > 1 ? 's seront archivés' : ' sera archivé'} et désactivé${count > 1 ? 's' : ''}.'),
+          content: count == 1 && singleProf != null
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          UserAvatar(
+                            name: singleProf['full_name'] as String? ?? 'Professeur',
+                            photoUrl: singleProf['photo_url'] as String?,
+                            radius: 18,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  singleProf['full_name'] as String? ?? 'Professeur',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  (singleProf['speciality'] as String?) ?? 'Enseignant',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.slate500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Ce professeur sera archivé et désactivé.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                  ],
+                )
+              : Text('$count professeur${count > 1 ? 's seront archivés' : ' sera archivé'} et désactivé${count > 1 ? 's' : ''}.'),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
           actions: [
             Row(

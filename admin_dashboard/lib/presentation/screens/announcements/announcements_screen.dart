@@ -1093,6 +1093,13 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     AsyncValue<AnnouncementsState> announcementsAsync,
   ) {
     final count = _selectedIds.length;
+    final selectedAnnouncements = announcementsAsync.value?.announcements
+        .where((a) => _selectedIds.contains(a.id))
+        .toList() ?? [];
+    final allPinned = selectedAnnouncements.isNotEmpty &&
+        selectedAnnouncements.every((a) => a.isPinned);
+    final allImportant = selectedAnnouncements.isNotEmpty &&
+        selectedAnnouncements.every((a) => a.isImportant);
 
     return Material(
       elevation: 12,
@@ -1144,16 +1151,16 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
             ),
             // Actions
             _buildSelectionAction(
-              Icons.push_pin_outlined,
-              'Épingler',
+              allPinned ? Icons.push_pin_outlined : Icons.push_pin,
+              allPinned ? 'Désépingler' : 'Épingler',
               Colors.white70,
-              () => _bulkPin(true),
+              () => _bulkPin(!allPinned),
             ),
             _buildSelectionAction(
               Icons.priority_high,
-              'Important',
+              allImportant ? 'Normal' : 'Important',
               Colors.white70,
-              () => _bulkImportant(true),
+              () => _bulkImportant(!allImportant),
             ),
             _buildSelectionAction(
               Icons.delete_outline,
@@ -1225,55 +1232,75 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
   void _bulkDeleteConfirm() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer les annonces ?'),
-        content: Text(
-          'Êtes-vous sûr de vouloir supprimer ${_selectedIds.length} annonce(s) ?\nCette action est irréversible.',
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                  ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
                 ),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      final state = ref.read(announcementsProvider).value;
-                      if (state == null) return;
-                      final selected = state.announcements.where((a) => _selectedIds.contains(a.id)).toList();
-                      await ref.read(announcementsProvider.notifier).bulkDelete(selected);
-                      _exitSelectionMode();
-                    },
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
+              const Text('Supprimer les annonces ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Êtes-vous sûr de vouloir supprimer ${_selectedIds.length} annonce(s) ?'),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ],
           ),
-        ],
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final state = ref.read(announcementsProvider).value;
+                    if (state == null) return;
+                    final selected = state.announcements.where((a) => _selectedIds.contains(a.id)).toList();
+                    await ref.read(announcementsProvider.notifier).bulkDelete(selected);
+                    _exitSelectionMode();
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1940,6 +1967,32 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                             ),
                           ),
                         ],
+                        if (a.isImportant) ...[
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.5)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.priority_high_rounded, size: 12, color: Color(0xFFDC2626)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Important',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -2167,42 +2220,66 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: AlertDialog(
-        title: const Text('Supprimer l\'annonce ?'),
-        content: Text(
-          'Êtes-vous sûr de vouloir supprimer "${a.title}" ?\nCette action est irréversible.',
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
             children: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF6B7280),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () {
-                  ref.read(announcementsProvider.notifier).delete(a.id, scope: a.scope);
-                  Navigator.pop(ctx);
-                },
-                icon: const Icon(Icons.delete_outline, size: 16),
-                label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+              const SizedBox(width: 12),
+              const Text('Supprimer l\'annonce ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Êtes-vous sûr de vouloir supprimer "${a.title}" ?'),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ],
           ),
-        ],
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    ref.read(announcementsProvider.notifier).delete(a.id, scope: a.scope);
+                    Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -2347,6 +2424,8 @@ class _AnnouncementComposerDialogState
   String? _selectedSubjectName; // For subject dropdown
   String _teacherSearchQuery = ''; // For fuzzy teacher search
   String? _selectedTeacherName; // For teacher search selection
+  String? _selectedTeacherSpeciality;
+  String? _selectedTeacherPhotoUrl;
   String _announcementType = 'general';
   String _senderType = 'administration';
   bool _isPinned = false;
@@ -2421,7 +2500,13 @@ class _AnnouncementComposerDialogState
     _subjectCtrl = TextEditingController(text: payload['subject'] ?? '');
     _selectedSubjectName = payload['subject'] as String?;
     _selectedTeacherName = payload['teacher_name'] as String?;
-    if (_selectedTeacherName != null && _selectedTeacherName!.isEmpty) _selectedTeacherName = null;
+    _selectedTeacherSpeciality = payload['teacher_speciality'] as String? ?? payload['subject'] as String?;
+    _selectedTeacherPhotoUrl = payload['teacher_photo_url'] as String?;
+    if (_selectedTeacherName != null && _selectedTeacherName!.isEmpty) {
+      _selectedTeacherName = null;
+      _selectedTeacherSpeciality = null;
+      _selectedTeacherPhotoUrl = null;
+    }
     if (_selectedSubjectName != null && _selectedSubjectName!.isEmpty) _selectedSubjectName = null;
     _oldRoomCtrl = TextEditingController(text: payload['old_room'] ?? '');
     _newRoomCtrl = TextEditingController(text: payload['new_room'] ?? '');
@@ -3415,60 +3500,92 @@ class _AnnouncementComposerDialogState
   /// Smart teacher search widget with fuzzy matching
   Widget _buildTeacherSearchField() {
     final subjectsAsync = ref.watch(subjectsManagementProvider);
+    final subjectsState = subjectsAsync.asData?.value;
+    String? currentSpeciality = _selectedTeacherSpeciality;
+    String? currentPhotoUrl = _selectedTeacherPhotoUrl;
+    if (_selectedTeacherName != null && subjectsState != null) {
+      final foundTeacher = subjectsState.teachers
+          .where((t) => t.fullName.toLowerCase() == _selectedTeacherName!.toLowerCase())
+          .firstOrNull;
+      if (foundTeacher != null) {
+        currentPhotoUrl ??= foundTeacher.photoUrl;
+        if (currentSpeciality == null) {
+          final assignment = subjectsState.teacherAssignments
+              .where((a) => a.teacherId == foundTeacher.id)
+              .firstOrNull;
+          if (assignment != null) {
+            final subj = subjectsState.subjects
+                .where((s) => s.id == assignment.subjectId)
+                .firstOrNull;
+            currentSpeciality = subj?.name;
+          }
+        }
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _formFieldLabel('ENSEIGNANT CONCERNÉ *'),
-        // Selected teacher chip
+        // Selected teacher pill
         if (_selectedTeacherName != null) ...[
           Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.secondary.withOpacity(0.08), AppColors.primary.withOpacity(0.05)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
             ),
             child: Row(
               children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.secondary, AppColors.primary]),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.person, color: Colors.white, size: 18),
+                UserAvatar(
+                  name: _selectedTeacherName!,
+                  photoUrl: currentPhotoUrl,
+                  radius: 18,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         _selectedTeacherName!,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                      const Text('Enseignant sélectionné', style: TextStyle(fontSize: 10, color: AppColors.slate400)),
+                      const SizedBox(height: 2),
+                      Text(
+                        currentSpeciality ?? 'Enseignant',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.slate500,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 InkWell(
                   onTap: () => setState(() {
                     _selectedTeacherName = null;
+                    _selectedTeacherSpeciality = null;
+                    _selectedTeacherPhotoUrl = null;
                     _teacherNameCtrl.clear();
                     _teacherSearchQuery = '';
                   }),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(16),
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.slate100,
+                      shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 14, color: AppColors.error),
+                    child: const Icon(Icons.close, size: 14, color: AppColors.slate500),
                   ),
                 ),
               ],
@@ -3588,10 +3705,21 @@ class _AnnouncementComposerDialogState
                             separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.slate100),
                             itemBuilder: (_, i) {
                               final r = results[i];
+                              final assignment = state.teacherAssignments
+                                  .where((a) => a.teacherId == r.teacher.id)
+                                  .firstOrNull;
+                              final subj = assignment != null
+                                  ? state.subjects
+                                      .where((s) => s.id == assignment.subjectId)
+                                      .firstOrNull
+                                  : null;
+                              final teacherSpeciality = subj?.name ?? 'Enseignant';
                               return InkWell(
                                 onTap: () {
                                   setState(() {
                                     _selectedTeacherName = r.name;
+                                    _selectedTeacherSpeciality = teacherSpeciality;
+                                    _selectedTeacherPhotoUrl = r.teacher.photoUrl;
                                     _teacherNameCtrl.text = r.name;
                                     _teacherSearchQuery = '';
                                   });

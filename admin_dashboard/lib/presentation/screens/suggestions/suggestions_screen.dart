@@ -369,23 +369,10 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Voulez-vous vraiment supprimer $count suggestion(s) ?'),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.errorSoft,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.error.withOpacity(0.2)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Cette action est irréversible !', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 6),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ],
           ),
@@ -634,6 +621,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
 
   Widget _buildFloatingSelectionBar(BuildContext context) {
     final count = _selectedIds.length;
+    final state = ref.watch(suggestionsProvider).value;
+    final selectedSuggestions = state?.suggestions
+        .where((s) => _selectedIds.contains(s.id))
+        .toList() ?? [];
+    final allRead = selectedSuggestions.isNotEmpty &&
+        selectedSuggestions.every((s) => s.isRead);
 
     return Material(
       elevation: 12,
@@ -685,14 +678,18 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             ),
             // Actions
             _buildSelectionAction(
-              Icons.mark_email_read_outlined,
-              'Marquer lu',
+              allRead ? Icons.mark_email_unread_outlined : Icons.mark_email_read_outlined,
+              allRead ? 'Marquer non lu' : 'Marquer lu',
               Colors.white70,
               () async {
                 setState(() => _isPerformingAction = true);
                 try {
                   for (final id in _selectedIds.toList()) {
-                    await ref.read(suggestionsProvider.notifier).markAsRead(id);
+                    if (allRead) {
+                      await ref.read(suggestionsProvider.notifier).markAsUnread(id);
+                    } else {
+                      await ref.read(suggestionsProvider.notifier).markAsRead(id);
+                    }
                   }
                   _clearSelection();
                 } finally {
@@ -1518,23 +1515,10 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.errorSoft,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.error.withOpacity(0.2)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Cette action est irréversible !', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 8),
+              const Text(
+                'Cette action est irréversible.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ],
           ),

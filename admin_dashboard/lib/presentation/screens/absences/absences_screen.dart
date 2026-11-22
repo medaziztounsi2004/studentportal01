@@ -25,6 +25,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
   final _searchController = TextEditingController();
   bool _showFilters = false;
   bool _isSelectionMode = false;
+  bool _isPerformingAction = false;
   String _sortKey = 'date_desc';
 
   // Filter drawer cascade state
@@ -108,11 +109,13 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                     if (_isSelectionMode)
                       _buildSelectionBar(context, absencesAsync),
                     Expanded(
-                      child: absencesAsync.when(
-                        loading: () => const TableSkeletonLoader(),
-                        error: (e, _) => _buildErrorState(e),
-                        data: (state) => _buildContent(context, state),
-                      ),
+                      child: _isPerformingAction
+                          ? const TableSkeletonLoader()
+                          : absencesAsync.when(
+                              loading: () => const TableSkeletonLoader(),
+                              error: (e, _) => _buildErrorState(e),
+                              data: (state) => _buildContent(context, state),
+                            ),
                     ),
                   ],
                 ),
@@ -362,19 +365,24 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
           if (selectedCount > 0) ...[
             _buildGradientActionButton(
               onPressed: () async {
-                final count = await ref
-                    .read(absencesProvider.notifier)
-                    .bulkToggleJustified(true);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '$count absence(s) marquée(s) justifiée(s)',
+                setState(() => _isPerformingAction = true);
+                try {
+                  final count = await ref
+                      .read(absencesProvider.notifier)
+                      .bulkToggleJustified(true);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '$count absence(s) marquée(s) justifiée(s)',
+                        ),
+                        backgroundColor: AppColors.success,
                       ),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                  ref.read(absencesProvider.notifier).clearSelection();
+                    );
+                    ref.read(absencesProvider.notifier).clearSelection();
+                  }
+                } finally {
+                  if (mounted) setState(() => _isPerformingAction = false);
                 }
               },
               icon: Icons.check_circle_rounded,
@@ -385,19 +393,24 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
             const SizedBox(width: 8),
             _buildGradientActionButton(
               onPressed: () async {
-                final count = await ref
-                    .read(absencesProvider.notifier)
-                    .bulkToggleJustified(false);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '$count absence(s) marquée(s) non justifiée(s)',
+                setState(() => _isPerformingAction = true);
+                try {
+                  final count = await ref
+                      .read(absencesProvider.notifier)
+                      .bulkToggleJustified(false);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '$count absence(s) marquée(s) non justifiée(s)',
+                        ),
+                        backgroundColor: AppColors.warning,
                       ),
-                      backgroundColor: AppColors.warning,
-                    ),
-                  );
-                  ref.read(absencesProvider.notifier).clearSelection();
+                    );
+                    ref.read(absencesProvider.notifier).clearSelection();
+                  }
+                } finally {
+                  if (mounted) setState(() => _isPerformingAction = false);
                 }
               },
               icon: Icons.cancel_rounded,
@@ -913,10 +926,15 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
               label: 'Justifier',
               color: Colors.white70,
               onPressed: () async {
-                final counted = await ref.read(absencesProvider.notifier).bulkToggleJustified(true);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$counted absence(s) marquée(s) justifiée(s)', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.success));
-                  ref.read(absencesProvider.notifier).clearSelection();
+                setState(() => _isPerformingAction = true);
+                try {
+                  final counted = await ref.read(absencesProvider.notifier).bulkToggleJustified(true);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$counted absence(s) marquée(s) justifiée(s)', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.success));
+                    ref.read(absencesProvider.notifier).clearSelection();
+                  }
+                } finally {
+                  if (mounted) setState(() => _isPerformingAction = false);
                 }
               },
             ),
@@ -925,10 +943,15 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
               label: 'Non justifier',
               color: Colors.white70,
               onPressed: () async {
-                final counted = await ref.read(absencesProvider.notifier).bulkToggleJustified(false);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$counted absence(s) marquée(s) non justifiée(s)', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.warning));
-                  ref.read(absencesProvider.notifier).clearSelection();
+                setState(() => _isPerformingAction = true);
+                try {
+                  final counted = await ref.read(absencesProvider.notifier).bulkToggleJustified(false);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$counted absence(s) marquée(s) non justifiée(s)', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.warning));
+                    ref.read(absencesProvider.notifier).clearSelection();
+                  }
+                } finally {
+                  if (mounted) setState(() => _isPerformingAction = false);
                 }
               },
             ),
@@ -1223,7 +1246,14 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                         alignment: Alignment.centerLeft,
                         child: _JustifiedBadge(
                           justified: a.justified,
-                          onTap: () => ref.read(absencesProvider.notifier).toggleJustified(a.id, a.justified),
+                          onTap: () async {
+                            setState(() => _isPerformingAction = true);
+                            try {
+                              await ref.read(absencesProvider.notifier).toggleJustified(a.id, a.justified);
+                            } finally {
+                              if (mounted) setState(() => _isPerformingAction = false);
+                            }
+                          },
                         ),
                       ),
                     )),
@@ -1652,16 +1682,19 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Voulez-vous vraiment supprimer l\'absence de "${absence.studentName}" ?'),
-              const SizedBox(height: 8),
+              Text(
+                'Voulez-vous vraiment supprimer l\'absence de "${absence.studentName}" ? Cette action est irréversible.',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: AppColors.slate50, borderRadius: BorderRadius.circular(6)),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(color: AppColors.slate50, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, size: 16, color: AppColors.textTertiary),
+                    const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.textTertiary),
                     const SizedBox(width: 8),
-                    Expanded(child: Text('Date: ${DateFormat('d MMM yyyy', 'fr_FR').format(absence.date)}', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary, fontFamily: 'monospace'))),
+                    Expanded(child: Text('Date: ${DateFormat('d MMM yyyy', 'fr_FR').format(absence.date)}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500))),
                   ],
                 ),
               ),
@@ -1672,35 +1705,33 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                SizedBox(
-                  height: 40,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF6B7280),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  height: 40,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      ref.read(absencesProvider.notifier).delete(absence.id);
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    },
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    setState(() => _isPerformingAction = true);
+                    try {
+                      await ref.read(absencesProvider.notifier).delete(absence.id);
+                    } finally {
+                      if (mounted) setState(() => _isPerformingAction = false);
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ],
@@ -1727,50 +1758,48 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                 child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
               const SizedBox(width: 12),
-              const Text('Supprimer en masse ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              Text('Supprimer $count absence${count > 1 ? 's' : ''} ?', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
-          content: Text('Voulez-vous vraiment supprimer $count absence(s) sélectionnée(s) ?'),
+          content: Text(
+            'Cette action est irréversible. $count absence${count > 1 ? 's seront supprimées' : ' sera supprimée'} définitivement.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
           actions: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE8EAF0)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                      ),
-                      child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                    ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final deleted = await ref.read(absencesProvider.notifier).deleteSelected();
-                        if (ctx.mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$deleted absence(s) supprimée(s)'), backgroundColor: AppColors.error));
-                        }
-                      },
-                      icon: const Icon(Icons.delete_outline, size: 16),
-                      label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        foregroundColor: Colors.white,
-                        elevation: 2,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    setState(() => _isPerformingAction = true);
+                    try {
+                      final deleted = await ref.read(absencesProvider.notifier).deleteSelected();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$deleted absence(s) supprimée(s)'), backgroundColor: AppColors.error));
+                      }
+                    } finally {
+                      if (mounted) setState(() => _isPerformingAction = false);
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: Text('Supprimer $count', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ],

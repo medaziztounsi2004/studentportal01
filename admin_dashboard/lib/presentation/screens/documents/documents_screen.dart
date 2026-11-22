@@ -1094,18 +1094,6 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
             ),
             // Actions
             _buildSelectionAction(
-              Icons.ios_share_rounded,
-              'Exporter',
-              Colors.white70,
-              () => _exportCsv(selectedDocs),
-            ),
-            _buildSelectionAction(
-              Icons.calendar_month_outlined,
-              'Changer semestre',
-              Colors.white70,
-              () => _bulkChangeSemester(selectedDocs, semesters),
-            ),
-            _buildSelectionAction(
               Icons.delete_outline,
               'Supprimer',
               const Color(0xFFFCA5A5),

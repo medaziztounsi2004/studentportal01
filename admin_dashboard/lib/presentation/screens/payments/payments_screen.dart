@@ -4514,52 +4514,60 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   void _confirmCancelPayment(BuildContext context, Payment payment) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Annuler le paiement ?'),
-        content: Text(
-          'Voulez-vous annuler le paiement de ${payment.amount.toStringAsFixed(0)} TND ?',
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Non', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                  ),
-                ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      ref.read(paymentsProvider.notifier).cancelPayment(payment.id);
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiement annulé')));
-                    },
-                    icon: const Icon(Icons.warning_outlined, size: 16),
-                    label: const Text('Oui, annuler', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.warning,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ),
+              const Text('Annuler le paiement ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
-        ],
+          content: Text(
+            'Voulez-vous annuler le paiement de ${payment.amount.toStringAsFixed(0)} TND ? Cette action est irréversible.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    ref.read(paymentsProvider.notifier).cancelPayment(payment.id);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiement annulé')));
+                  },
+                  icon: const Icon(Icons.warning_outlined, size: 16),
+                  label: const Text('Oui, annuler', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4567,52 +4575,60 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   void _confirmDeletePayment(BuildContext context, Payment payment) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Supprimer le paiement ?'),
-        content: Text(
-          'Cette action est irréversible. Supprimer le paiement de ${payment.amount.toStringAsFixed(0)} TND ?',
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                  ),
-                ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      ref.read(paymentsProvider.notifier).deletePayment(payment.id);
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiement supprimé'), backgroundColor: Color(0xFFEF4444)));
-                    },
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ),
+              const Text('Supprimer le paiement ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
-        ],
+          content: Text(
+            'Cette action est irréversible. Supprimer définitivement le paiement de ${payment.amount.toStringAsFixed(0)} TND ?',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    ref.read(paymentsProvider.notifier).deletePayment(payment.id);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiement supprimé'), backgroundColor: Color(0xFFEF4444)));
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -6081,79 +6097,72 @@ class _StudentPaymentDetailDialogState
   Future<void> _cancelPayment(String paymentId) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmer l\'annulation'),
-        content: const Text('Voulez-vous vraiment annuler ce paiement ?'),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Non', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                  ),
-                ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context, true),
-                    icon: const Icon(Icons.warning_outlined, size: 16),
-                    label: const Text('Oui, annuler', style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ),
+              const Text('Confirmer l\'annulation', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
-        ],
+          content: const Text(
+            'Voulez-vous vraiment annuler ce paiement ? Cette action est irréversible.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context, true),
+                  icon: const Icon(Icons.warning_outlined, size: 16),
+                  label: const Text('Oui, annuler', style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
 
     if (confirm != true) return;
 
     try {
-      final supabase = Supabase.instance.client;
+      final supabase = SupabaseConfig.adminClient;
       await supabase
           .from('payments')
-          .update({'status': 'cancelled'})
+          .update({'status': 'pending', 'paid_at': null})
           .eq('id', paymentId);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Paiement annulé'),
-          backgroundColor: Color(0xFFF59E0B),
-        ),
-      );
-
       await _loadStudentPayments();
-      ref.read(paymentsProvider.notifier).refresh();
+      ref.invalidate(paymentsProvider);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            UserFriendlyError.format(
-              e,
-              fallback: 'Unable to cancel this payment right now. Please try again.',
-            ),
-          ),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      debugPrint('Error canceling payment: $e');
     }
   }
 
@@ -6167,142 +6176,178 @@ class _StudentPaymentDetailDialogState
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Modifier le paiement'),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+        builder: (context, setDialogState) => BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+          child: AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
               children: [
-                TextField(
-                  controller: amountController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Montant (TND)',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    prefixIcon: const Icon(Icons.attach_money),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEEECFB),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ),
-                const SizedBox(height: 16),
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: selectedDate ?? DateTime.now(),
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                    );
-                    if (picked != null) {
-                      setDialogState(() => selectedDate = picked);
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.textTertiary),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today, color: AppColors.textTertiary),
-                        const SizedBox(width: 12),
-                        Text(
-                          selectedDate != null
-                              ? DateFormat('d MMM yyyy', 'fr_FR').format(selectedDate!)
-                              : 'Sélectionner une date',
-                          style: TextStyle(
-                            color: selectedDate != null
-                                ? AppColors.textPrimary
-                                : AppColors.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-          actions: [
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 46,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE8EAF0)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                    ),
-                  ),
+                  child: const Icon(Icons.edit_rounded, color: Color(0xFF655DD5), size: 18),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 46,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context, {
-                          'amount': double.tryParse(amountController.text) ?? 0,
-                          'due_date': selectedDate?.toIso8601String(),
-                        });
-                      },
-                      icon: const Icon(Icons.check, size: 16),
-                      label: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Modifier le paiement', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                    Text('Modifier le montant ou l\'échéance', style: TextStyle(fontSize: 12, color: AppColors.textTertiary, fontWeight: FontWeight.normal)),
+                  ],
                 ),
               ],
             ),
-          ],
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('MONTANT (TND)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B), letterSpacing: 0.5)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                    ],
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    decoration: InputDecoration(
+                      hintText: 'Ex: 150.000',
+                      prefixIcon: const Icon(Icons.payments_outlined, size: 18, color: Color(0xFF655DD5)),
+                      suffixText: 'TND',
+                      suffixStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF655DD5)),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF655DD5), width: 1.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('DATE D\'ÉCHÉANCE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B), letterSpacing: 0.5)),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) {
+                        setDialogState(() => selectedDate = picked);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF655DD5)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              selectedDate != null
+                                  ? DateFormat('d MMMM yyyy', 'fr_FR').format(selectedDate!)
+                                  : 'Sélectionner une date',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: selectedDate != null
+                                    ? AppColors.textPrimary
+                                    : AppColors.textTertiary,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context, {
+                        'amount': double.tryParse(amountController.text) ?? 0,
+                        'due_date': selectedDate?.toIso8601String(),
+                      });
+                    },
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF655DD5),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
 
     if (result != null) {
       try {
-        final supabase = Supabase.instance.client;
-        await supabase
-            .from('payments')
-            .update({
+        final paymentId = payment['id'].toString();
+        if (paymentId.startsWith('pricing_')) {
+          final enrollments = await SupabaseConfig.adminClient
+              .from('enrollments')
+              .select('id')
+              .eq('user_id', widget.student.studentId);
+          final enrollId = (enrollments as List).isNotEmpty ? enrollments.first['id'] : null;
+          if (enrollId != null) {
+            await SupabaseConfig.adminClient.from('payments').insert({
+              'enrollment_id': enrollId,
               'amount': result['amount'],
+              'status': 'pending',
               'due_date': result['due_date'],
-            })
-            .eq('id', payment['id']);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Paiement modifié'),
-            backgroundColor: Color(0xFF3B82F6),
-          ),
-        );
+              'payment_method': 'cash',
+              'notes': payment['category'] ?? 'Autre paiement',
+            });
+          }
+        } else {
+          await SupabaseConfig.adminClient.from('payments').update({
+            'amount': result['amount'],
+            if (result['due_date'] != null) 'due_date': result['due_date'],
+          }).eq('id', paymentId);
+        }
 
         await _loadStudentPayments();
-        ref.read(paymentsProvider.notifier).refresh();
+        ref.invalidate(paymentsProvider);
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              UserFriendlyError.format(
-                e,
-                fallback: 'Unable to update this payment right now. Please try again.',
-              ),
-            ),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        debugPrint('Error updating payment: $e');
       }
     }
   }
@@ -6971,20 +7016,20 @@ class _StudentPaymentDetailDialogState
     final ids = _selectedPaymentIds.toList();
     if (ids.isEmpty) return;
 
+    setState(() => _isLoading = true);
     try {
-      final supabase = Supabase.instance.client;
       final realIds = ids.where((id) => !id.startsWith('pricing_')).toList();
       final syntheticIds = ids.where((id) => id.startsWith('pricing_')).toList();
 
       if (realIds.isNotEmpty) {
-        await supabase
+        await SupabaseConfig.adminClient
             .from('payments')
             .update({'status': 'paid', 'paid_at': DateTime.now().toIso8601String()})
             .inFilter('id', realIds);
       }
 
       if (syntheticIds.isNotEmpty) {
-        final enrollments = await supabase
+        final enrollments = await SupabaseConfig.adminClient
             .from('enrollments')
             .select('id')
             .eq('user_id', widget.student.studentId);
@@ -7005,7 +7050,7 @@ class _StudentPaymentDetailDialogState
               'notes': p['category'] ?? 'Autre paiement',
             };
           }).toList();
-          await supabase.from('payments').insert(toInsert);
+          await SupabaseConfig.adminClient.from('payments').insert(toInsert);
         }
       }
 
@@ -7013,9 +7058,11 @@ class _StudentPaymentDetailDialogState
         _selectedPaymentIds.clear();
       });
       await _loadStudentPayments();
-      ref.read(paymentsProvider.notifier).refresh();
+      ref.invalidate(paymentsProvider);
     } catch (e) {
       debugPrint('Error bulk marking paid: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -7023,36 +7070,110 @@ class _StudentPaymentDetailDialogState
     final ids = _selectedPaymentIds.toList();
     if (ids.isEmpty) return;
 
+    setState(() => _isLoading = true);
     try {
-      final supabase = Supabase.instance.client;
-      await supabase
-          .from('payments')
-          .update({'status': 'pending', 'paid_at': null})
-          .inFilter('id', ids);
+      final realIds = ids.where((id) => !id.startsWith('pricing_')).toList();
+      if (realIds.isNotEmpty) {
+        await SupabaseConfig.adminClient
+            .from('payments')
+            .update({'status': 'pending', 'paid_at': null})
+            .inFilter('id', realIds);
+      }
 
       setState(() {
         _selectedPaymentIds.clear();
       });
       await _loadStudentPayments();
+      ref.invalidate(paymentsProvider);
     } catch (e) {
       debugPrint('Error bulk marking unpaid: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _bulkDelete() async {
-    final ids = _selectedPaymentIds.toList();
-    if (ids.isEmpty) return;
+    final count = _selectedPaymentIds.length;
+    if (count == 0) return;
 
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Supprimer $count paiement${count > 1 ? 's' : ''} ?',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ],
+          ),
+          content: Text(
+            'Cette action est irréversible. $count paiement${count > 1 ? 's seront supprimés' : ' sera supprimé'} définitivement.',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: Text('Supprimer $count', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
     try {
-      final supabase = Supabase.instance.client;
-      await supabase.from('payments').delete().inFilter('id', ids);
-
+      final realIds = _selectedPaymentIds.where((id) => !id.startsWith('pricing_')).toList();
+      if (realIds.isNotEmpty) {
+        await SupabaseConfig.adminClient.from('payments').delete().inFilter('id', realIds);
+      }
       setState(() {
         _selectedPaymentIds.clear();
       });
       await _loadStudentPayments();
+      ref.invalidate(paymentsProvider);
     } catch (e) {
       debugPrint('Error bulk deleting: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

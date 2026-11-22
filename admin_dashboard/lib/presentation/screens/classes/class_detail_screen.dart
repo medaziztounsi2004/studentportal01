@@ -571,6 +571,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                       width: checkboxW,
                       child: Center(
                         child: _buildCheckbox(allPageSelected, (v) {
+                          if (!allPageSelected && _selectedTeacherIds.isNotEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Veuillez d\'abord désélectionner les enseignants'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
                           setState(() {
                             if (allPageSelected) {
                               for (final s in page) _selectedStudentIds.remove(s.id);
@@ -621,6 +630,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                           width: checkboxW,
                           child: Center(
                             child: _buildCheckbox(isSelected, (v) {
+                              if (v == true && _selectedTeacherIds.isNotEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Veuillez d\'abord désélectionner les enseignants'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                                return;
+                              }
                               setState(() {
                                 if (v == true) _selectedStudentIds.add(s.id);
                                 else _selectedStudentIds.remove(s.id);
@@ -1866,21 +1884,32 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
   void _showBulkTransferDialog(BuildContext ctx, List<StudentInClass> students, ClassDetailData data) async {
     if (students.isEmpty) return;
 
-    // Fetch all classes from the same school
+    // Fetch all classes from the same school and same niveau/section
     List<Map<String, dynamic>> allClasses = [];
     try {
       final classResp = await SupabaseConfig.adminClient
           .from('classes')
-          .select('school_id')
+          .select('school_id, niveau_id, section_id')
           .eq('id', data.classId)
           .single();
       final schoolId = classResp['school_id'] as String;
-      final resp = await SupabaseConfig.adminClient
+      final currentNiveauId = classResp['niveau_id'];
+      final currentSectionId = classResp['section_id'];
+
+      var query = SupabaseConfig.adminClient
           .from('classes')
-          .select('id, name, room, capacity, niveaux(code, name)')
+          .select('id, name, room, capacity, niveau_id, section_id, niveaux(code, name)')
           .eq('school_id', schoolId)
-          .neq('id', data.classId)
-          .order('name');
+          .neq('id', data.classId);
+
+      if (currentNiveauId != null) {
+        query = query.eq('niveau_id', currentNiveauId);
+      }
+      if (currentSectionId != null) {
+        query = query.eq('section_id', currentSectionId);
+      }
+
+      final resp = await query.order('name');
       allClasses = List<Map<String, dynamic>>.from(resp as List);
     } catch (e) {
       debugPrint('Load classes for transfer error: $e');
@@ -1968,7 +1997,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                         onChanged: (v) => setInner(() => search = v),
                         style: const TextStyle(fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: 'Rechercher une classe ou un niveau...',
+                          hintText: 'Rechercher une classe...',
                           hintStyle: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
                           prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.textTertiary),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E4EA))),
@@ -1984,16 +2013,38 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                       child: Row(children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(8)),
-                          child: Text('De: ${data.className}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFD97706))),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.logout_rounded, size: 12, color: AppColors.slate500),
+                              const SizedBox(width: 6),
+                              Text('De: ${data.className}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                            ],
+                          ),
                         ),
                         if (selectedClassId != null) ...[
-                          const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.textTertiary)),
+                          const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF6D4CF6))),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(color: const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(8)),
-                            child: Text('Vers: ${allClasses.firstWhere((c) => c['id'] == selectedClassId)['name']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF059669))),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEECFB),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFF6D4CF6).withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.login_rounded, size: 12, color: Color(0xFF6D4CF6)),
+                                const SizedBox(width: 6),
+                                Text('Vers: ${allClasses.firstWhere((c) => c['id'] == selectedClassId)['name']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6D4CF6))),
+                              ],
+                            ),
                           ),
                         ],
                       ]),
@@ -2029,9 +2080,8 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                           duration: const Duration(milliseconds: 150),
                                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                           decoration: BoxDecoration(
-                                            color: isSelected ? const Color(0xFFEEECFB) : const Color(0xFFF9F9FC),
+                                            color: isSelected ? const Color(0xFFEEECFB) : const Color(0xFFF1F5F9),
                                             borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(color: isSelected ? const Color(0xFF6D4CF6).withOpacity(0.4) : const Color(0xFFEAEAF0)),
                                           ),
                                           child: Row(children: [
                                             Container(
@@ -2956,6 +3006,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                           width: checkboxW,
                           child: Center(
                             child: _buildCheckbox(allTeachersSelected, (v) {
+                              if (!allTeachersSelected && _selectedStudentIds.isNotEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Veuillez d\'abord désélectionner les étudiants'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                                return;
+                              }
                               setState(() {
                                 if (allTeachersSelected) {
                                   for (final t in sortedTeachers) _selectedTeacherIds.remove(t.id);
@@ -3020,6 +3079,15 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                               width: checkboxW,
                               child: Center(
                                 child: _buildCheckbox(isSelected, (v) {
+                                  if (v == true && _selectedStudentIds.isNotEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Veuillez d\'abord désélectionner les étudiants'),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                    return;
+                                  }
                                   setState(() {
                                     if (v == true) {
                                       _selectedTeacherIds.add(t.id);
