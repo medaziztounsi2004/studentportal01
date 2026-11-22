@@ -111,7 +111,7 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
 
       final classesResp = await _supabase
           .from('classes')
-          .select()
+          .select('*, niveaux:niveaux(name, code), sections:sections(name, code)')
           .eq('school_id', schoolId)
           .order('name');
       final groupsResp = await _supabase.from('groups').select();

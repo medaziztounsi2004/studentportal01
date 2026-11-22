@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/config/supabase_config.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../data/models/user_model.dart';
+import '../../../data/models/class_model.dart';
 import '../../providers/users_provider.dart';
 import '../../providers/curriculum_provider.dart';
 import '../../../models/curriculum_models.dart';
@@ -2134,23 +2135,130 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     if (students.isEmpty) return;
 
     final usersState = ref.read(usersProvider);
-    final allClasses = usersState.whenOrNull(data: (s) => s.classes) ?? [];
+    List<ClassModel> allClasses = usersState.whenOrNull(data: (s) => s.classes) ?? [];
     if (allClasses.isEmpty) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(content: Text('Aucune classe disponible')),
-      );
+      try {
+        final freshClasses = await SupabaseConfig.adminClient
+            .from('classes')
+            .select('*, niveaux:niveaux(name, code), sections:sections(name, code)')
+            .order('name');
+        if (freshClasses.isNotEmpty) {
+          allClasses = freshClasses.map((e) => ClassModel.fromJson(e)).toList();
+        }
+      } catch (_) {}
+    }
+
+    if (allClasses.isEmpty) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Aucune classe disponible')),
+        );
+      }
       return;
     }
 
+    final firstStudent = students.first;
+    String? currentClassName = firstStudent.className;
+    String? currentClassId;
+    String? currentNiveauId;
+    String? currentSectionId;
+
+    // Look for student's current class in allClasses
+    ClassModel? currentClass;
+    final initialClassName = currentClassName;
+    if (initialClassName != null && initialClassName.isNotEmpty) {
+      currentClass = allClasses.where((c) => c.name.toLowerCase() == initialClassName.toLowerCase()).firstOrNull;
+    }
+
+    // If not found or missing niveau_id, fetch from enrollments
+    if (currentClass == null || currentClass.gradeLevelId == null) {
+      try {
+        final enr = await SupabaseConfig.adminClient
+            .from('enrollments')
+            .select('class_id, classes:classes(id, name, niveau_id, section_id, niveaux:niveaux(name, code), sections:sections(name, code))')
+            .eq('student_id', firstStudent.id)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (enr != null && enr['classes'] != null) {
+          final cMap = enr['classes'] as Map<String, dynamic>;
+          currentClassId = cMap['id']?.toString();
+          currentClassName = cMap['name']?.toString() ?? currentClassName;
+          currentNiveauId = cMap['niveau_id']?.toString();
+          currentSectionId = cMap['section_id']?.toString();
+          currentClass = allClasses.where((c) => c.id == currentClassId).firstOrNull;
+        }
+      } catch (e) {
+        debugPrint('Error finding student current class: $e');
+      }
+    }
+
+    if (currentClass != null) {
+      currentClassId ??= currentClass.id;
+      currentClassName ??= currentClass.name;
+      currentNiveauId ??= currentClass.gradeLevelId;
+      currentSectionId ??= currentClass.sectionId;
+    }
+
+    // Extract prefix from class name (e.g. "9B-1" -> "9B", "4S-ST-2" -> "4S-ST")
+    String? classPrefix;
+    if (currentClassName != null && currentClassName.contains('-')) {
+      classPrefix = currentClassName.substring(0, currentClassName.lastIndexOf('-')).trim().toUpperCase();
+    }
+
+    // Freeze variables for filtering closure
+    final fixedCurrentClassId = currentClassId;
+    final fixedCurrentClassName = currentClassName?.toLowerCase();
+    final fixedNiveauId = currentNiveauId;
+    final fixedSectionId = currentSectionId;
+    final fixedPrefix = classPrefix;
+
+    // Filter available classes to ONLY classes of that student's niveau (and section/filière if exists)
+    final availableClasses = allClasses.where((c) {
+      // Exclude current class if single student
+      if (students.length == 1) {
+        if (fixedCurrentClassId != null && c.id == fixedCurrentClassId) return false;
+        if (fixedCurrentClassName != null && c.name.toLowerCase() == fixedCurrentClassName) return false;
+      }
+
+      // 1. Match by niveau ID and section ID if available
+      if (fixedNiveauId != null && c.gradeLevelId != null) {
+        if (c.gradeLevelId != fixedNiveauId) return false;
+        if (fixedSectionId != null && c.sectionId != null) {
+          if (c.sectionId != fixedSectionId) return false;
+        }
+        return true;
+      }
+
+      // 2. Fallback: match by prefix (e.g. "9B" or "4S-ST")
+      if (fixedPrefix != null && fixedPrefix.isNotEmpty) {
+        final cPrefix = c.name.contains('-')
+            ? c.name.substring(0, c.name.lastIndexOf('-')).trim().toUpperCase()
+            : c.name.toUpperCase();
+        return cPrefix == fixedPrefix;
+      }
+
+      // 3. Fallback: match by student.niveauCode
+      if (firstStudent.niveauCode != null && firstStudent.niveauCode!.isNotEmpty) {
+        final nCode = firstStudent.niveauCode!.toUpperCase();
+        if (c.name.toUpperCase().startsWith(nCode)) return true;
+        if (c.gradeLevelName != null && c.gradeLevelName!.toUpperCase().contains(nCode)) return true;
+      }
+
+      return true;
+    }).toList();
+
     String? selectedClassId;
     String search = '';
+
+    if (!ctx.mounted) return;
 
     await showDialog(
       context: ctx,
       barrierColor: Colors.black.withOpacity(0.4),
       builder: (dCtx) {
         return StatefulBuilder(builder: (dCtx, setInner) {
-          final filtered = allClasses.where((c) {
+          final filtered = availableClasses.where((c) {
             if (search.isEmpty) return true;
             final q = search.toLowerCase();
             return c.name.toLowerCase().contains(q) || (c.gradeLevelName?.toLowerCase().contains(q) ?? false);
@@ -2198,30 +2306,67 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    students.length == 1 ? 'Changer la classe' : 'Changer la classe (${students.length} étudiants)',
-                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    students.length == 1 ? students.first.fullName : '${students.length} étudiants sélectionnés',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
-                                  ),
-                                ],
-                              ),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  students.length == 1 ? 'Changer la classe' : 'Changer la classe (${students.length} étudiants)',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  students.length == 1 ? students.first.fullName : '${students.length} étudiants sélectionnés',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.textTertiary),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              onPressed: () => Navigator.pop(dCtx),
-                              icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF9CA3AF)),
-                            ),
-                          ],
-                        ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(dCtx),
+                            icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF9CA3AF)),
+                          ),
+                        ],
                       ),
+                    ),
+                    // From -> To Pill
+                    if (currentClassName != null && currentClassName.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Classe actuelle: $currentClassName',
+                                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFFD97706)),
+                                ),
+                              ),
+                              if (selectedClassId != null) ...[
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 6),
+                                  child: Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF94A3B8)),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD1FAE5),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'Vers: ${availableClasses.where((c) => c.id == selectedClassId).firstOrNull?.name ?? ''}',
+                                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF059669)),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       // Search
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                         child: TextField(
                           onChanged: (v) => setInner(() => search = v),
                           style: const TextStyle(fontSize: 13),
@@ -2237,57 +2382,78 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                           ),
                         ),
                       ),
-                      // Classes list
+                      // Classes list without grey rectangle background
                       Flexible(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                          shrinkWrap: true,
-                          itemCount: filtered.length,
-                          itemBuilder: (_, i) {
-                            final c = filtered[i];
-                            final isSelected = selectedClassId == c.id;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: InkWell(
-                                onTap: () => setInner(() => selectedClassId = c.id),
-                                borderRadius: BorderRadius.circular(10),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: isSelected ? const Color(0xFFEEECFB) : const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 32,
-                                        height: 32,
+                        child: filtered.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.info_outline_rounded, size: 36, color: AppColors.textTertiary),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      search.isEmpty
+                                          ? 'Aucune autre classe disponible pour ce niveau'
+                                          : 'Aucune classe trouvée pour "$search"',
+                                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                shrinkWrap: true,
+                                itemCount: filtered.length,
+                                itemBuilder: (_, i) {
+                                  final c = filtered[i];
+                                  final isSelected = selectedClassId == c.id;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: InkWell(
+                                      onTap: () => setInner(() => selectedClassId = c.id),
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                                         decoration: BoxDecoration(
-                                          color: isSelected ? const Color(0xFF6D4CF6).withOpacity(0.12) : const Color(0xFFE2E8F0),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Icon(Icons.class_rounded, size: 16, color: isSelected ? const Color(0xFF6D4CF6) : AppColors.textTertiary),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          c.name,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                                            color: isSelected ? const Color(0xFF6D4CF6) : AppColors.textPrimary,
+                                          color: isSelected ? const Color(0xFFEEECFB) : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(
+                                            color: isSelected ? const Color(0xFF6D4CF6) : const Color(0xFFE2E8F0),
+                                            width: isSelected ? 1.5 : 1,
                                           ),
                                         ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.school_outlined,
+                                              size: 18,
+                                              color: isSelected ? const Color(0xFF6D4CF6) : const Color(0xFF64748B),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                c.name,
+                                                style: TextStyle(
+                                                  fontSize: 13.5,
+                                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                                  color: isSelected ? const Color(0xFF6D4CF6) : AppColors.textPrimary,
+                                                ),
+                                              ),
+                                            ),
+                                            Icon(
+                                              isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                                              size: 18,
+                                              color: isSelected ? const Color(0xFF6D4CF6) : const Color(0xFFCBD5E1),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                      if (isSelected)
-                                        const Icon(Icons.check_circle_rounded, size: 20, color: Color(0xFF6D4CF6)),
-                                    ],
-                                  ),
-                                ),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
                       ),
                       // Footer
                       Container(

@@ -1227,7 +1227,7 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                         child: Container(
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
-                                            color: isSelected ? const Color(0xFFEEECFB) : const Color(0xFFF9F9FC),
+                                            color: isSelected ? const Color(0xFFEEECFB) : Colors.transparent,
                                             borderRadius: BorderRadius.circular(10),
                                             border: Border.all(color: isSelected ? const Color(0xFF6D4CF6).withOpacity(0.4) : const Color(0xFFEAEAF0)),
                                           ),
@@ -2080,7 +2080,8 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
                                           duration: const Duration(milliseconds: 150),
                                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                           decoration: BoxDecoration(
-                                            color: isSelected ? const Color(0xFFEEECFB) : const Color(0xFFF1F5F9),
+                                            color: isSelected ? const Color(0xFFEEECFB) : Colors.transparent,
+                                            border: Border.all(color: isSelected ? const Color(0xFF6D4CF6) : const Color(0xFFE2E8F0)),
                                             borderRadius: BorderRadius.circular(10),
                                           ),
                                           child: Row(children: [
