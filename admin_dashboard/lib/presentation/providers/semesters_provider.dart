@@ -827,12 +827,13 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       }
 
       if (currentYear == null) throw Exception('Aucune année scolaire active');
+      final activeYear = currentYear;
 
       // Fetch fresh academic year directly from DB to verify bounds
       final yearRes = await admin
           .from('academic_years')
           .select('id, name, start_date, end_date')
-          .eq('id', currentYear.id)
+          .eq('id', activeYear.id)
           .single();
       final yearStart = SemestersState.stripTime(DateTime.parse(yearRes['start_date']));
       final yearEnd = SemestersState.stripTime(DateTime.parse(yearRes['end_date']));
@@ -870,7 +871,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
           .from('semesters')
           .select('id, name, number, start_date, end_date')
           .eq('school_id', schoolId)
-          .eq('academic_year_id', currentYear.id)
+          .eq('academic_year_id', activeYear.id)
           .order('start_date', ascending: true);
 
       final existingList = (existingDbSemesters as List);
@@ -926,7 +927,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
           'name': finalName,
           'number': num,
           'school_id': schoolId,
-          'academic_year_id': currentYear.id,
+          'academic_year_id': activeYear.id,
           'start_date': range.start.toIso8601String().split('T')[0],
           'end_date': range.end.toIso8601String().split('T')[0],
           'is_current': false,
@@ -941,13 +942,13 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       await admin
           .from('vacation_periods')
           .delete()
-          .eq('academic_year_id', currentYear.id)
+          .eq('academic_year_id', activeYear.id)
           .eq('type', 'manual');
 
       if (manualVacations.isNotEmpty) {
         final vacationRows = manualVacations.map((v) => {
           'school_id': schoolId,
-          'academic_year_id': currentYear.id,
+          'academic_year_id': activeYear.id,
           'name': 'Vacances',
           'start_date': v.start.toIso8601String().split('T')[0],
           'end_date': v.end.toIso8601String().split('T')[0],
@@ -960,12 +961,12 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       await admin
           .from('exam_periods')
           .delete()
-          .eq('academic_year_id', currentYear.id);
+          .eq('academic_year_id', activeYear.id);
 
       if (examPeriods.isNotEmpty) {
         final examRows = examPeriods.map((e) => {
           'school_id': schoolId,
-          'academic_year_id': currentYear.id,
+          'academic_year_id': activeYear.id,
           'name': 'Période d\'examens',
           'start_date': e.start.toIso8601String().split('T')[0],
           'end_date': e.end.toIso8601String().split('T')[0],
@@ -974,7 +975,7 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       }
 
       // Rebuild auto-gap vacations for this academic year from database
-      await _rebuildAutoGapVacations(schoolId, currentYear.id);
+      await _rebuildAutoGapVacations(schoolId, activeYear.id);
 
       await _refreshCurrentSemester(schoolId);
       final fresh = await _load();
@@ -1382,10 +1383,11 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       }
     }
     if (year == null) throw Exception('Aucune année scolaire active');
+    final activeYear = year;
 
     await admin.from('vacation_periods').insert({
       'school_id': schoolId,
-      'academic_year_id': year.id,
+      'academic_year_id': activeYear.id,
       'name': name ?? 'Vacances',
       'start_date': startDate.toIso8601String().split('T')[0],
       'end_date': endDate.toIso8601String().split('T')[0],
@@ -1428,10 +1430,11 @@ class SemestersNotifier extends AsyncNotifier<SemestersState> {
       }
     }
     if (year == null) throw Exception('Aucune année scolaire active');
+    final activeYear = year;
 
     await admin.from('exam_periods').insert({
       'school_id': schoolId,
-      'academic_year_id': year.id,
+      'academic_year_id': activeYear.id,
       'name': name ?? 'Examen',
       'start_date': startDate.toIso8601String().split('T')[0],
       'end_date': endDate.toIso8601String().split('T')[0],
