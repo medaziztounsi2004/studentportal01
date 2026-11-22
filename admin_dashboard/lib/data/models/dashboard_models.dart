@@ -1,11 +1,15 @@
 class DashboardKpis {
   final int totalStudents;
+  final int activeStudents;
   final int totalTeachers;
   final int totalStaff;
   final int totalClasses;
   final int openSuggestions;
   final double totalPaymentsDue;
   final double totalPaymentsCollected;
+  final double thisMonthRevenue;
+  final double lastMonthRevenue;
+  final double unpaidAmount;
   final double attendanceRate;
   final int studentsAtRisk;
   final double avgSemesterGrade;
@@ -35,67 +39,80 @@ class DashboardKpis {
 
   DashboardKpis({
     this.totalStudents = 0,
+    this.activeStudents = 0,
     this.totalTeachers = 0,
     this.totalStaff = 0,
     this.totalClasses = 0,
     this.openSuggestions = 0,
     this.totalPaymentsDue = 0,
     this.totalPaymentsCollected = 0,
+    this.thisMonthRevenue = 0,
+    this.lastMonthRevenue = 0,
+    this.unpaidAmount = 0,
     this.attendanceRate = 100,
     this.studentsAtRisk = 0,
     this.avgSemesterGrade = 0,
-    this.revenueGrowth = 3.5,
-    this.revenueGrowthLabel = "vs l'an dernier",
+    this.revenueGrowth = 0.0,
+    this.revenueGrowthLabel = "vs mois dernier",
     this.revenueGrowthUp = true,
-    this.monthlyGrowth = 8.3,
-    this.monthlyGrowthTrend = 1.2,
+    this.monthlyGrowth = 0.0,
+    this.monthlyGrowthTrend = 0.0,
     this.monthlyGrowthLabel = "vs mois dernier",
     this.monthlyGrowthUp = true,
-    this.studentTargetDiff = -1.7,
-    this.studentTargetLabel = "vs objectif",
-    this.studentTargetUp = false,
-    this.teacherStaffGrowth = 2.5,
-    this.teacherStaffGrowthLabel = "vs semestre préc.",
+    this.studentTargetDiff = 0.0,
+    this.studentTargetLabel = "actifs",
+    this.studentTargetUp = true,
+    this.teacherStaffGrowth = 0.0,
+    this.teacherStaffGrowthLabel = "profs",
     this.teacherStaffGrowthUp = true,
-    this.recoveryRate = 82.0,
-    this.recoveryRateDiff = -2.3,
-    this.recoveryRateLabel = "vs l'an dernier",
-    this.recoveryRateUp = false,
+    this.recoveryRate = 0.0,
+    this.recoveryRateDiff = 0.0,
+    this.recoveryRateLabel = "du total facturé",
+    this.recoveryRateUp = true,
   });
 
   factory DashboardKpis.fromJson(Map<String, dynamic> json) {
     final totalDue = (json['total_payments_due'] ?? 0).toDouble();
     final totalPaid = (json['total_payments_collected'] ?? 0).toDouble();
-    final recovery = totalDue > 0 ? (totalPaid / totalDue * 100) : 82.0;
+    final thisMonth = (json['this_month_revenue'] ?? 0).toDouble();
+    final lastMonth = (json['last_month_revenue'] ?? 0).toDouble();
+    final unpaid = (json['unpaid_amount'] ?? (totalDue - totalPaid).clamp(0.0, double.infinity)).toDouble();
+    final recovery = totalDue > 0 ? (totalPaid / totalDue * 100) : (totalPaid > 0 ? 100.0 : 0.0);
+    final totalStudents = (json['total_students'] ?? 0) as int;
+    final activeStudents = (json['active_students'] ?? totalStudents) as int;
 
     return DashboardKpis(
-      totalStudents: json['total_students'] ?? 0,
+      totalStudents: totalStudents,
+      activeStudents: activeStudents,
       totalTeachers: json['total_teachers'] ?? 0,
       totalStaff: json['total_staff'] ?? 0,
       totalClasses: json['total_classes'] ?? 0,
       openSuggestions: json['open_suggestions'] ?? 0,
       totalPaymentsDue: totalDue,
       totalPaymentsCollected: totalPaid,
+      thisMonthRevenue: thisMonth,
+      lastMonthRevenue: lastMonth,
+      unpaidAmount: unpaid,
       attendanceRate: (json['attendance_rate'] ?? 100).toDouble(),
       studentsAtRisk: json['students_at_risk'] ?? 0,
       avgSemesterGrade: (json['avg_semester_grade'] ?? 0).toDouble(),
-      revenueGrowth: (json['revenue_growth'] ?? 3.5).toDouble(),
-      revenueGrowthLabel: json['revenue_growth_label'] ?? "vs l'an dernier",
+      revenueGrowth: (json['revenue_growth'] ?? 0.0).toDouble(),
+      revenueGrowthLabel: json['revenue_growth_label'] ?? "vs mois dernier",
       revenueGrowthUp: json['revenue_growth_up'] ?? true,
-      monthlyGrowth: (json['monthly_growth'] ?? 8.3).toDouble(),
-      monthlyGrowthTrend: (json['monthly_growth_trend'] ?? 1.2).toDouble(),
+      monthlyGrowth: (json['monthly_growth'] ?? 0.0).toDouble(),
+      monthlyGrowthTrend: (json['monthly_growth_trend'] ?? 0.0).toDouble(),
       monthlyGrowthLabel: json['monthly_growth_label'] ?? "vs mois dernier",
       monthlyGrowthUp: json['monthly_growth_up'] ?? true,
-      studentTargetDiff: (json['student_target_diff'] ?? -1.7).toDouble(),
-      studentTargetLabel: json['student_target_label'] ?? "vs objectif",
-      studentTargetUp: json['student_target_up'] ?? false,
-      teacherStaffGrowth: (json['teacher_staff_growth'] ?? 2.5).toDouble(),
-      teacherStaffGrowthLabel: json['teacher_staff_growth_label'] ?? "vs semestre préc.",
+      studentTargetDiff: (json['student_target_diff'] ?? 0.0).toDouble(),
+      studentTargetLabel: json['student_target_label'] ?? "actifs",
+      studentTargetUp: json['student_target_up'] ?? true,
+      teacherStaffGrowth: (json['teacher_staff_growth'] ?? 0.0).toDouble(),
+      teacherStaffGrowthLabel: json['teacher_staff_growth_label'] ?? "profs",
       teacherStaffGrowthUp: json['teacher_staff_growth_up'] ?? true,
       recoveryRate: recovery,
-      recoveryRateDiff: (json['recovery_rate_diff'] ?? -2.3).toDouble(),
-      recoveryRateLabel: json['recovery_rate_label'] ?? "vs l'an dernier",
-      recoveryRateUp: json['recovery_rate_up'] ?? false,
+      recoveryRateDiff: (json['recovery_rate_diff'] ?? 0.0).toDouble(),
+      recoveryRateLabel: json['recovery_rate_label'] ?? "du total facturé",
+      recoveryRateUp: json['recovery_rate_up'] ?? true,
     );
   }
 

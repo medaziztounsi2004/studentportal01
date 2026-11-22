@@ -132,10 +132,10 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 
   Future<DashboardKpis> _loadKpis(String schoolId) async {
     int totalStudents = 0;
+    int activeStudents = 0;
     int totalTeachers = 0;
     int totalStaff = 0;
     int totalClasses = 0;
-    int totalCapacity = 0;
     double totalDue = 0;
     double totalPaid = 0;
 
@@ -149,10 +149,12 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     try {
       final studentsResp = await _supabase
           .from('users')
-          .select('id')
+          .select('id, is_active, account_status')
           .eq('school_id', schoolId)
           .eq('role', 'student');
-      totalStudents = (studentsResp as List).length;
+      final sList = (studentsResp as List).cast<Map<String, dynamic>>();
+      totalStudents = sList.length;
+      activeStudents = sList.where((s) => s['is_active'] != false && s['account_status'] != 'paused_unpaid').length;
 
       final teachersResp = await _supabase
           .from('users')
@@ -170,12 +172,9 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 
       final classesResp = await _supabase
           .from('classes')
-          .select('id, capacity')
+          .select('id')
           .eq('school_id', schoolId);
       totalClasses = (classesResp as List).length;
-      for (final c in classesResp) {
-        totalCapacity += (c['capacity'] as num?)?.toInt() ?? 25;
-      }
     } catch (e) {
       debugPrint('Error loading user/class counts for KPIs: $e');
     }
@@ -218,7 +217,8 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 
     final collected = totalPaid;
     final due = totalDue > 0 ? totalDue : totalPaid;
-    final recovery = (due > 0) ? (collected / due * 100).clamp(0.0, 100.0) : 0.0;
+    final unpaid = (due - collected).clamp(0.0, double.infinity);
+    final recovery = (due > 0) ? (collected / due * 100).clamp(0.0, 100.0) : (collected > 0 ? 100.0 : 0.0);
 
     // Real Revenue Growth (this month vs last month)
     double revGrowth = 0.0;
@@ -229,52 +229,39 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     } else if (thisMonthCollected > 0) {
       revGrowth = 100.0;
       revGrowthUp = true;
+    } else {
+      revGrowth = 0.0;
+      revGrowthUp = true;
     }
-
-    // Real Monthly Growth (rate of monthly collection vs total or goal)
-    double monthlyGrowth = (due > 0)
-        ? ((thisMonthCollected / due) * 100).roundToDouble()
-        : (collected > 0 ? 100.0 : 0.0);
-    double monthlyTrend = revGrowth;
-    bool monthlyUp = thisMonthCollected > 0;
-
-    // Real School Capacity Fill Rate
-    double fillRate = totalCapacity > 0
-        ? ((totalStudents / totalCapacity) * 100).roundToDouble()
-        : 100.0;
-
-    // Real Student to Teacher Ratio
-    double studentTeacherRatio = totalTeachers > 0
-        ? (totalStudents / totalTeachers).roundToDouble()
-        : totalStudents.toDouble();
-
-    // Real Recovery Rate Difference vs 100% target
-    double recoveryDiff = (recovery - 100.0).roundToDouble();
 
     return DashboardKpis(
       totalStudents: totalStudents,
+      activeStudents: activeStudents,
       totalTeachers: totalTeachers,
       totalStaff: totalStaff,
       totalClasses: totalClasses,
       totalPaymentsDue: due,
       totalPaymentsCollected: collected,
+      thisMonthRevenue: thisMonthCollected,
+      lastMonthRevenue: lastMonthCollected,
+      unpaidAmount: unpaid,
       revenueGrowth: revGrowth,
       revenueGrowthLabel: "vs mois dernier",
       revenueGrowthUp: revGrowthUp,
-      monthlyGrowth: monthlyGrowth,
-      monthlyGrowthTrend: monthlyTrend,
-      monthlyGrowthLabel: "ce mois-ci",
-      monthlyGrowthUp: monthlyUp,
-      studentTargetDiff: fillRate,
-      studentTargetLabel: "taux d'occupation",
-      studentTargetUp: true,
-      teacherStaffGrowth: studentTeacherRatio,
-      teacherStaffGrowthLabel: "élèves / prof",
+      monthlyGrowth: revGrowth,
+      monthlyGrowthTrend: revGrowth,
+      monthlyGrowthLabel: "vs mois dernier",
+      monthlyGrowthUp: revGrowthUp,
+      studentTargetDiff: activeStudents.toDouble(),
+      studentTargetLabel: "élèves actifs",
+      studentTargetUp: activeStudents >= totalStudents,
+      teacherStaffGrowth: totalTeachers.toDouble(),
+      teacherStaffGrowthLabel: "profs",
       teacherStaffGrowthUp: true,
       recoveryRate: recovery,
-      recoveryRateDiff: recoveryDiff,
-      recoveryRateLabel: "vs objectif 100%",
-      recoveryRateUp: recovery >= 100,
+      recoveryRateDiff: unpaid,
+      recoveryRateLabel: unpaid > 0 ? "reste à recouvrer" : "aucun impayé",
+      recoveryRateUp: unpaid == 0,
     );
   }
 

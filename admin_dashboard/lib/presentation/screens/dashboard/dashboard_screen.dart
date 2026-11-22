@@ -251,20 +251,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: const Color(0xFFF5F3FF),
                   title: 'Total Revenus',
                   value: currencyFormat.format(kpis.totalPaymentsCollected),
-                  trend: '${kpis.revenueGrowth >= 0 ? '+' : ''}${kpis.revenueGrowth.toStringAsFixed(0)}%',
-                  trendLabel: kpis.revenueGrowthLabel,
-                  trendUp: kpis.revenueGrowthUp,
+                  trend: '${kpis.recoveryRate.toStringAsFixed(0)}%',
+                  trendLabel: 'du total facturé',
+                  trendUp: kpis.recoveryRate >= 50 || kpis.totalPaymentsDue == 0,
+                  showArrow: false,
                   onTap: () => context.go('/payments'),
                 ),
                 _buildGoldenMetricCard(
                   icon: Icons.trending_up_rounded,
                   iconColor: const Color(0xFF10B981),
                   iconBgColor: const Color(0xFFECFDF5),
-                  title: 'Croissance Mensuelle',
-                  value: '${kpis.monthlyGrowth >= 0 ? '+' : ''}${kpis.monthlyGrowth.toStringAsFixed(0)}%',
-                  trend: '${kpis.monthlyGrowthTrend >= 0 ? '+' : ''}${kpis.monthlyGrowthTrend.toStringAsFixed(0)}%',
-                  trendLabel: kpis.monthlyGrowthLabel,
-                  trendUp: kpis.monthlyGrowthUp,
+                  title: 'Revenus ce mois',
+                  value: currencyFormat.format(kpis.thisMonthRevenue),
+                  trend: '${kpis.revenueGrowth >= 0 ? '+' : ''}${kpis.revenueGrowth.toStringAsFixed(0)}%',
+                  trendLabel: 'vs mois dernier',
+                  trendUp: kpis.revenueGrowthUp,
+                  showArrow: true,
                   onTap: () => context.go('/payments'),
                 ),
                 _buildGoldenMetricCard(
@@ -273,9 +275,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: const Color(0xFFF5F3FF),
                   title: 'Total Inscriptions',
                   value: NumberFormat.decimalPattern().format(kpis.totalStudents),
-                  trend: '${kpis.studentTargetDiff.toStringAsFixed(0)}%',
-                  trendLabel: kpis.studentTargetLabel,
-                  trendUp: kpis.studentTargetUp,
+                  trend: '${kpis.activeStudents} actifs',
+                  trendLabel: kpis.totalStudents > 0 ? 'sur ${kpis.totalStudents} élèves' : 'aucun élève',
+                  trendUp: kpis.activeStudents > 0 && kpis.activeStudents == kpis.totalStudents,
+                  showArrow: false,
                   onTap: () => context.go('/users'),
                 ),
                 _buildGoldenMetricCard(
@@ -284,9 +287,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: const Color(0xFFF0F9FF),
                   title: 'Enseignants & Staff',
                   value: (kpis.totalTeachers + kpis.totalStaff).toString(),
-                  trend: '${kpis.teacherStaffGrowth.toStringAsFixed(0)}:1',
-                  trendLabel: kpis.teacherStaffGrowthLabel,
-                  trendUp: kpis.teacherStaffGrowthUp,
+                  trend: '${kpis.totalTeachers} profs',
+                  trendLabel: kpis.totalTeachers > 0
+                      ? 'et ${kpis.totalStaff} staff (${(kpis.totalStudents / kpis.totalTeachers).toStringAsFixed(0)} él./prof)'
+                      : 'et ${kpis.totalStaff} staff',
+                  trendUp: true,
+                  showArrow: false,
                   onTap: () => context.go('/professors'),
                 ),
                 _buildGoldenMetricCard(
@@ -295,9 +301,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: const Color(0xFFF5F3FF),
                   title: 'Taux de Recouvrement',
                   value: '${kpis.recoveryRate.toStringAsFixed(0)}%',
-                  trend: '${kpis.recoveryRateDiff.toStringAsFixed(0)}%',
-                  trendLabel: kpis.recoveryRateLabel,
-                  trendUp: kpis.recoveryRateUp,
+                  trend: kpis.unpaidAmount > 0
+                      ? currencyFormat.format(kpis.unpaidAmount)
+                      : 'Soldé',
+                  trendLabel: kpis.unpaidAmount > 0 ? 'reste à recouvrer' : 'aucun impayé',
+                  trendUp: kpis.unpaidAmount == 0,
+                  showArrow: false,
                   onTap: () => context.go('/payments'),
                 ),
               ];
@@ -417,6 +426,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required String trend,
     required String trendLabel,
     required bool trendUp,
+    bool showArrow = true,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -492,12 +502,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             // Trend Indicator
             Row(
               children: [
-                Icon(
-                  trendUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                  size: 12,
-                  color: trendUp ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                ),
-                const SizedBox(width: 3),
+                if (showArrow) ...[
+                  Icon(
+                    trendUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                    size: 12,
+                    color: trendUp ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  ),
+                  const SizedBox(width: 3),
+                ],
                 Text(
                   trend,
                   style: TextStyle(

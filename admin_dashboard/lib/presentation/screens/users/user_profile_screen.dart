@@ -29,6 +29,7 @@ class UserProfileData {
   final int yearsAtSchool;
   final List<Map<String, dynamic>> suggestions;
   final List<Map<String, dynamic>> monthlyAbsences;
+  final int thisMonthAbsences;
   final int totalAbsences;
   final int justifiedAbsences;
   final List<Map<String, dynamic>> payments;
@@ -38,6 +39,7 @@ class UserProfileData {
   final double totalPaid;
   final double totalDue;
   final List<Map<String, dynamic>> grades;
+  final double? averageGrade;
   final List<Map<String, dynamic>> timetable;
   final List<Map<String, dynamic>> messages;
   final List<Map<String, dynamic>> activityLog;
@@ -50,6 +52,7 @@ class UserProfileData {
     this.yearsAtSchool = 0,
     this.suggestions = const [],
     this.monthlyAbsences = const [],
+    this.thisMonthAbsences = 0,
     this.totalAbsences = 0,
     this.justifiedAbsences = 0,
     this.payments = const [],
@@ -59,6 +62,7 @@ class UserProfileData {
     this.totalPaid = 0,
     this.totalDue = 0,
     this.grades = const [],
+    this.averageGrade,
     this.timetable = const [],
     this.messages = const [],
     this.activityLog = const [],
@@ -155,28 +159,59 @@ final userProfileDataProvider =
       suggestions = (resp as List).cast<Map<String, dynamic>>();
     } catch (_) {}
 
-    // Get all absences (for calendar display across months)
+    // Collect all enrollment IDs for this student
+    final List<String> enrollmentIds = [];
+    if (enrollment != null && enrollment['id'] != null) {
+      enrollmentIds.add(enrollment['id'].toString());
+    }
+    try {
+      final eResp = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', userId);
+      for (final e in (eResp as List)) {
+        final idStr = e['id']?.toString();
+        if (idStr != null && !enrollmentIds.contains(idStr)) {
+          enrollmentIds.add(idStr);
+        }
+      }
+    } catch (_) {}
+
+    // Get all absences specifically for this student
     final now = DateTime.now();
     List<Map<String, dynamic>> monthlyAbsences = [];
     int totalAbsences = 0;
+    int thisMonthAbsences = 0;
     int justifiedAbsences = 0;
 
     try {
       final resp = await supabase
           .from('absence_records')
-          .select('date, hours_absent, justified, enrollment_id')
-          .order('date');
+          .select('id, date, hours_absent, justified, session_type, reason, enrollment_id')
+          .eq('student_id', userId)
+          .order('date', ascending: false);
       monthlyAbsences = (resp as List).cast<Map<String, dynamic>>();
-      // Count current month absences for stats
-      final currentMonthAbsences = monthlyAbsences.where((a) {
+
+      if (monthlyAbsences.isEmpty && enrollmentIds.isNotEmpty) {
+        final fallbackResp = await supabase
+            .from('absence_records')
+            .select('id, date, hours_absent, justified, session_type, reason, enrollment_id')
+            .inFilter('enrollment_id', enrollmentIds)
+            .order('date', ascending: false);
+        monthlyAbsences = (fallbackResp as List).cast<Map<String, dynamic>>();
+      }
+
+      totalAbsences = monthlyAbsences.length;
+      justifiedAbsences = monthlyAbsences.where((a) => a['justified'] == true).length;
+
+      final currentMonthList = monthlyAbsences.where((a) {
         final d = DateTime.tryParse(a['date'] as String? ?? '');
         return d != null && d.year == now.year && d.month == now.month;
       }).toList();
-      totalAbsences = currentMonthAbsences.length;
-      justifiedAbsences = currentMonthAbsences
-          .where((a) => a['justified'] == true)
-          .length;
-    } catch (_) {}
+      thisMonthAbsences = currentMonthList.length;
+    } catch (e) {
+      debugPrint('Profile: Error loading absences for $userId: $e');
+    }
 
     // Get payments and calculate accuracy (filtered to this student's enrollments)
     List<Map<String, dynamic>> payments = [];
@@ -187,14 +222,6 @@ final userProfileDataProvider =
     double totalDue = 0;
 
     try {
-      final enrollmentsResp = await supabase
-          .from('enrollments')
-          .select('id')
-          .eq('user_id', userId);
-      final enrollmentIds = (enrollmentsResp as List)
-          .map((e) => e['id'] as String)
-          .toList();
-
       if (enrollmentIds.isNotEmpty) {
         final resp = await supabase
             .from('payments')
@@ -237,39 +264,58 @@ final userProfileDataProvider =
       debugPrint('$st');
     }
 
-    // Get grades
+    // Get grades specifically for this student
     List<Map<String, dynamic>> grades = [];
+    double? averageGrade;
     try {
-      final resp = await supabase
-          .from('grades')
-          .select('grade_value, status, subjects(name)')
-          .order('created_at', ascending: false)
-          .limit(10);
-      grades = (resp as List).cast<Map<String, dynamic>>();
-    } catch (_) {}
+      if (enrollmentIds.isNotEmpty) {
+        final resp = await supabase
+            .from('grades')
+            .select('id, grade_value, status, graded_at, created_at, subject_offerings(subjects(name, code))')
+            .inFilter('enrollment_id', enrollmentIds)
+            .order('created_at', ascending: false);
+        grades = (resp as List).cast<Map<String, dynamic>>();
 
-    // Get timetable
+        final scored = grades
+            .where((g) => g['grade_value'] != null)
+            .map((g) => (g['grade_value'] as num).toDouble())
+            .toList();
+        if (scored.isNotEmpty) {
+          averageGrade = scored.reduce((a, b) => a + b) / scored.length;
+        }
+      }
+    } catch (e) {
+      debugPrint('Profile: error loading grades for $userId: $e');
+    }
+
+    // Get timetable for student's class
     List<Map<String, dynamic>> timetable = [];
     try {
-      final resp = await supabase
-          .from('timetable_slots')
-          .select('*, subjects(name)')
-          .order('day_of_week')
-          .order('start_time');
-      timetable = (resp as List).cast<Map<String, dynamic>>();
+      final classId = enrollment?['class_id'];
+      if (classId != null) {
+        final resp = await supabase
+            .from('timetable_slots')
+            .select('*, subjects(name)')
+            .eq('class_id', classId)
+            .order('day_of_week')
+            .order('start_time');
+        timetable = (resp as List).cast<Map<String, dynamic>>();
+      }
     } catch (_) {}
 
     // Get class messages
     List<Map<String, dynamic>> messages = [];
     try {
-      if (enrollment != null && enrollment['class_id'] != null) {
-        final resp = await supabase
-            .from('announcements')
-            .select('id, title, body, published_at')
-            .order('published_at', ascending: false)
-            .limit(5);
-        messages = (resp as List).cast<Map<String, dynamic>>();
+      final classId = enrollment?['class_id'];
+      final schoolId = userData['school_id'];
+      var query = supabase.from('announcements').select('id, title, body, published_at');
+      if (classId != null) {
+        query = query.or('target_class_id.eq.$classId,scope.eq.school,scope.eq.all');
+      } else if (schoolId != null) {
+        query = query.eq('school_id', schoolId);
       }
+      final resp = await query.order('published_at', ascending: false).limit(5);
+      messages = (resp as List).cast<Map<String, dynamic>>();
     } catch (_) {}
 
     // Build activity log from real data
@@ -322,6 +368,7 @@ final userProfileDataProvider =
       yearsAtSchool: yearsAtSchool,
       suggestions: suggestions,
       monthlyAbsences: monthlyAbsences,
+      thisMonthAbsences: thisMonthAbsences,
       totalAbsences: totalAbsences,
       justifiedAbsences: justifiedAbsences,
       payments: payments,
@@ -331,6 +378,7 @@ final userProfileDataProvider =
       totalPaid: totalPaid,
       totalDue: totalDue,
       grades: grades,
+      averageGrade: averageGrade,
       timetable: timetable,
       messages: messages,
       activityLog: activityLog,
@@ -1399,10 +1447,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         iconColor: const Color(0xFFEF4444),
         iconBgColor: const Color(0xFFFEF2F2),
         title: 'Absences ce mois',
-        value: '${data.monthlyAbsences.length}',
+        value: '${data.thisMonthAbsences}',
         trend: '${data.totalAbsences} au total',
         trendLabel: 'sur l\'année',
-        trendUp: data.monthlyAbsences.isEmpty,
+        trendUp: data.thisMonthAbsences == 0,
         onTap: () => context.push('/student-absences/${widget.userId}'),
       ),
       _buildGoldenMetricCard(
@@ -1414,7 +1462,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         trend: data.totalAbsences > 0
             ? '${((data.justifiedAbsences / data.totalAbsences) * 100).toStringAsFixed(0)}%'
             : '100%',
-        trendLabel: 'taux de justification',
+        trendLabel: data.totalAbsences > 0 ? 'taux de justification' : 'assiduité parfaite',
         trendUp: true,
         onTap: () => context.push('/student-absences/${widget.userId}'),
       ),
@@ -1424,20 +1472,24 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         iconBgColor: const Color(0xFFFFFBEB),
         title: 'Suggestions',
         value: '${data.suggestions.length}',
-        trend: data.suggestions.any((s) => s['status'] == 'pending') ? 'En attente' : 'Traité',
-        trendLabel: 'statut récent',
-        trendUp: true,
+        trend: data.suggestions.any((s) => s['status'] == 'pending')
+            ? 'En attente'
+            : (data.suggestions.isNotEmpty ? 'Traité' : 'Aucune'),
+        trendLabel: data.suggestions.isNotEmpty ? 'statut récent' : 'enregistrée',
+        trendUp: !data.suggestions.any((s) => s['status'] == 'pending'),
         onTap: () => context.go('/suggestions'),
       ),
       _buildGoldenMetricCard(
         icon: Icons.grade_outlined,
         iconColor: const Color(0xFF6D4CF6),
         iconBgColor: const Color(0xFFF5F3FF),
-        title: 'Notes récentes',
+        title: 'Notes & Évaluations',
         value: '${data.grades.length}',
-        trend: data.grades.isNotEmpty ? 'Enregistrées' : 'Aucune',
-        trendLabel: 'évaluations',
-        trendUp: true,
+        trend: data.averageGrade != null
+            ? '${data.averageGrade!.toStringAsFixed(2)}/20'
+            : (data.grades.isNotEmpty ? 'Enregistrées' : 'Aucune'),
+        trendLabel: data.averageGrade != null ? 'moyenne générale' : 'évaluations',
+        trendUp: data.averageGrade == null || data.averageGrade! >= 10.0,
         onTap: () => context.go('/grades'),
       ),
     ];
