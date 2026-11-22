@@ -523,31 +523,49 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              SizedBox(
-                height: 40,
-                child: OutlinedButton.icon(
-                  onPressed: _showToggleActiveConfirmation,
-                  icon: Icon(
-                    isActive ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded,
-                    size: 16,
-                    color: isActive ? AppColors.warning : const Color(0xFF16A34A),
+              Container(
+                decoration: BoxDecoration(
+                  color: !isActive ? const Color(0xFFFEF2F2) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: !isActive
+                        ? const Color(0xFFFECACA).withValues(alpha: 0.8)
+                        : AppColors.border.withValues(alpha: 0.6),
                   ),
-                  label: Text(
-                    isActive ? 'Désactiver' : 'Activer',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
                     ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: isActive ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
-                    side: BorderSide(
-                      color: isActive ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _showToggleActiveConfirmation,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            !isActive ? Icons.lock_outline_rounded : Icons.verified_user_outlined,
+                            size: 16,
+                            color: !isActive ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                          ),
+                          const SizedBox(width: 7),
+                          Text(
+                            !isActive ? 'Inactif — Réactiver' : 'Accès actif',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: !isActive ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -799,50 +817,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     );
   }
 
-  Widget _outlineButton({
-    required IconData icon,
-    required String label,
-    VoidCallback? onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 16, color: AppColors.slate500),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.slate500,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   // ══════════════════════════════════════════════════════════════
   //  BODY – 2-column layout
