@@ -241,26 +241,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return const ProfileSkeleton();
     }
 
-    if (user == null) {
-      return _GradientBackground(
-        child: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-                const SizedBox(height: 16),
-                const Text('Profil non disponible'),
-                TextButton(
-                  onPressed: () => ref.read(authProvider.notifier).refreshUserData(),
-                  child: Text(l10n.retry),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+    if (user == null && !authState.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(authProvider.notifier).refreshUserData();
+      });
     }
+
+    final now = DateTime.now();
+    final effectiveUser = user ??
+        UserModel(
+          id: '',
+          role: 'student',
+          fullName: 'Étudiant',
+          email: '',
+          createdAt: now,
+          updatedAt: now,
+          accountStatus: 'active',
+          isActive: true,
+        );
 
     return _GradientBackground(
       child: SafeArea(
@@ -282,7 +280,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               const SizedBox(height: 20),
               // Hero Profile Card
               _ProfileHeroCard(
-                user: user,
+                user: effectiveUser,
                 enrollment: enrollment,
                 isUploading: _isUploadingPhoto,
                 onEditPhoto: _showFloatingPhotoPicker,
@@ -296,18 +294,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   _InfoItem(
                     icon: Icons.person_outline_rounded,
                     label: l10n.fullName,
-                    value: user.fullName,
+                    value: effectiveUser.fullName,
                     color: const Color(0xFF3B82F6),
                   ),
                   _InfoItem(
                     icon: Icons.badge_outlined,
                     label: l10n.studentCode,
-                    value: user.studentCode ?? 'Non défini',
+                    value: effectiveUser.studentCode ?? 'Non défini',
                     color: const Color(0xFF6366F1),
-                    trailing: user.studentCode != null
+                    trailing: effectiveUser.studentCode != null
                         ? GestureDetector(
                             onTap: () {
-                              Clipboard.setData(ClipboardData(text: user.studentCode!));
+                              Clipboard.setData(ClipboardData(text: effectiveUser.studentCode!));
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(l10n.studentCodeCopied),
@@ -331,62 +329,66 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   _InfoItem(
                     icon: Icons.email_outlined,
                     label: l10n.email,
-                    value: user.email,
+                    value: effectiveUser.email.isNotEmpty ? effectiveUser.email : '-',
                     color: const Color(0xFF10B981),
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: user.email));
-                      HapticFeedback.lightImpact();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.emailCopied),
-                          duration: const Duration(seconds: 1),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      );
-                    },
-                    trailing: GestureDetector(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: user.email));
-                        HapticFeedback.lightImpact();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.emailCopied),
-                            duration: const Duration(seconds: 1),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF10B981)),
-                      ),
-                    ),
+                    onTap: effectiveUser.email.isNotEmpty
+                        ? () {
+                            Clipboard.setData(ClipboardData(text: effectiveUser.email));
+                            HapticFeedback.lightImpact();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(l10n.emailCopied),
+                                duration: const Duration(seconds: 1),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                          }
+                        : null,
+                    trailing: effectiveUser.email.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: effectiveUser.email));
+                              HapticFeedback.lightImpact();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.emailCopied),
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF10B981)),
+                            ),
+                          )
+                        : null,
                   ),
-                  if (user.phone != null && user.phone!.isNotEmpty)
+                  if (effectiveUser.phone != null && effectiveUser.phone!.isNotEmpty)
                     _InfoItem(
                       icon: Icons.phone_outlined,
                       label: l10n.phone,
-                      value: '\u200E${user.phone!}',
+                      value: '\u200E${effectiveUser.phone!}',
                       color: const Color(0xFFF59E0B),
                     ),
-                  if (user.dateOfBirth != null)
+                  if (effectiveUser.dateOfBirth != null)
                     _InfoItem(
                       icon: Icons.cake_outlined,
                       label: l10n.dateOfBirth,
-                      value: '\u200E${DateFormat('dd/MM/yyyy').format(user.dateOfBirth!)}',
+                      value: '\u200E${DateFormat('dd/MM/yyyy').format(effectiveUser.dateOfBirth!)}',
                       color: const Color(0xFFEC4899),
                     ),
-                  if (user.address != null && user.address!.isNotEmpty)
+                  if (effectiveUser.address != null && effectiveUser.address!.isNotEmpty)
                     _InfoItem(
                       icon: Icons.location_on_outlined,
                       label: l10n.address,
-                      value: user.address!,
+                      value: effectiveUser.address!,
                       color: const Color(0xFF8B5CF6),
                     ),
                 ],
@@ -406,13 +408,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   _InfoItem(
                     icon: Icons.layers_outlined,
                     label: l10n.niveau,
-                    value: '\u200E${_resolveLevel(context, studentContext, user, enrollment)}',
+                    value: '\u200E${_resolveLevel(context, studentContext, effectiveUser, enrollment)}',
                     color: const Color(0xFF8B5CF6),
                   ),
                   _InfoItem(
                     icon: Icons.school_outlined,
                     label: l10n.filiere,
-                    value: '\u200E${_resolveField(context, studentContext, user, enrollment)}',
+                    value: '\u200E${_resolveField(context, studentContext, effectiveUser, enrollment)}',
                     color: const Color(0xFFEC4899),
                   ),
                   _InfoItem(

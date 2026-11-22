@@ -210,7 +210,6 @@ class StudentPortalApp extends ConsumerWidget {
             body = _AccessLockedScreen(
               isSchoolSuspended: authState.schoolSuspended,
               onRefresh: () => ref.read(authProvider.notifier).refreshUserData(),
-              onSignOut: () => ref.read(authProvider.notifier).signOut(),
             );
           }
 
@@ -242,12 +241,10 @@ class StudentPortalApp extends ConsumerWidget {
 class _AccessLockedScreen extends StatefulWidget {
   final bool isSchoolSuspended;
   final Future<bool> Function() onRefresh;
-  final VoidCallback onSignOut;
 
   const _AccessLockedScreen({
     required this.isSchoolSuspended,
     required this.onRefresh,
-    required this.onSignOut,
   });
 
   @override
@@ -423,14 +420,6 @@ class _AccessLockedScreenState extends State<_AccessLockedScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: widget.onSignOut,
-                    child: const Text(
-                      'Se déconnecter',
-                      style: TextStyle(color: Color(0xFF64748B)),
-                    ),
-                  ),
                 ],
               ),
             ),

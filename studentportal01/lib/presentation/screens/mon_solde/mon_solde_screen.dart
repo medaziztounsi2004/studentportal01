@@ -16,6 +16,7 @@ import '../../providers/student_context_provider.dart';
 import '../../widgets/mon_solde_skeleton.dart';
 import '../../widgets/bouncing_wrapper.dart';
 import '../../widgets/ios_bounce_zoom_transition.dart';
+import '../../widgets/empty_state_glass_card.dart';
 
 // Semester state provider for this screen
 final soldeSemesterProvider = StateProvider<int>((ref) => 1);
@@ -581,6 +582,19 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
             (c.amount > 0 || c.paid > 0))
         .toList();
 
+    // If no tuition or categories configured and no real payments exist, show unified EmptyStateGlassCard
+    if (totalAmount <= 0 && allPayments.isEmpty && dedupedPlans.isEmpty && nonScolariteCategories.isEmpty) {
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: EmptyStateGlassCard(
+          icon: Icons.account_balance_wallet_rounded,
+          gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6D4CF6)],
+          title: l10n.noPayments,
+          subtitle: l10n.translate('no_payments_desc'),
+        ),
+      );
+    }
+
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return SliverPadding(
@@ -663,7 +677,15 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        if (planType == 'monthly')
+        if (displayPayments.isEmpty)
+          EmptyStateGlassCard(
+            horizontalMargin: 0,
+            icon: Icons.event_available_rounded,
+            gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6D4CF6)],
+            title: l10n.noPayments,
+            subtitle: l10n.translate('no_payments_desc'),
+          )
+        else if (planType == 'monthly')
           _buildMonthlyPaymentGrid(displayPayments, currentSemester)
         else
           ...displayPayments.map(
@@ -748,6 +770,10 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     double totalAmount,
     List<PaymentInfo> realPayments,
   ) {
+    if (totalAmount <= 0 && realPayments.isEmpty) {
+      return <PaymentInfo>[];
+    }
+
     if (planType != 'monthly') {
       // For non-monthly plans, return real payments or generate placeholders
       if (realPayments.isNotEmpty) return realPayments;

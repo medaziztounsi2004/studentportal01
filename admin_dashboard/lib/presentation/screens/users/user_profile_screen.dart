@@ -677,12 +677,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: isPaused ? const Color(0xFFFEF2F2) : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isPaused
-              ? const Color(0xFFFECACA).withValues(alpha: 0.8)
-              : AppColors.border.withValues(alpha: 0.6),
+          color: AppColors.border.withValues(alpha: 0.6),
         ),
         boxShadow: [
           BoxShadow(

@@ -525,12 +525,10 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: !isActive ? const Color(0xFFFEF2F2) : Colors.white,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: !isActive
-                        ? const Color(0xFFFECACA).withValues(alpha: 0.8)
-                        : AppColors.border.withValues(alpha: 0.6),
+                    color: AppColors.border.withValues(alpha: 0.6),
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -557,7 +555,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                           ),
                           const SizedBox(width: 7),
                           Text(
-                            !isActive ? 'Inactif — Réactiver' : 'Accès actif',
+                            !isActive ? 'Suspendu — Réactiver' : 'Accès actif',
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
