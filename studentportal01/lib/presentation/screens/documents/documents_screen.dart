@@ -19,6 +19,7 @@ import '../../widgets/detail_modal_sheet.dart';
 import '../../widgets/documents_skeleton.dart';
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/locked_semester_card.dart';
+import '../../widgets/empty_state_glass_card.dart';
 import '../../providers/nav_bar_provider.dart';
 import '../../../core/utils/file_download_helper.dart';
 import '../../widgets/ios_photo_gallery_viewer.dart';
@@ -412,19 +413,12 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
               const SizedBox(height: 12),
               Expanded(
                 child: isLocked
-                    ? Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: context.horizontalPadding,
-                          ),
-                          child: LockedSemesterCard(
-                            startDate: semesters
-                                .where((s) => s.number == selectedSemester)
-                                .firstOrNull
-                                ?.startDate,
-                            moduleType: LockedModuleType.documents,
-                          ),
-                        ),
+                    ? LockedSemesterCard(
+                        startDate: semesters
+                            .where((s) => s.number == selectedSemester)
+                            .firstOrNull
+                            ?.startDate,
+                        moduleType: LockedModuleType.documents,
                       )
                     : documentsAsync.when(
                         data: (documents) => _buildContent(documents, l10n, selectedSemester),
@@ -792,121 +786,22 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen>
   }
 
   Widget _buildEmptySemesterState(int semester, AppLocalizations l10n) {
-    return Align(
+    return EmptyStateGlassCard(
       alignment: const Alignment(0, -0.45),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding, vertical: 16),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: Colors.white,
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 20,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF10B981), Color(0xFF059669)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.folder_open_rounded,
-                  size: 34,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                l10n.noData,
-                textAlign: TextAlign.center,
-                style: ArabicTypography.headerStyle(
-                  context,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF1F2937),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                l10n.noDocsForSemester(semester),
-                textAlign: TextAlign.center,
-                style: ArabicTypography.bodyStyle(
-                  context,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF6B7280),
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      icon: Icons.folder_open_rounded,
+      gradientColors: const [Color(0xFF10B981), Color(0xFF059669)],
+      title: l10n.noData,
+      subtitle: l10n.noDocsForSemester(semester),
     );
   }
 
   Widget _buildEmptyFilterState(AppLocalizations l10n) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 40),
-        child: Column(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF10B981).withValues(alpha: 0.12),
-              ),
-              child: const Icon(Icons.filter_list_off_rounded, size: 28, color: Color(0xFF10B981)),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              l10n.noMatchingDocuments,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              l10n.trySelectAnotherType,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return EmptyStateGlassCard(
+      alignment: const Alignment(0, -0.2),
+      icon: Icons.filter_list_off_rounded,
+      gradientColors: const [Color(0xFF10B981), Color(0xFF059669)],
+      title: l10n.noMatchingDocuments,
+      subtitle: l10n.trySelectAnotherType,
     );
   }
 

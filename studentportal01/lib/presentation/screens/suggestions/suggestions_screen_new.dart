@@ -20,6 +20,7 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/suggestions_screen_skeleton.dart';
 import '../../widgets/ios_photo_gallery_viewer.dart';
 import '../../widgets/ios_edge_swipe_back.dart';
+import '../../widgets/empty_state_glass_card.dart';
 import '../../../core/utils/file_download_helper.dart';
 
 class SuggestionsScreen extends ConsumerStatefulWidget {
@@ -228,6 +229,66 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                       return matchesFilter;
                     }).toList();
 
+                    if (suggestions.isEmpty) {
+                      return SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: EmptyStateGlassCard(
+                          icon: Icons.lightbulb_rounded,
+                          gradientColors: const [Color(0xFF06B6D4), Color(0xFF0284C7)],
+                          title: l10n.noSuggestions,
+                          subtitle: l10n.suggestionsSubtitle,
+                          action: BouncingWrapper(
+                            key: _emptyBtnKey,
+                            shrinkScale: 0.92,
+                            onTap: () => _openWriteSuggestion(_emptyBtnKey),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF06B6D4), Color(0xFF0284C7)],
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF06B6D4).withValues(alpha: 0.4),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    l10n.newSuggestion,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (filtered.isEmpty) {
+                      return SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: EmptyStateGlassCard(
+                          icon: Icons.search_off_rounded,
+                          gradientColors: const [Color(0xFF64748B), Color(0xFF475569)],
+                          title: l10n.noResults,
+                          subtitle: l10n.noSearchResultsDesc,
+                        ),
+                      );
+                    }
+
                     return SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         AppResponsive.horizontalPadding(context),
@@ -237,131 +298,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
                       ),
                       sliver: SliverList(
                         delegate: SliverChildListDelegate([
-                          if (filtered.isNotEmpty) ...[
-                            ...filtered.map(
-                              (suggestion) => _buildSuggestionCard(suggestion, l10n),
-                            ),
-                          ] else if (suggestions.isEmpty) ...[
-                            const SizedBox(height: 40),
-                            Center(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(28),
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.55),
-                                        borderRadius: BorderRadius.circular(28),
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            width: 72,
-                                            height: 72,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              gradient: const LinearGradient(
-                                                colors: [Color(0xFF06B6D4), Color(0xFF0284C7)],
-                                                begin: Alignment.topLeft,
-                                                end: Alignment.bottomRight,
-                                              ),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: const Color(0xFF06B6D4).withValues(alpha: 0.35),
-                                                  blurRadius: 18,
-                                                  offset: const Offset(0, 8),
-                                                ),
-                                              ],
-                                            ),
-                                            child: const Icon(
-                                              Icons.lightbulb_rounded,
-                                              size: 34,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 20),
-                                          Text(
-                                            l10n.noSuggestions,
-                                            style: const TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w800,
-                                              color: Color(0xFF1F2937),
-                                              letterSpacing: -0.4,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            l10n.suggestionsSubtitle,
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                              color: Color(0xFF6B7280),
-                                              height: 1.4,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 20),
-                                          BouncingWrapper(
-                                            key: _emptyBtnKey,
-                                            shrinkScale: 0.92,
-                                            onTap: () => _openWriteSuggestion(_emptyBtnKey),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                              decoration: BoxDecoration(
-                                                gradient: const LinearGradient(
-                                                  colors: [Color(0xFF06B6D4), Color(0xFF0284C7)],
-                                                ),
-                                                borderRadius: BorderRadius.circular(20),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: const Color(0xFF06B6D4).withValues(alpha: 0.4),
-                                                    blurRadius: 16,
-                                                    offset: const Offset(0, 6),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    l10n.newSuggestion,
-                                                    style: const TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight: FontWeight.w700,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ] else ...[
-                            const SizedBox(height: 40),
-                            Center(
-                              child: Text(
-                                l10n.noResults,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.black.withValues(alpha: 0.6),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ...filtered.map(
+                            (suggestion) => _buildSuggestionCard(suggestion, l10n),
+                          ),
                         ]),
                       ),
                     );

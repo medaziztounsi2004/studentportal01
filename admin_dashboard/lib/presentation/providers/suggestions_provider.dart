@@ -271,6 +271,8 @@ class SuggestionsState {
   final List<Suggestion> suggestions;
   final String statusFilter;
   final String typeFilter;
+  final String niveauFilter;
+  final String fieldFilter;
   final String classFilter;
   final String searchQuery;
   final String sortBy;
@@ -282,6 +284,8 @@ class SuggestionsState {
     this.suggestions = const [],
     this.statusFilter = 'all',
     this.typeFilter = 'all',
+    this.niveauFilter = 'all',
+    this.fieldFilter = 'all',
     this.classFilter = 'all',
     this.searchQuery = '',
     this.sortBy = 'date',
@@ -305,8 +309,32 @@ class SuggestionsState {
       // Type filter
       if (typeFilter != 'all' && s.suggestionType != typeFilter) return false;
 
+      // Niveau filter
+      if (niveauFilter != 'all') {
+        final qNiveau = niveauFilter.toLowerCase().trim();
+        final sLevel = (s.studentLevel ?? '').toLowerCase().trim();
+        final sClass = (s.className ?? '').toLowerCase().trim();
+        final matches = sLevel == qNiveau ||
+            sClass.startsWith(qNiveau) ||
+            sClass.contains(qNiveau);
+        if (!matches) return false;
+      }
+
+      // Field filter (filière)
+      if (fieldFilter != 'all') {
+        final qField = fieldFilter.toLowerCase().trim();
+        final sField = (s.studentField ?? '').toLowerCase().trim();
+        final sClass = (s.className ?? '').toLowerCase().trim();
+        final matches = sField == qField || sClass.contains(qField);
+        if (!matches) return false;
+      }
+
       // Class filter
-      if (classFilter != 'all' && s.classId != classFilter) return false;
+      if (classFilter != 'all' &&
+          s.classId != classFilter &&
+          s.className != classFilter) {
+        return false;
+      }
 
       // Date range filter
       if (dateFrom != null && s.createdAt.isBefore(dateFrom!)) return false;
@@ -384,6 +412,8 @@ class SuggestionsState {
     List<Suggestion>? suggestions,
     String? statusFilter,
     String? typeFilter,
+    String? niveauFilter,
+    String? fieldFilter,
     String? classFilter,
     String? searchQuery,
     String? sortBy,
@@ -394,6 +424,8 @@ class SuggestionsState {
     suggestions: suggestions ?? this.suggestions,
     statusFilter: statusFilter ?? this.statusFilter,
     typeFilter: typeFilter ?? this.typeFilter,
+    niveauFilter: niveauFilter ?? this.niveauFilter,
+    fieldFilter: fieldFilter ?? this.fieldFilter,
     classFilter: classFilter ?? this.classFilter,
     searchQuery: searchQuery ?? this.searchQuery,
     sortBy: sortBy ?? this.sortBy,
@@ -531,6 +563,21 @@ class SuggestionsNotifier extends AsyncNotifier<SuggestionsState> {
 
   void setTypeFilter(String type) {
     state.whenData((s) => state = AsyncData(s.copyWith(typeFilter: type)));
+  }
+
+  void setNiveauFilter(String niveau) {
+    state.whenData((s) => state = AsyncData(s.copyWith(
+      niveauFilter: niveau,
+      fieldFilter: 'all',
+      classFilter: 'all',
+    )));
+  }
+
+  void setFieldFilter(String field) {
+    state.whenData((s) => state = AsyncData(s.copyWith(
+      fieldFilter: field,
+      classFilter: 'all',
+    )));
   }
 
   void setClassFilter(String classId) {

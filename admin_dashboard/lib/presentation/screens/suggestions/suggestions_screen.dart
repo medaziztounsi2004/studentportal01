@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../providers/suggestions_provider.dart';
 import '../../providers/classes_provider.dart';
+import '../../providers/grade_levels_provider.dart';
 import '../../../data/models/class_model.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/admin_sort_dropdown.dart';
@@ -286,6 +287,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
   String _sortKey = 'date_desc';
   final Set<String> _selectedIds = {};
   bool _selectionMode = false;
+  bool _isPerformingAction = false;
 
   // Pagination state
   int _currentPage = 1;
@@ -341,58 +343,100 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
 
   Future<void> _deleteSelected() async {
     if (_selectedIds.isEmpty) return;
+    final count = _selectedIds.length;
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmer la suppression'),
-        content: Text(
-          'Voulez-vous vraiment supprimer ${_selectedIds.length} suggestion(s) ?',
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE8EAF0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
-                  ),
-                ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 46,
+              const Text('Supprimer en masse ?', style: TextStyle(fontWeight: FontWeight.w700)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Voulez-vous vraiment supprimer $count suggestion(s) ?'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.error.withOpacity(0.2)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text('Cette action est irréversible !', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
                   child: ElevatedButton.icon(
                     onPressed: () => Navigator.pop(ctx, true),
                     icon: const Icon(Icons.delete_outline, size: 16),
                     label: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
+                      backgroundColor: AppColors.error,
                       foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
+
     if (confirm == true) {
-      for (final id in _selectedIds) {
-        await ref.read(suggestionsProvider.notifier).delete(id);
+      setState(() => _isPerformingAction = true);
+      try {
+        await ref.read(suggestionsProvider.notifier).deleteMultiple(_selectedIds.toList());
+        _clearSelection();
+      } finally {
+        if (mounted) setState(() => _isPerformingAction = false);
       }
-      _clearSelection();
     }
   }
 
@@ -419,8 +463,10 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   children: [
                     _buildTopBar(context, suggestionsAsync),
                     Expanded(
-                      child: suggestionsAsync.when(
-                        loading: () => const SuggestionsSkeletonLoader(),
+                      child: _isPerformingAction
+                          ? const SuggestionsSkeletonLoader()
+                          : suggestionsAsync.when(
+                              loading: () => const SuggestionsSkeletonLoader(),
                         error: (e, _) => Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -643,10 +689,15 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
               'Marquer lu',
               Colors.white70,
               () async {
-                for (final id in _selectedIds.toList()) {
-                  await ref.read(suggestionsProvider.notifier).markAsRead(id);
+                setState(() => _isPerformingAction = true);
+                try {
+                  for (final id in _selectedIds.toList()) {
+                    await ref.read(suggestionsProvider.notifier).markAsRead(id);
+                  }
+                  _clearSelection();
+                } finally {
+                  if (mounted) setState(() => _isPerformingAction = false);
                 }
-                _clearSelection();
               },
             ),
             _buildSelectionAction(
@@ -719,6 +770,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
           data: (state) =>
               state.statusFilter != 'all' ||
               state.typeFilter != 'all' ||
+              state.niveauFilter != 'all' ||
+              state.fieldFilter != 'all' ||
               state.classFilter != 'all' ||
               state.dateFrom != null ||
               state.dateTo != null,
@@ -894,20 +947,145 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                                   onChanged: (v) => ref.read(suggestionsProvider.notifier).setTypeFilter(v!),
                                 ),
                                 const SizedBox(height: 28),
-                                if (state.uniqueClasses.isNotEmpty) ...[
-                                  const Text('CLASSE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.slate400)),
-                                  const SizedBox(height: 12),
-                                  _buildStyledDropdown<String>(
-                                    value: state.classFilter,
-                                    defaultValue: 'all',
-                                    items: [
-                                      const DropdownMenuItem(value: 'all', child: Text('Toutes les classes')),
-                                      ...state.uniqueClasses.map((classId) => DropdownMenuItem(value: classId, child: Text(state.classNames[classId] ?? classId))),
-                                    ],
-                                    onChanged: (v) => ref.read(suggestionsProvider.notifier).setClassFilter(v!),
-                                  ),
-                                  const SizedBox(height: 28),
-                                ],
+                                Builder(
+                                  builder: (context) {
+                                    final classesState = ref.watch(classesProvider).value;
+                                    final gradeLevelsState = ref.watch(gradeLevelsProvider).value;
+                                    final allClasses = classesState?.classes ?? [];
+                                    final allGradeLevels = gradeLevelsState?.gradeLevels ?? [];
+
+                                    // 1. Available Niveaux
+                                    final niveauSet = <String>{};
+                                    for (final gl in allGradeLevels) {
+                                      if (gl.name.trim().isNotEmpty) niveauSet.add(gl.name.trim());
+                                    }
+                                    for (final c in allClasses) {
+                                      final lvl = c.level ?? c.gradeLevelName;
+                                      if (lvl != null && lvl.trim().isNotEmpty) niveauSet.add(lvl.trim());
+                                    }
+                                    for (final s in state.suggestions) {
+                                      if (s.studentLevel != null && s.studentLevel!.trim().isNotEmpty) {
+                                        niveauSet.add(s.studentLevel!.trim());
+                                      }
+                                    }
+                                    final availableNiveaux = niveauSet.toList()..sort();
+
+                                    // 2. Check if selected niveau has filières
+                                    final selectedNiveau = state.niveauFilter;
+                                    List<String> availableFields = [];
+                                    if (selectedNiveau != 'all') {
+                                      final selLevelLower = selectedNiveau.toLowerCase().trim();
+                                      final niveauClasses = allClasses.where((c) {
+                                        final cLevel = (c.level ?? c.gradeLevelName ?? '').toLowerCase().trim();
+                                        return cLevel == selLevelLower || cLevel.contains(selLevelLower) || selLevelLower.contains(cLevel);
+                                      }).toList();
+
+                                      final fieldSet = <String>{};
+                                      for (final c in niveauClasses) {
+                                        final sec = c.section ?? c.sectionName;
+                                        if (sec != null && sec.trim().isNotEmpty && sec.trim().toLowerCase() != 'commun' && sec.trim().toLowerCase() != 'tronc commun') {
+                                          fieldSet.add(sec.trim());
+                                        }
+                                      }
+                                      for (final s in state.suggestions) {
+                                        final sLevel = (s.studentLevel ?? s.className ?? '').toLowerCase().trim();
+                                        if (sLevel.contains(selLevelLower) || selLevelLower.contains(sLevel)) {
+                                          if (s.studentField != null && s.studentField!.trim().isNotEmpty) {
+                                            fieldSet.add(s.studentField!.trim());
+                                          }
+                                        }
+                                      }
+                                      availableFields = fieldSet.toList()..sort();
+                                    }
+
+                                    // 3. Selectable classes
+                                    var filteredClasses = allClasses;
+                                    if (selectedNiveau != 'all') {
+                                      final selLevelLower = selectedNiveau.toLowerCase().trim();
+                                      filteredClasses = filteredClasses.where((c) {
+                                        final cLevel = (c.level ?? c.gradeLevelName ?? '').toLowerCase().trim();
+                                        return cLevel == selLevelLower || cLevel.contains(selLevelLower) || selLevelLower.contains(cLevel);
+                                      }).toList();
+                                    }
+                                    if (state.fieldFilter != 'all') {
+                                      final selFieldLower = state.fieldFilter.toLowerCase().trim();
+                                      filteredClasses = filteredClasses.where((c) {
+                                        final cField = (c.section ?? c.sectionName ?? '').toLowerCase().trim();
+                                        return cField == selFieldLower || cField.contains(selFieldLower);
+                                      }).toList();
+                                    }
+
+                                    final classItems = <String, String>{};
+                                    for (final c in filteredClasses) {
+                                      classItems[c.id] = c.name;
+                                    }
+                                    for (final s in state.suggestions) {
+                                      if (s.classId != null && s.className != null) {
+                                        bool matches = true;
+                                        if (selectedNiveau != 'all') {
+                                          final sLevel = (s.studentLevel ?? s.className ?? '').toLowerCase().trim();
+                                          matches = sLevel.contains(selectedNiveau.toLowerCase().trim());
+                                        }
+                                        if (matches && state.fieldFilter != 'all') {
+                                          final sField = (s.studentField ?? s.className ?? '').toLowerCase().trim();
+                                          matches = sField.contains(state.fieldFilter.toLowerCase().trim());
+                                        }
+                                        if (matches) {
+                                          classItems.putIfAbsent(s.classId!, () => s.className!);
+                                        }
+                                      }
+                                    }
+
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // NIVEAU
+                                        const Text('NIVEAU', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.slate400)),
+                                        const SizedBox(height: 12),
+                                        _buildStyledDropdown<String>(
+                                          value: availableNiveaux.contains(state.niveauFilter) ? state.niveauFilter : 'all',
+                                          defaultValue: 'all',
+                                          items: [
+                                            const DropdownMenuItem(value: 'all', child: Text('Tous les niveaux')),
+                                            ...availableNiveaux.map((n) => DropdownMenuItem(value: n, child: Text(n))),
+                                          ],
+                                          onChanged: (v) => ref.read(suggestionsProvider.notifier).setNiveauFilter(v!),
+                                        ),
+                                        const SizedBox(height: 28),
+
+                                        // FILIÈRE (only shown if filières exist for that niveau)
+                                        if (availableFields.isNotEmpty) ...[
+                                          const Text('FILIÈRE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.slate400)),
+                                          const SizedBox(height: 12),
+                                          _buildStyledDropdown<String>(
+                                            value: availableFields.contains(state.fieldFilter) ? state.fieldFilter : 'all',
+                                            defaultValue: 'all',
+                                            items: [
+                                              const DropdownMenuItem(value: 'all', child: Text('Toutes les filières')),
+                                              ...availableFields.map((f) => DropdownMenuItem(value: f, child: Text(f))),
+                                            ],
+                                            onChanged: (v) => ref.read(suggestionsProvider.notifier).setFieldFilter(v!),
+                                          ),
+                                          const SizedBox(height: 28),
+                                        ],
+
+                                        // CLASSE
+                                        const Text('CLASSE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.slate400)),
+                                        const SizedBox(height: 12),
+                                        _buildStyledDropdown<String>(
+                                          value: classItems.containsKey(state.classFilter) ? state.classFilter : 'all',
+                                          defaultValue: 'all',
+                                          items: [
+                                            const DropdownMenuItem(value: 'all', child: Text('Toutes les classes')),
+                                            ...classItems.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))),
+                                          ],
+                                          onChanged: (v) => ref.read(suggestionsProvider.notifier).setClassFilter(v!),
+                                        ),
+                                        const SizedBox(height: 28),
+                                      ],
+                                    );
+                                  },
+                                ),
                                 const Text('PÉRIODE (DATE)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.0, color: AppColors.slate400)),
                                 const SizedBox(height: 12),
                                 Row(
@@ -1274,10 +1452,16 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
         _showReplyDialog(context, ref, s);
         break;
       case 'read':
-        ref.read(suggestionsProvider.notifier).markAsRead(s.id);
+        setState(() => _isPerformingAction = true);
+        ref.read(suggestionsProvider.notifier).markAsRead(s.id).whenComplete(() {
+          if (mounted) setState(() => _isPerformingAction = false);
+        });
         break;
       case 'unread':
-        ref.read(suggestionsProvider.notifier).markAsUnread(s.id);
+        setState(() => _isPerformingAction = true);
+        ref.read(suggestionsProvider.notifier).markAsUnread(s.id).whenComplete(() {
+          if (mounted) setState(() => _isPerformingAction = false);
+        });
         break;
       case 'view':
         _showDetailDialog(context, s);
@@ -1334,6 +1518,24 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.errorSoft,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.error.withOpacity(0.2)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_rounded, color: AppColors.error, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text('Cette action est irréversible !', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
@@ -1377,7 +1579,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     );
 
     if (confirm == true) {
-      await ref.read(suggestionsProvider.notifier).delete(s.id);
+      setState(() => _isPerformingAction = true);
+      try {
+        await ref.read(suggestionsProvider.notifier).delete(s.id);
+      } finally {
+        if (mounted) setState(() => _isPerformingAction = false);
+      }
     }
   }
 

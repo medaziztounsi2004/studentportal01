@@ -17,6 +17,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart' as ctx;
 import '../../widgets/semester_navigator.dart';
 import '../../widgets/locked_semester_card.dart';
+import '../../widgets/empty_state_glass_card.dart';
 import '../../../data/models/absence_model.dart';
 
 // Selected semester provider (dynamic from DB)
@@ -577,17 +578,12 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
                 if (isLocked)
                   SliverFillRemaining(
                     hasScrollBody: false,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppResponsive.horizontalPadding(context),
-                      ),
-                      child: LockedSemesterCard(
-                        startDate: semesters
-                            .where((s) => s.number == selectedTrimester)
-                            .firstOrNull
-                            ?.startDate,
-                        moduleType: LockedModuleType.absences,
-                      ),
+                    child: LockedSemesterCard(
+                      startDate: semesters
+                          .where((s) => s.number == selectedTrimester)
+                          .firstOrNull
+                          ?.startDate,
+                      moduleType: LockedModuleType.absences,
                     ),
                   )
                 else if (isRefreshing)
@@ -905,7 +901,19 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
     );
   }
 
-  SliverToBoxAdapter _buildContent(BuildContext context, List<SubjectAbsenceSummary> absences, AppLocalizations l10n) {
+  Widget _buildContent(BuildContext context, List<SubjectAbsenceSummary> absences, AppLocalizations l10n) {
+    if (absences.isEmpty) {
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: EmptyStateGlassCard(
+          icon: Icons.event_available_rounded,
+          gradientColors: const [Color(0xFFEC4899), Color(0xFFF43F5E)],
+          title: l10n.noAbsences,
+          subtitle: l10n.noAbsencesDesc,
+        ),
+      );
+    }
+
     final filtered = _searchQuery.isEmpty
         ? absences
         : absences.where((a) {
@@ -920,6 +928,29 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
     final overallPercent = rawPercent.clamp(0.0, 100.0);
     final criticalCount = absences.where((a) => a.level == AbsenceLevel.critical || a.level == AbsenceLevel.eliminated).length;
 
+    if (filtered.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppResponsive.horizontalPadding(context),
+              ),
+              child: _buildSummaryCard(totalAbsent, totalHours, overallPercent, criticalCount),
+            ),
+            const SizedBox(height: 16),
+            EmptyStateGlassCard(
+              icon: Icons.search_off_rounded,
+              gradientColors: const [Color(0xFF64748B), Color(0xFF475569)],
+              title: l10n.noResults,
+              subtitle: l10n.noSearchResultsDesc,
+            ),
+            const SizedBox(height: 120),
+          ],
+        ),
+      );
+    }
+
     return SliverToBoxAdapter(
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -929,99 +960,13 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
           children: [
             _buildSummaryCard(totalAbsent, totalHours, overallPercent, criticalCount),
             const SizedBox(height: 36),
-            if (filtered.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 20,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: _searchQuery.isNotEmpty
-                                ? const [Color(0xFF64748B), Color(0xFF475569)]
-                                : const [Color(0xFFEC4899), Color(0xFFF43F5E)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (_searchQuery.isNotEmpty
-                                      ? const Color(0xFF64748B)
-                                      : const Color(0xFFEC4899))
-                                  .withValues(alpha: 0.35),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          _searchQuery.isNotEmpty
-                              ? Icons.search_off_rounded
-                              : Icons.event_available_rounded,
-                          size: 34,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        _searchQuery.isNotEmpty ? l10n.noResults : l10n.noAbsences,
-                        textAlign: TextAlign.center,
-                        style: ArabicTypography.headerStyle(
-                          context,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF1F2937),
-                          letterSpacing: -0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? l10n.noSearchResultsDesc
-                            : l10n.noAbsencesDesc,
-                        textAlign: TextAlign.center,
-                        style: ArabicTypography.bodyStyle(
-                          context,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF6B7280),
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              ...filtered.map((a) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _GlassyAbsenceCard(
-                  absence: a,
-                  onTap: () => context.go('/absences/${a.subjectOfferingId}'),
-                ),
-              )),
+            ...filtered.map((a) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _GlassyAbsenceCard(
+                absence: a,
+                onTap: () => context.go('/absences/${a.subjectOfferingId}'),
+              ),
+            )),
             const SizedBox(height: 120),
           ],
         ),
