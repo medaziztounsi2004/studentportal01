@@ -8,7 +8,7 @@ import '../../../core/utils/error_messages.dart';
 import '../../providers/semesters_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
-import '../../widgets/ios_loader.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
 
 const _brand = Color(0xFF7C3AED);
 const _brandLight = Color(0xFFF3E8FF);
@@ -148,6 +148,8 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
               ),
             ),
           ),
+          const SizedBox(width: 8),
+          const UndoRedoToolbarButtons(),
           const SizedBox(width: 12),
           // Add button
           SizedBox(

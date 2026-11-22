@@ -19,6 +19,7 @@ import '../../widgets/admin_sidebar.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
 
 // ===================== MODELS =====================
 
@@ -2561,6 +2562,8 @@ class _TimetablesScreenState extends ConsumerState<TimetablesScreen> {
                           padding: EdgeInsets.zero,
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      const UndoRedoToolbarButtons(),
                     ],
                   ),
                   // Active filters

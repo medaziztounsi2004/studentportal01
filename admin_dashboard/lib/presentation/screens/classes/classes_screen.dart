@@ -12,6 +12,7 @@ import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
 
 import 'class_form_dialog.dart';
 
@@ -588,6 +589,8 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> {
               ),
             ),
           ),
+          const SizedBox(width: 8),
+          const UndoRedoToolbarButtons(),
           const SizedBox(width: 16),
           // + Nouvelle classe button
           SizedBox(

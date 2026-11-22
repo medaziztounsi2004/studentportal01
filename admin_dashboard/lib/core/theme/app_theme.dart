@@ -584,11 +584,21 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.slate900,
-        contentTextStyle: GoogleFonts.plusJakartaSans(color: AppColors.surface),
+        contentTextStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.surface,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(100),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.1),
+            width: 1,
+          ),
         ),
         behavior: SnackBarBehavior.floating,
+        width: 420,
+        elevation: 8,
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(

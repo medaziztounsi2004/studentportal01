@@ -17,11 +17,13 @@ import '../../../models/curriculum_models.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/user_avatar.dart';
 import 'user_form_dialog.dart';
-import 'bulk_photo_upload_screen.dart';
 import 'simple_bulk_import_screen.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/admin_sort_dropdown.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../widgets/feedback_pill.dart';
 
 
 class UsersScreen extends ConsumerStatefulWidget {
@@ -111,16 +113,57 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     super.dispose();
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo) return;
+    try {
+      final desc = await notifier.undo();
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) {
+        FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+      }
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo) return;
+    try {
+      final desc = await notifier.redo();
+      if (mounted && desc != null) {
+        FeedbackPill.show(context, message: 'Action rétablie : $desc', type: FeedbackPillType.info);
+      }
+    } catch (e) {
+      if (mounted) {
+        FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final usersAsync = ref.watch(usersProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          Row(
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          body: Stack(
             children: [
+              Row(
+                children: [
               const AdminSidebar(currentRoute: '/users'),
               Expanded(
                 child: Stack(
@@ -230,6 +273,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             ),
           ],
         ],
+      ),
+        ),
       ),
     );
   }
@@ -351,16 +396,12 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             onPressed: _toggleFilters,
           ),
           const SizedBox(width: 8),
+          const UndoRedoToolbarButtons(),
+          const SizedBox(width: 8),
           _buildHeaderIconButton(
             icon: Icons.file_download_outlined,
             tooltip: 'Import en masse',
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SimpleBulkImportScreen())),
-          ),
-          const SizedBox(width: 8),
-          _buildHeaderIconButton(
-            icon: Icons.photo_library_outlined,
-            tooltip: 'Photos en masse',
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BulkPhotoUploadScreen())),
           ),
           const SizedBox(width: 16),
           SizedBox(
@@ -2137,6 +2178,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                   onPressed: () {
                     ref.read(usersProvider.notifier).deleteUser(u.id);
                     Navigator.pop(ctx);
+                    FeedbackPill.showSuccess(context, 'Utilisateur "${u.fullName}" supprimé');
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
                   label: const Text('Supprimer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -2173,22 +2215,11 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const IosLoader.small(color: Colors.white),
-              const SizedBox(width: 12),
-              Text(
-                shouldArchive
-                    ? 'Suspension de $count utilisateur(s) en cours...'
-                    : 'Activation de $count utilisateur(s) en cours...',
-              ),
-            ],
-          ),
-          duration: const Duration(seconds: 15),
-          backgroundColor: const Color(0xFF655DD5),
-        ),
+      FeedbackPill.showProcessing(
+        context,
+        shouldArchive
+            ? 'Suspension de $count utilisateur(s) en cours...'
+            : 'Activation de $count utilisateur(s) en cours...',
       );
     }
 
@@ -2197,31 +2228,34 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           .read(usersProvider.notifier)
           .bulkToggleArchive(selectedIds, newActive);
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? (shouldArchive
-                      ? '$count utilisateur(s) suspendu(s)'
-                      : '$count utilisateur(s) activé(s)')
-                  : 'Échec de la modification du statut',
+        if (success) {
+          FeedbackPill.showSuccess(
+            context,
+            shouldArchive
+                ? '$count utilisateur(s) suspendu(s)'
+                : '$count utilisateur(s) activé(s)',
+          );
+          ref.read(undoRedoProvider.notifier).recordAction(
+            AppAction(
+              title: shouldArchive ? 'Suspension utilisateurs' : 'Activation utilisateurs',
+              description: shouldArchive
+                  ? 'Suspension de $count utilisateur(s)'
+                  : 'Activation de $count utilisateur(s)',
+              undo: () async {
+                await ref.read(usersProvider.notifier).bulkToggleArchive(selectedIds, !newActive);
+              },
+              redo: () async {
+                await ref.read(usersProvider.notifier).bulkToggleArchive(selectedIds, newActive);
+              },
             ),
-            backgroundColor: success
-                ? (shouldArchive ? AppColors.warning : AppColors.success)
-                : AppColors.error,
-          ),
-        );
+          );
+        } else {
+          FeedbackPill.showError(context, 'Échec de la modification du statut');
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(UserFriendlyError.format(e)),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        FeedbackPill.showError(context, UserFriendlyError.format(e));
       }
     }
   }
@@ -2667,20 +2701,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 child: ElevatedButton.icon(
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Row(
-                          children: [
-                            const IosLoader.small(color: Colors.white),
-                            const SizedBox(width: 12),
-                            Text('Suppression de $count utilisateurs en cours...'),
-                          ],
-                        ),
-                        duration: const Duration(seconds: 60),
-                        backgroundColor: const Color(0xFF655DD5),
-                      ),
-                    );
+                    FeedbackPill.showProcessing(context, 'Suppression de $count utilisateurs en cours...');
                     final notifier = ref.read(usersProvider.notifier);
                     final result = await notifier.bulkDeleteUsers(_selectedUserIds.toList());
                     final deleted = result['deleted'] ?? 0;
@@ -2690,15 +2711,11 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       _isSelectionMode = false;
                     });
                     if (mounted) {
-                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('$deleted supprimé(s), $failed échec(s)'),
-                          backgroundColor: failed == 0 ? AppColors.success : AppColors.warning,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                      );
+                      if (failed == 0) {
+                        FeedbackPill.showSuccess(context, '$deleted utilisateur(s) supprimé(s)');
+                      } else {
+                        FeedbackPill.showError(context, '$deleted supprimé(s), $failed échec(s)');
+                      }
                     }
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),

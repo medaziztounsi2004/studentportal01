@@ -12,6 +12,7 @@ import '../../providers/absences_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
 
 bool _dateFormattingInitialized = false;
 
@@ -268,7 +269,7 @@ class _StudentAbsencesScreenState extends ConsumerState<StudentAbsencesScreen> {
             ),
           ),
           const SizedBox(width: 16),
-const SizedBox.shrink(),
+          const UndoRedoToolbarButtons(),
         ],
       ),
     );

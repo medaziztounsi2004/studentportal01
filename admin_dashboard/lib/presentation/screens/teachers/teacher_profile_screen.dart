@@ -13,6 +13,9 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/admin_sort_dropdown.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/feedback_pill.dart';
+import 'professors_screen.dart' show professorsProvider;
 
 const _brand = Color(0xFF655DD5);
 const _brandLight = Color(0xFFEEECFB);
@@ -471,6 +474,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   // ══════════════════════════════════════════════════════════════
   Widget _buildHeader() {
     final fullName = _user?['full_name']?.toString() ?? 'Enseignant';
+    final isActive = _user?['is_active'] == true;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
@@ -521,6 +525,35 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             children: [
               SizedBox(
                 height: 40,
+                child: OutlinedButton.icon(
+                  onPressed: _showToggleActiveConfirmation,
+                  icon: Icon(
+                    isActive ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded,
+                    size: 16,
+                    color: isActive ? AppColors.warning : const Color(0xFF16A34A),
+                  ),
+                  label: Text(
+                    isActive ? 'Désactiver' : 'Activer',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isActive ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: isActive ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
+                    side: BorderSide(
+                      color: isActive ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: 40,
                 child: ElevatedButton.icon(
                   onPressed: _showEditTeacherDialog,
                   icon: const Icon(Icons.edit_outlined, size: 16),
@@ -545,6 +578,203 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         ],
       ),
     );
+  }
+
+  void _showToggleActiveConfirmation() {
+    final bool currentActive = _user?['is_active'] == true;
+    final bool nextActive = !currentActive;
+    final String fullName = _user?['full_name']?.toString() ?? 'Enseignant';
+    final String? photoUrl = _user?['photo_url']?.toString();
+    final String speciality = _mainSubject.isNotEmpty ? _mainSubject : 'Enseignant';
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.08),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: currentActive ? AppColors.warningSoft : AppColors.successSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  currentActive ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded,
+                  color: currentActive ? AppColors.warning : AppColors.success,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                currentActive ? 'Désactiver ce professeur ?' : 'Activer ce professeur ?',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    UserAvatar(
+                      name: fullName,
+                      photoUrl: photoUrl,
+                      radius: 18,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            fullName,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            speciality,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.slate500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                currentActive ? 'Ce professeur sera désactivé.' : 'Ce professeur sera réactivé.',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _executeToggleActive(nextActive);
+                    },
+                    icon: Icon(
+                      currentActive ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded,
+                      size: 16,
+                    ),
+                    label: Text(
+                      currentActive ? 'Désactiver' : 'Activer',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: currentActive ? AppColors.warning : AppColors.success,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executeToggleActive(bool newActive) async {
+    final String fullName = _user?['full_name']?.toString() ?? 'Enseignant';
+    try {
+      await SupabaseConfig.adminClient
+          .from('users')
+          .update({'is_active': newActive})
+          .eq('id', widget.teacherId);
+
+      if (mounted) {
+        setState(() {
+          _user = Map<String, dynamic>.from(_user ?? {})..[ 'is_active'] = newActive;
+        });
+        ref.invalidate(professorsProvider);
+
+        FeedbackPill.showSuccess(
+          context,
+          newActive ? 'Professeur "$fullName" activé' : 'Professeur "$fullName" désactivé',
+        );
+
+        ref.read(undoRedoProvider.notifier).recordAction(
+          AppAction(
+            title: newActive ? 'Activation professeur' : 'Désactivation professeur',
+            description: newActive ? 'Activation de $fullName' : 'Désactivation de $fullName',
+            undo: () async {
+              await SupabaseConfig.adminClient
+                  .from('users')
+                  .update({'is_active': !newActive})
+                  .eq('id', widget.teacherId);
+              if (mounted) {
+                setState(() {
+                  _user = Map<String, dynamic>.from(_user ?? {})..[ 'is_active'] = !newActive;
+                });
+                ref.invalidate(professorsProvider);
+              }
+            },
+            redo: () async {
+              await SupabaseConfig.adminClient
+                  .from('users')
+                  .update({'is_active': newActive})
+                  .eq('id', widget.teacherId);
+              if (mounted) {
+                setState(() {
+                  _user = Map<String, dynamic>.from(_user ?? {})..[ 'is_active'] = newActive;
+                });
+                ref.invalidate(professorsProvider);
+              }
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        FeedbackPill.showError(context, 'Erreur lors du changement de statut : $e');
+      }
+    }
   }
 
   Widget _iconButton({required IconData icon, required VoidCallback onTap}) {
@@ -695,13 +925,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             child: GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: fullName));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Nom copié!'),
-                    duration: Duration(seconds: 1),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                FeedbackPill.showSuccess(context, 'Nom copié !');
               },
               child: Text(
                 fullName,
@@ -715,43 +939,21 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          // Role + Active/Inactive badge (moved from header)
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            alignment: WrapAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'Enseignant',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+          // Active/Inactive badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              color: isActive ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              isActive ? 'Actif' : 'Inactif',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isActive ? const Color(0xFF15803D) : const Color(0xFFDC2626),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  isActive ? 'Actif' : 'Inactif',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isActive ? const Color(0xFF15803D) : const Color(0xFFDC2626),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 6),
           // Clickable Teacher ID

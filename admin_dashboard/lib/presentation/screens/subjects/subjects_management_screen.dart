@@ -13,6 +13,7 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/modern_animated_switch.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
 import '../../../data/models/academic_models.dart';
 import '../../../data/models/school_models.dart';
 import '../../../data/models/user_model.dart';
@@ -607,6 +608,8 @@ class _SubjectsManagementScreenState
             ),
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
+          const SizedBox(width: 8),
+          const UndoRedoToolbarButtons(),
           const SizedBox(width: 12),
           SizedBox(
             height: 40,

@@ -13,6 +13,7 @@ import '../../../core/utils/error_messages.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/admin_sort_dropdown.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border, TextSpan, BorderStyle;
 
@@ -424,6 +425,8 @@ class _ClassDetailScreenState extends ConsumerState<ClassDetailScreen> {
           // Inline stat pills
           _inlineStat(Icons.meeting_room_rounded, currentRoom, AppColors.slate500),
           const Spacer(),
+          const UndoRedoToolbarButtons(),
+          const SizedBox(width: 8),
           SizedBox(
             width: 220, height: 36,
             child: TextField(

@@ -16,6 +16,8 @@ import '../../widgets/user_avatar.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/admin_sort_dropdown.dart';
 import '../../providers/undo_redo_provider.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../widgets/feedback_pill.dart';
 
 
 // ── Speciality Color Helper ───────────────────────────────────────────────
@@ -253,31 +255,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     try {
       final desc = await notifier.undo();
       if (mounted && desc != null) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.undo_rounded, color: Colors.white, size: 18),
-                const SizedBox(width: 10),
-                Expanded(child: Text('Action annulée : $desc')),
-              ],
-            ),
-            duration: const Duration(seconds: 3),
-            backgroundColor: const Color(0xFF1E293B),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur lors de l\'annulation : $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
       }
     }
   }
@@ -288,31 +270,11 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
     try {
       final desc = await notifier.redo();
       if (mounted && desc != null) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.redo_rounded, color: Colors.white, size: 18),
-                const SizedBox(width: 10),
-                Expanded(child: Text('Action rétablie : $desc')),
-              ],
-            ),
-            duration: const Duration(seconds: 3),
-            backgroundColor: const Color(0xFF1E293B),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
+        FeedbackPill.show(context, message: 'Action rétablie : $desc', type: FeedbackPillType.info);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur lors du rétablissement : $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        FeedbackPill.showError(context, 'Impossible de rétablir : $e');
       }
     }
   }
@@ -517,7 +479,6 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
   // ── Header (matching users page layout) ─────────────────────────────────
 
   Widget _buildHeader(BuildContext context, AsyncValue<List<Map<String, dynamic>>> professorsAsync) {
-    final undoState = ref.watch(undoRedoProvider);
     final total = professorsAsync.whenOrNull(data: (p) => p.length) ?? 0;
     final activeCount = professorsAsync.whenOrNull(data: (p) => p.where((u) => u['is_active'] == true).length) ?? 0;
 
@@ -642,55 +603,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
             constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           const SizedBox(width: 8),
-          // Undo / Redo segmented control
-          Container(
-            height: 38,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Tooltip(
-                  message: undoState.undoTooltip,
-                  child: InkWell(
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(7)),
-                    onTap: undoState.canUndo ? () => _handleUndo() : null,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                      child: Icon(
-                        Icons.rotate_left_rounded,
-                        size: 20,
-                        color: undoState.canUndo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
-                      ),
-                    ),
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 18,
-                  color: AppColors.border,
-                ),
-                Tooltip(
-                  message: undoState.redoTooltip,
-                  child: InkWell(
-                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(7)),
-                    onTap: undoState.canRedo ? () => _handleRedo() : null,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                      child: Icon(
-                        Icons.rotate_right_rounded,
-                        size: 20,
-                        color: undoState.canRedo ? AppColors.textPrimary : AppColors.textTertiary.withOpacity(0.35),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const UndoRedoToolbarButtons(),
           const SizedBox(width: 16),
           // Ajouter button — same as users
           SizedBox(
@@ -1099,7 +1012,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                           },
                         ),
                       );
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" désactivé'), backgroundColor: AppColors.warning));
+                      if (mounted) FeedbackPill.showSuccess(context, 'Professeur "$name" désactivé');
                     },
                     icon: const Icon(Icons.pause_circle_outline_rounded, size: 16),
                     label: const Text('Désactiver', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -1178,7 +1091,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                           },
                         ),
                       );
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Professeur "$name" activé'), backgroundColor: AppColors.success));
+                      if (mounted) FeedbackPill.showSuccess(context, 'Professeur "$name" activé');
                     },
                     icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
                     label: const Text('Activer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -1539,9 +1452,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         ),
                       );
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$count professeur${count > 1 ? 's désactivés' : ' désactivé'}'), backgroundColor: AppColors.warning),
-                        );
+                        FeedbackPill.showSuccess(context, '$count professeur${count > 1 ? 's désactivés' : ' désactivé'}');
                       }
                     },
                     icon: const Icon(Icons.pause_circle_outline_rounded, size: 16),
@@ -1688,9 +1599,7 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
                         ),
                       );
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$count professeur${count > 1 ? 's activés' : ' activé'}'), backgroundColor: AppColors.success),
-                        );
+                        FeedbackPill.showSuccess(context, '$count professeur${count > 1 ? 's activés' : ' activé'}');
                       }
                     },
                     icon: const Icon(Icons.check_circle_outline_rounded, size: 16),

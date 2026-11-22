@@ -6,7 +6,7 @@ import '../../../core/theme/app_theme.dart' show AppColors;
 import '../../../core/utils/error_messages.dart';
 import '../../providers/grade_levels_provider.dart';
 import '../../widgets/admin_sidebar.dart';
-import '../../widgets/skeleton_loader.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
 
 import '../../../data/models/academic_models.dart';
 
@@ -205,6 +205,8 @@ class _GradeLevelsScreenState extends ConsumerState<GradeLevelsScreen>
           const SizedBox(width: 12),
           // Filter button
           _buildFilterButton(),
+          const SizedBox(width: 8),
+          const UndoRedoToolbarButtons(),
           const SizedBox(width: 16),
           // Ajouter popup button
           _buildAddButton(),
