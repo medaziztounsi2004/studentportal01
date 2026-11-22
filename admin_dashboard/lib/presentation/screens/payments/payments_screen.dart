@@ -4761,10 +4761,38 @@ class _StudentPaymentDetailDialogState
   String _selectedCategory = 'all';
   String _detailSortKey = 'due_date_asc';
   final Set<String> _selectedPaymentIds = {};
+  final Set<String> _deletedPaymentIds = {};
+  final Set<String> _deletedSyntheticCategories = {};
   double _paidAmount = 0;
   double _totalAmount = 0;
   int _paidPayments = 0;
   int _totalPayments = 0;
+
+  String _determinePaymentCategory(Map<String, dynamic> payment) {
+    final directCat = payment['category']?.toString();
+    if (directCat != null && directCat.isNotEmpty && directCat != 'null') {
+      final n = _normalizeCategory(directCat);
+      if (n != 'autres' || directCat.toLowerCase() == 'autres') return n;
+    }
+    final plan = payment['payment_plans'] as Map<String, dynamic>?;
+    final planCat = plan?['category']?.toString() ?? plan?['description']?.toString();
+    if (planCat != null && planCat.isNotEmpty && planCat != 'null') {
+      final n = _normalizeCategory(planCat);
+      if (n != 'autres' || planCat.toLowerCase() == 'autres') return n;
+    }
+    final notes = payment['notes']?.toString();
+    if (notes != null && notes.isNotEmpty && notes != 'null') {
+      final n = _normalizeCategory(notes);
+      if (n != 'autres' || notes.toLowerCase() == 'autres') return n;
+    }
+    final desc = payment['description']?.toString();
+    if (desc != null && desc.isNotEmpty && desc != 'null') {
+      final n = _normalizeCategory(desc);
+      if (n != 'autres' || desc.toLowerCase() == 'autres') return n;
+    }
+    if (payment['is_synthetic'] == true) return 'autres';
+    return 'scolarite';
+  }
 
   @override
   void initState() {
@@ -4798,6 +4826,7 @@ class _StudentPaymentDetailDialogState
       // 1. Seed directly from widget.student.plans (guaranteed in memory)
       for (final pl in widget.student.plans) {
         for (final pay in pl.payments) {
+          if (_deletedPaymentIds.contains(pay.id)) continue;
           if (!seedPayments.any((sp) => sp['id'] == pay.id)) {
             seedPayments.add({
               'id': pay.id,
@@ -4821,6 +4850,7 @@ class _StudentPaymentDetailDialogState
       final state = widget.ref.read(paymentsProvider).asData?.value;
       if (state != null) {
         for (final p in state.payments) {
+          if (_deletedPaymentIds.contains(p.id)) continue;
           if (p.studentId == widget.student.studentId ||
               (p.studentName != null && p.studentName == widget.student.studentName)) {
             if (!seedPayments.any((sp) => sp['id'] == p.id)) {
@@ -4845,6 +4875,7 @@ class _StudentPaymentDetailDialogState
           if (pl.studentId == widget.student.studentId ||
               (pl.studentName != null && pl.studentName == widget.student.studentName)) {
             for (final pay in pl.payments) {
+              if (_deletedPaymentIds.contains(pay.id)) continue;
               if (!seedPayments.any((sp) => sp['id'] == pay.id)) {
                 seedPayments.add({
                   'id': pay.id,
@@ -5054,10 +5085,18 @@ class _StudentPaymentDetailDialogState
       final uniquePayments = <Map<String, dynamic>>[];
       for (final p in [...paymentsResponse, ...seedPayments]) {
         final id = p['id']?.toString() ?? '';
-        if (id.isNotEmpty && !seenIds.contains(id)) {
-          seenIds.add(id);
-          uniquePayments.add(Map<String, dynamic>.from(p));
+        if (id.isEmpty || seenIds.contains(id) || _deletedPaymentIds.contains(id)) {
+          continue;
         }
+        final status = p['status']?.toString();
+        final detCat = _determinePaymentCategory(p);
+        p['category'] = detCat;
+        if (status == 'cancelled') {
+          _deletedSyntheticCategories.add(detCat);
+          continue;
+        }
+        seenIds.add(id);
+        uniquePayments.add(Map<String, dynamic>.from(p));
       }
 
       // 6. Pricing for tariffs
@@ -5096,9 +5135,14 @@ class _StudentPaymentDetailDialogState
             if (amt <= 0) continue;
 
             final normCat = _normalizeCategory(cat);
+            if (_deletedSyntheticCategories.contains(normCat) ||
+                _deletedPaymentIds.contains('pricing_$cat') ||
+                _deletedPaymentIds.contains('pricing_$normCat')) {
+              continue;
+            }
+
             final alreadyHasPayment = uniquePayments.any((p) {
-              final pCat = p['category'] ?? (p['payment_plans'] as Map?)?['category'];
-              return _normalizeCategory(pCat?.toString()) == normCat;
+              return _determinePaymentCategory(p) == normCat;
             });
 
             if (!alreadyHasPayment) {
@@ -5107,13 +5151,13 @@ class _StudentPaymentDetailDialogState
                 'title': _getCategoryName(cat),
                 'amount': amt,
                 'status': 'pending',
-                'category': cat,
+                'category': normCat,
                 'due_date': DateTime.now().toIso8601String(),
                 'paid_at': null,
                 'payment_method': null,
                 'is_synthetic': true,
                 'payment_plans': {
-                  'category': cat,
+                  'category': normCat,
                   'plan_type': 'single',
                 },
               });
@@ -5169,16 +5213,12 @@ class _StudentPaymentDetailDialogState
       result = List.from(_payments);
     } else if (_selectedCategory == 'scolarite') {
       result = _payments.where((p) {
-        final plan = p['payment_plans'] as Map<String, dynamic>?;
-        final cat = p['category'] ?? plan?['category'];
-        return _normalizeCategory(cat?.toString()) == 'scolarite';
+        return _determinePaymentCategory(p) == 'scolarite';
       }).toList();
     } else {
       // 'autres' - other fees like Cantine, Uniforme, Transport, etc.
       result = _payments.where((p) {
-        final plan = p['payment_plans'] as Map<String, dynamic>?;
-        final cat = p['category'] ?? plan?['category'];
-        return _normalizeCategory(cat?.toString()) != 'scolarite';
+        return _determinePaymentCategory(p) != 'scolarite';
       }).toList();
     }
     result.sort((a, b) {
@@ -5704,15 +5744,11 @@ class _StudentPaymentDetailDialogState
       if (cat == 'all') return _payments.length;
       if (cat == 'scolarite') {
         return _payments.where((p) {
-          final plan = p['payment_plans'] as Map<String, dynamic>?;
-          final c = p['category'] ?? plan?['category'];
-          return _normalizeCategory(c?.toString()) == 'scolarite';
+          return _determinePaymentCategory(p) == 'scolarite';
         }).length;
       }
       return _payments.where((p) {
-        final plan = p['payment_plans'] as Map<String, dynamic>?;
-        final c = p['category'] ?? plan?['category'];
-        return _normalizeCategory(c?.toString()) != 'scolarite';
+        return _determinePaymentCategory(p) != 'scolarite';
       }).length;
     }
 
@@ -5941,8 +5977,7 @@ class _StudentPaymentDetailDialogState
     final paidAt = payment['paid_at'] != null
         ? DateTime.tryParse(payment['paid_at'])
         : null;
-    final plan = payment['payment_plans'] as Map<String, dynamic>?;
-    final category = payment['category'] ?? plan?['category'] ?? 'scolarite';
+    final category = _determinePaymentCategory(payment);
 
     final isOverdue =
         status == 'pending' &&
@@ -6198,7 +6233,7 @@ class _StudentPaymentDetailDialogState
     );
 
     try {
-      final supabase = Supabase.instance.client;
+      final supabase = SupabaseConfig.adminClient;
       if (payment != null && payment['is_synthetic'] == true) {
         String schId = '11111111-1111-1111-1111-111111111111';
         try {
@@ -6206,23 +6241,76 @@ class _StudentPaymentDetailDialogState
           if (uRow?['school_id'] != null) {
             schId = uRow!['school_id'].toString();
           } else {
-            final curr = supabase.auth.currentUser;
+            final curr = Supabase.instance.client.auth.currentUser;
             if (curr != null) {
               final cRow = await supabase.from('users').select('school_id').eq('id', curr.id).maybeSingle();
               if (cRow?['school_id'] != null) schId = cRow!['school_id'].toString();
             }
           }
         } catch (_) {}
-        await supabase.from('payments').insert({
+
+        String? enrollmentId;
+        if (_paymentPlans.isNotEmpty) {
+          enrollmentId = _paymentPlans.first['enrollment_id']?.toString();
+        }
+        if (enrollmentId == null || enrollmentId.isEmpty) {
+          try {
+            final eList = await supabase
+                .from('enrollments')
+                .select('id')
+                .eq('user_id', widget.student.studentId)
+                .limit(1) as List<dynamic>;
+            if (eList.isNotEmpty) {
+              enrollmentId = eList.first['id']?.toString();
+            }
+          } catch (_) {}
+        }
+
+        final rawCat = payment['category']?.toString() ?? 'inscription';
+        final normCat = _normalizeCategory(rawCat);
+        final catLabel = _getCategoryName(normCat);
+        final amt = (payment['amount'] as num?)?.toDouble() ?? 0.0;
+
+        String? planId;
+        if (enrollmentId != null && enrollmentId.isNotEmpty) {
+          try {
+            final planRes = await supabase.from('payment_plans').insert({
+              'enrollment_id': enrollmentId,
+              'plan_type': 'single',
+              'amount_total': amt,
+              'currency': 'TND',
+              'description': catLabel,
+              'category': normCat,
+              'school_id': schId,
+            }).select('id').single();
+            planId = planRes['id']?.toString();
+          } catch (e) {
+            debugPrint('Error creating payment_plan for synthetic payment: $e');
+          }
+        }
+
+        final payRes = await supabase.from('payments').insert({
+          if (planId != null) 'payment_plan_id': planId,
           'student_id': widget.student.studentId,
           'school_id': schId,
-          'amount': payment['amount'] ?? 0,
+          'amount': amt,
           'status': 'paid',
           'paid_at': nowIso,
           'due_date': payment['due_date'] ?? nowIso,
           'method': 'cash',
-          'notes': payment['category'] ?? 'Autre paiement',
-        });
+          'notes': normCat,
+        }).select().single();
+
+        payment['id'] = payRes['id']?.toString() ?? payment['id'];
+        payment['is_synthetic'] = false;
+        payment['status'] = 'paid';
+        payment['paid_at'] = nowIso;
+        payment['category'] = normCat;
+        payment['payment_plans'] = {
+          'id': planId,
+          'category': normCat,
+          'plan_type': 'single',
+        };
       } else {
         await supabase
             .from('payments')
@@ -6233,8 +6321,8 @@ class _StudentPaymentDetailDialogState
             .eq('id', paymentId);
       }
 
+      await ref.read(paymentsProvider.notifier).refresh();
       await _loadStudentPayments();
-      ref.read(paymentsProvider.notifier).refresh();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -6314,21 +6402,21 @@ class _StudentPaymentDetailDialogState
       builder: (context) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               Container(
                 width: 36,
                 height: 36,
-                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+                decoration: BoxDecoration(color: AppColors.errorSoft, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
               ),
               const SizedBox(width: 12),
-              const Text('Confirmer l\'annulation', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const Text('Supprimer ce paiement ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             ],
           ),
           content: const Text(
-            'Voulez-vous vraiment annuler ce paiement ? Cette action est irréversible.',
+            'Voulez-vous vraiment supprimer ce paiement ? Cette action est irréversible.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
@@ -6336,25 +6424,32 @@ class _StudentPaymentDetailDialogState
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context, true),
-                  icon: const Icon(Icons.warning_outlined, size: 16),
-                  label: const Text('Oui, annuler', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.error,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(context, true),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Supprimer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
               ],
@@ -6368,15 +6463,50 @@ class _StudentPaymentDetailDialogState
 
     try {
       final supabase = SupabaseConfig.adminClient;
-      await supabase
-          .from('payments')
-          .update({'status': 'pending', 'paid_at': null})
-          .eq('id', paymentId);
+      if (paymentId.startsWith('pricing_')) {
+        final cat = paymentId.replaceFirst('pricing_', '');
+        final normCat = _normalizeCategory(cat);
+        _deletedSyntheticCategories.add(normCat);
+        _deletedPaymentIds.add(paymentId);
+        setState(() {
+          _payments.removeWhere((p) => p['id'] == paymentId);
+          _selectedPaymentIds.remove(paymentId);
+        });
 
+        String schId = '11111111-1111-1111-1111-111111111111';
+        try {
+          final uRow = await supabase.from('users').select('school_id').eq('id', widget.student.studentId).maybeSingle();
+          if (uRow?['school_id'] != null) schId = uRow!['school_id'].toString();
+        } catch (_) {}
+
+        await supabase.from('payments').insert({
+          'student_id': widget.student.studentId,
+          'school_id': schId,
+          'amount': 0,
+          'status': 'cancelled',
+          'due_date': DateTime.now().toIso8601String(),
+          'notes': normCat,
+        });
+      } else {
+        _deletedPaymentIds.add(paymentId);
+        setState(() {
+          _payments.removeWhere((p) => p['id']?.toString() == paymentId);
+          _selectedPaymentIds.remove(paymentId);
+        });
+        for (int i = 0; i < widget.student.plans.length; i++) {
+          final plan = widget.student.plans[i];
+          final updatedPayments = plan.payments.where((pay) => pay.id != paymentId).toList();
+          try {
+            widget.student.plans[i] = plan.copyWith(payments: updatedPayments);
+          } catch (_) {}
+        }
+        await supabase.from('payments').delete().eq('id', paymentId);
+      }
+
+      await ref.read(paymentsProvider.notifier).refresh();
       await _loadStudentPayments();
-      ref.invalidate(paymentsProvider);
     } catch (e) {
-      debugPrint('Error canceling payment: $e');
+      debugPrint('Error deleting payment: $e');
     }
   }
 
@@ -6580,8 +6710,7 @@ class _StudentPaymentDetailDialogState
         : null;
     final reference = payment['reference'] ?? 'N/A';
     final method = payment['method'] ?? 'cash';
-    final plan = payment['payment_plans'] as Map<String, dynamic>?;
-    final category = plan?['category'] ?? 'scolarite';
+    final category = _determinePaymentCategory(payment);
 
     showDialog(
       context: context,
@@ -6917,8 +7046,7 @@ class _StudentPaymentDetailDialogState
                                   final amount = (payment['amount'] as num? ?? 0).toDouble();
                                   final dueDate = DateTime.tryParse(payment['due_date'] ?? '');
                                   final paidAt = payment['paid_at'] != null ? DateTime.tryParse(payment['paid_at']) : null;
-                                  final plan = payment['payment_plans'] as Map<String, dynamic>?;
-                                  final category = payment['category'] ?? plan?['category'] ?? 'scolarite';
+                                  final category = _determinePaymentCategory(payment);
 
                                   final isOverdue = status == 'pending' && dueDate != null && dueDate.isBefore(DateTime.now());
                                   final isPaid = status == 'paid';
@@ -7308,35 +7436,83 @@ class _StudentPaymentDetailDialogState
               }
             }
           } catch (_) {}
-          final toInsert = syntheticIds.map((sId) {
+
+          String? enrollmentId;
+          if (_paymentPlans.isNotEmpty) {
+            enrollmentId = _paymentPlans.first['enrollment_id']?.toString();
+          }
+          if (enrollmentId == null || enrollmentId.isEmpty) {
+            try {
+              final eList = await SupabaseConfig.adminClient
+                  .from('enrollments')
+                  .select('id')
+                  .eq('user_id', widget.student.studentId)
+                  .limit(1) as List<dynamic>;
+              if (eList.isNotEmpty) {
+                enrollmentId = eList.first['id']?.toString();
+              }
+            } catch (_) {}
+          }
+
+          for (final sId in syntheticIds) {
             final p = _payments.firstWhere(
               (item) => item['id'] == sId,
               orElse: () => <String, dynamic>{},
             );
-            return {
+            if (p.isEmpty) continue;
+            final rawCat = p['category']?.toString() ?? sId.replaceFirst('pricing_', '');
+            final normCat = _normalizeCategory(rawCat);
+            final catLabel = _getCategoryName(normCat);
+            final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
+
+            String? planId;
+            if (enrollmentId != null && enrollmentId.isNotEmpty) {
+              try {
+                final planRes = await SupabaseConfig.adminClient.from('payment_plans').insert({
+                  'enrollment_id': enrollmentId,
+                  'plan_type': 'single',
+                  'amount_total': amt,
+                  'currency': 'TND',
+                  'description': catLabel,
+                  'category': normCat,
+                  'school_id': schId,
+                }).select('id').single();
+                planId = planRes['id']?.toString();
+              } catch (e) {
+                debugPrint('Error inserting plan for $normCat: $e');
+              }
+            }
+
+            final payRes = await SupabaseConfig.adminClient.from('payments').insert({
+              if (planId != null) 'payment_plan_id': planId,
               'student_id': widget.student.studentId,
               'school_id': schId,
-              'amount': p['amount'] ?? 0,
+              'amount': amt,
               'status': 'paid',
               'paid_at': nowIso,
               'due_date': p['due_date'] ?? nowIso,
               'method': 'cash',
-              'notes': p['category'] ?? 'Autre paiement',
+              'notes': normCat,
+            }).select().single();
+
+            p['id'] = payRes['id']?.toString() ?? p['id'];
+            p['is_synthetic'] = false;
+            p['status'] = 'paid';
+            p['paid_at'] = nowIso;
+            p['category'] = normCat;
+            p['payment_plans'] = {
+              'id': planId,
+              'category': normCat,
+              'plan_type': 'single',
             };
-          }).toList();
-          await SupabaseConfig.adminClient.from('payments').insert(toInsert);
+          }
         } catch (e) {
           debugPrint('Error inserting synthetic payments: $e');
         }
       }
 
+      await ref.read(paymentsProvider.notifier).refresh();
       await _loadStudentPayments();
-
-      try {
-        await ref.read(paymentsProvider.notifier).bulkMarkAsPaid(realIds);
-      } catch (_) {
-        ref.invalidate(paymentsProvider);
-      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -7460,7 +7636,7 @@ class _StudentPaymentDetailDialogState
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               Container(
@@ -7468,9 +7644,9 @@ class _StudentPaymentDetailDialogState
                 height: 36,
                 decoration: BoxDecoration(
                   color: AppColors.errorSoft,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+                child: const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
               ),
               const SizedBox(width: 12),
               Text(
@@ -7488,25 +7664,32 @@ class _StudentPaymentDetailDialogState
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  icon: const Icon(Icons.delete_outline, size: 16),
-                  label: Text('Supprimer $count', style: const TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.error,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: Text('Supprimer $count', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
               ],
@@ -7522,6 +7705,9 @@ class _StudentPaymentDetailDialogState
     setState(() => _isLoading = true);
     try {
       final realIds = ids.where((id) => !id.startsWith('pricing_')).toList();
+      final syntheticIds = ids.where((id) => id.startsWith('pricing_')).toList();
+
+      _deletedPaymentIds.addAll(ids);
 
       // 1. Remove from local _payments
       _payments.removeWhere((p) => ids.contains(p['id']?.toString()));
@@ -7535,7 +7721,36 @@ class _StudentPaymentDetailDialogState
         } catch (_) {}
       }
 
-      // 3. Delete from Supabase
+      // 3. Handle synthetic exemptions
+      if (syntheticIds.isNotEmpty) {
+        String schId = '11111111-1111-1111-1111-111111111111';
+        try {
+          final uRow = await SupabaseConfig.adminClient.from('users').select('school_id').eq('id', widget.student.studentId).maybeSingle();
+          if (uRow?['school_id'] != null) schId = uRow!['school_id'].toString();
+        } catch (_) {}
+
+        final toInsert = <Map<String, dynamic>>[];
+        for (final sId in syntheticIds) {
+          final cat = sId.replaceFirst('pricing_', '');
+          final normCat = _normalizeCategory(cat);
+          _deletedSyntheticCategories.add(normCat);
+          toInsert.add({
+            'student_id': widget.student.studentId,
+            'school_id': schId,
+            'amount': 0,
+            'status': 'cancelled',
+            'due_date': DateTime.now().toIso8601String(),
+            'notes': normCat,
+          });
+        }
+        try {
+          await SupabaseConfig.adminClient.from('payments').insert(toInsert);
+        } catch (e) {
+          debugPrint('Error recording cancelled synthetic payments: $e');
+        }
+      }
+
+      // 4. Delete real payments from Supabase
       if (realIds.isNotEmpty) {
         try {
           await SupabaseConfig.adminClient.from('payments').delete().inFilter('id', realIds);
@@ -7553,13 +7768,8 @@ class _StudentPaymentDetailDialogState
         _selectedPaymentIds.clear();
       });
 
+      await ref.read(paymentsProvider.notifier).refresh();
       await _loadStudentPayments();
-
-      try {
-        await ref.read(paymentsProvider.notifier).refresh();
-      } catch (_) {
-        ref.invalidate(paymentsProvider);
-      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

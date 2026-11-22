@@ -700,18 +700,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: isPaused ? const Color(0xFFFEF2F2) : Colors.white,
+        color: isPaused ? const Color(0xFFFEF2F2) : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isPaused ? const Color(0xFFFECACA) : AppColors.border.withOpacity(0.6),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -757,24 +747,45 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                               : 'Voulez-vous vraiment suspendre l\'accès à la plateforme pour cet élève ?',
                           style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                         ),
+                        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                         actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(dCtx, false),
-                            child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textTertiary)),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => Navigator.pop(dCtx, true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isPaused ? AppColors.success : AppColors.warning,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              isPaused ? 'Activer' : 'Suspendre',
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                height: 40,
+                                child: TextButton(
+                                  onPressed: () => Navigator.pop(dCtx, false),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF6B7280),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  child: const Text(
+                                    'Annuler',
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              SizedBox(
+                                height: 40,
+                                child: ElevatedButton(
+                                  onPressed: () => Navigator.pop(dCtx, true),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isPaused ? AppColors.success : AppColors.warning,
+                                    foregroundColor: Colors.white,
+                                    elevation: 2,
+                                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  child: Text(
+                                    isPaused ? 'Activer' : 'Suspendre',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

@@ -765,22 +765,14 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                 icon: Icons.check_circle_outline_rounded,
                 label: 'Activer',
                 color: AppColors.success,
-                onTap: () {
-                  final ids = _selectedUserIds.toList();
-                  ref.read(usersProvider.notifier).bulkToggleArchive(ids, true);
-                  setState(() => _selectedUserIds.clear());
-                },
+                onTap: () => _confirmBulkToggleStatus(true),
               )
             else
               _FloatingBarButton(
                 icon: Icons.pause_circle_outline_rounded,
                 label: 'Suspendre',
                 color: AppColors.warning,
-                onTap: () {
-                  final ids = _selectedUserIds.toList();
-                  ref.read(usersProvider.notifier).bulkToggleArchive(ids, false);
-                  setState(() => _selectedUserIds.clear());
-                },
+                onTap: () => _confirmBulkToggleStatus(false),
               ),
             const SizedBox(width: 8),
             // Change class
@@ -1645,8 +1637,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
             // Password reset placeholder
             break;
           case 'toggle_status':
-            final newActive = !u.isActive;
-            ref.read(usersProvider.notifier).toggleUserArchive(u.id, newActive);
+            _confirmToggleStatus(context, u);
             break;
           case 'delete':
             _confirmDelete(context, u);
@@ -1824,6 +1815,164 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
     showDialog(
       context: context,
       builder: (ctx) => UserFormDialog(user: user),
+    );
+  }
+
+  // ====================== CONFIRM STATUS ======================
+  void _confirmToggleStatus(BuildContext context, UserModel u) {
+    final willSuspend = u.isActive;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: willSuspend ? AppColors.warningSoft : AppColors.successSoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                willSuspend ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded,
+                color: willSuspend ? AppColors.warning : AppColors.success,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              willSuspend ? 'Suspendre ce compte ?' : 'Activer ce compte ?',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+          ],
+        ),
+        content: Text(
+          willSuspend
+              ? 'Le compte de "${u.fullName}" sera suspendu.'
+              : 'Le compte de "${u.fullName}" sera réactivé.',
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              SizedBox(
+                height: 40,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await ref.read(usersProvider.notifier).toggleUserArchive(u.id, !willSuspend);
+                  },
+                  icon: Icon(willSuspend ? Icons.pause_circle_outline_rounded : Icons.check_circle_outline_rounded, size: 16),
+                  label: Text(willSuspend ? 'Suspendre' : 'Activer', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: willSuspend ? AppColors.warning : AppColors.success,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmBulkToggleStatus(bool activate) {
+    final count = _selectedUserIds.length;
+    if (count == 0) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: activate ? AppColors.successSoft : AppColors.warningSoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                activate ? Icons.check_circle_outline_rounded : Icons.pause_circle_outline_rounded,
+                color: activate ? AppColors.success : AppColors.warning,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              activate ? 'Activer $count compte(s) ?' : 'Suspendre $count compte(s) ?',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+          ],
+        ),
+        content: Text(
+          activate
+              ? 'Voulez-vous réactiver l\'accès pour les $count utilisateurs sélectionnés ?'
+              : 'Voulez-vous suspendre l\'accès pour les $count utilisateurs sélectionnés ?',
+          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+        actions: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              SizedBox(
+                height: 40,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Annuler', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 40,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final ids = _selectedUserIds.toList();
+                    await ref.read(usersProvider.notifier).bulkToggleArchive(ids, activate);
+                    setState(() => _selectedUserIds.clear());
+                  },
+                  icon: Icon(activate ? Icons.check_circle_outline_rounded : Icons.pause_circle_outline_rounded, size: 16),
+                  label: Text(activate ? 'Activer' : 'Suspendre', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: activate ? AppColors.success : AppColors.warning,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

@@ -129,7 +129,9 @@ class Payment {
       studentEmail: user?['email']?.toString(),
       classId: classData?['id']?.toString(),
       className: classData?['name']?.toString(),
-      category: paymentPlan?['description']?.toString(),
+      category: paymentPlan?['category']?.toString() ??
+          paymentPlan?['description']?.toString() ??
+          json['notes']?.toString(),
     );
   }
 
