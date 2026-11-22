@@ -4837,7 +4837,7 @@ class _StudentPaymentDetailDialogState
       try {
         final enrollments = await SupabaseConfig.adminClient
             .from('enrollments')
-            .select('id, school_id, class_id, classes(id, niveau_id, section_id)')
+            .select('id, school_id, class_id, academic_year_id, classes(id, school_id, niveau_id, section_id)')
             .eq('user_id', widget.student.studentId);
         enrollmentList = (enrollments as List?) ?? [];
       } catch (e) {
@@ -4845,7 +4845,7 @@ class _StudentPaymentDetailDialogState
         try {
           final enrollments = await supabase
               .from('enrollments')
-              .select('id, school_id, class_id, classes(id, niveau_id, section_id)')
+              .select('id, school_id, class_id, academic_year_id, classes(id, school_id, niveau_id, section_id)')
               .eq('user_id', widget.student.studentId);
           enrollmentList = (enrollments as List?) ?? [];
         } catch (_) {}
@@ -4856,7 +4856,7 @@ class _StudentPaymentDetailDialogState
         try {
           final enrollments = await SupabaseConfig.adminClient
               .from('enrollments')
-              .select('id, school_id, class_id, classes(id, niveau_id, section_id)')
+              .select('id, school_id, class_id, academic_year_id, classes(id, school_id, niveau_id, section_id)')
               .eq('id', widget.student.studentId);
           enrollmentList = (enrollments as List?) ?? [];
         } catch (_) {}
@@ -4864,13 +4864,38 @@ class _StudentPaymentDetailDialogState
 
       final enrollmentIds = enrollmentList.map((e) => e['id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
 
+      String? schoolId;
+      String? academicYearId;
       String? niveauId;
       String? sectionId;
       if (enrollmentList.isNotEmpty) {
         final firstEnrollment = enrollmentList.first;
+        schoolId = firstEnrollment['school_id'] as String?;
+        academicYearId = firstEnrollment['academic_year_id'] as String?;
         final cls = firstEnrollment['classes'] as Map<String, dynamic>?;
+        schoolId ??= cls?['school_id'] as String?;
         niveauId = cls?['niveau_id'] as String?;
         sectionId = cls?['section_id'] as String?;
+      }
+      if (schoolId == null) {
+        final user = supabase.auth.currentUser;
+        if (user != null) {
+          try {
+            final uRow = await supabase.from('users').select('school_id').eq('id', user.id).maybeSingle();
+            schoolId = uRow?['school_id'] as String?;
+          } catch (_) {}
+        }
+      }
+      if (academicYearId == null && schoolId != null) {
+        try {
+          final ayRow = await supabase
+              .from('academic_years')
+              .select('id')
+              .eq('school_id', schoolId)
+              .eq('is_current', true)
+              .maybeSingle();
+          academicYearId = ayRow?['id'] as String?;
+        } catch (_) {}
       }
 
       // 4. Load payment plans by enrollment_id
@@ -4963,20 +4988,44 @@ class _StudentPaymentDetailDialogState
       }
 
       // 6. Pricing for tariffs
-      if (niveauId != null) {
+      if (niveauId != null && schoolId != null) {
         try {
-          var pQuery = supabase
+          final pricingRows = await SupabaseConfig.adminClient
               .from('payment_pricing')
-              .select('id, category, amount, section_id, niveau_id')
-              .eq('niveau_id', niveauId);
-          final pricingRows = await pQuery as List<dynamic>;
+              .select('id, category, amount, section_id, niveau_id, academic_year_id, is_active')
+              .eq('school_id', schoolId)
+              .eq('niveau_id', niveauId)
+              .eq('is_active', true) as List<dynamic>;
 
+          // Only consider rows that belong to current academic year or null (fallback).
+          // Discard rows belonging to other academic years or other sections.
+          final categoryPricing = <String, double>{};
           for (final pr in pricingRows) {
             final cat = pr['category']?.toString();
             final amt = (pr['amount'] as num?)?.toDouble() ?? 0.0;
             final prSecId = pr['section_id']?.toString();
-            if (prSecId != null && sectionId != null && prSecId != sectionId) continue;
+            final prYearId = pr['academic_year_id']?.toString();
+
             if (cat == null || cat == 'scolarite' || amt <= 0) continue;
+            // Ignore tariffs from different academic years
+            if (prYearId != null && academicYearId != null && prYearId != academicYearId) continue;
+            // Ignore tariffs from different sections
+            if (prSecId != null && sectionId != null && prSecId != sectionId) continue;
+
+            final isExactYear = prYearId != null && prYearId == academicYearId;
+            final isExactSection = prSecId != null && prSecId == sectionId;
+
+            if (!categoryPricing.containsKey(cat)) {
+              categoryPricing[cat] = amt;
+            } else if (isExactYear || isExactSection) {
+              categoryPricing[cat] = amt;
+            }
+          }
+
+          for (final entry in categoryPricing.entries) {
+            final cat = entry.key;
+            final amt = entry.value;
+            if (amt <= 0) continue;
 
             final alreadyHasPayment = uniquePayments.any((p) {
               final pCat = p['category'] ?? (p['payment_plans'] as Map?)?['category'];
@@ -9862,39 +9911,65 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
 
             var query = supabase
                 .from('payment_pricing')
-                .select('id')
+                .select('id, academic_year_id')
                 .eq('school_id', _schoolId!)
                 .eq('category', category)
                 .eq('niveau_id', niveauId);
 
-            if (_academicYearId != null) {
-              query = query.eq('academic_year_id', _academicYearId!);
-            }
-
             final existingList = await (sectionId == null
-                ? query.isFilter('section_id', null).limit(1)
-                : query.eq('section_id', sectionId).limit(1));
+                ? query.isFilter('section_id', null)
+                : query.eq('section_id', sectionId)) as List<dynamic>;
 
-            final existing = (existingList as List).isNotEmpty ? existingList.first : null;
-
-            if (existing != null) {
-              await supabase
-                  .from('payment_pricing')
-                  .update({'amount': amount, 'updated_at': DateTime.now().toIso8601String()})
-                  .eq('id', existing['id']);
+            if (amount <= 0) {
+              // Delete ANY existing rows for this category/niveau/section in this school
+              for (final row in existingList) {
+                await supabase
+                    .from('payment_pricing')
+                    .delete()
+                    .eq('id', row['id']);
+              }
             } else {
-              await supabase.from('payment_pricing').insert({
-                'school_id': _schoolId,
-                'academic_year_id': _academicYearId,
-                'category': category,
-                'niveau_id': niveauId,
-                'section_id': sectionId,
-                'amount': amount,
-              });
+              // Positive amount: find exact match for _academicYearId
+              final exactMatch = existingList.cast<Map<String, dynamic>>().where(
+                (r) => r['academic_year_id']?.toString() == _academicYearId,
+              ).firstOrNull;
+
+              if (exactMatch != null) {
+                await supabase
+                    .from('payment_pricing')
+                    .update({
+                      'amount': amount,
+                      'is_active': true,
+                      'updated_at': DateTime.now().toIso8601String(),
+                    })
+                    .eq('id', exactMatch['id']);
+              } else {
+                await supabase.from('payment_pricing').insert({
+                  'school_id': _schoolId,
+                  'academic_year_id': _academicYearId,
+                  'category': category,
+                  'niveau_id': niveauId,
+                  'section_id': sectionId,
+                  'amount': amount,
+                  'is_active': true,
+                });
+              }
+
+              // Also delete any fallback or duplicate rows for this category/niveau/section
+              for (final row in existingList) {
+                if (row['id'] != exactMatch?['id']) {
+                  await supabase
+                      .from('payment_pricing')
+                      .delete()
+                      .eq('id', row['id']);
+                }
+              }
             }
           }
         }
       }
+
+      await _loadPricing();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -9934,17 +10009,15 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
   }
 
   double? _getAmount(String niveauId, String? sectionId) {
-    return _allPricing[_selectedCategory]?[niveauId]?[sectionId];
+    final amt = _allPricing[_selectedCategory]?[niveauId]?[sectionId];
+    if (amt == null || amt <= 0) return null;
+    return amt;
   }
 
   void _setAmount(String niveauId, String? sectionId, double? amount) {
     _allPricing.putIfAbsent(_selectedCategory, () => {});
     _allPricing[_selectedCategory]!.putIfAbsent(niveauId, () => {});
-    if (amount == null || amount <= 0) {
-      _allPricing[_selectedCategory]![niveauId]!.remove(sectionId);
-    } else {
-      _allPricing[_selectedCategory]![niveauId]![sectionId] = amount;
-    }
+    _allPricing[_selectedCategory]![niveauId]![sectionId] = (amount != null && amount > 0) ? amount : 0.0;
   }
 
   Widget _buildPricingSkeleton() {
