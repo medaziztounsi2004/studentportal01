@@ -83,6 +83,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   StudentPaymentSummary? _selectedDetailStudentSummary;
   final _niveauSearchController = TextEditingController();
   String _niveauSearchQuery = '';
+  int _pricingVersion = 0;
 
   int _getNiveauSortOrder(String? str) {
     if (str == null || str.trim().isEmpty) return 999;
@@ -804,17 +805,25 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
     );
     if (mounted) {
       ref.invalidate(paymentsProvider);
-      setState(() {});
+      setState(() {
+        _pricingVersion++;
+      });
     }
   }
 
-  void _showDefaultPaymentMethodDialog(BuildContext context) {
-    _showBlurredDialog(
+  void _showDefaultPaymentMethodDialog(BuildContext context) async {
+    await _showBlurredDialog(
       context: context,
       child: _DefaultPaymentMethodDialog(
         allNiveaux: _allNiveaux,
       ),
     );
+    if (mounted) {
+      ref.invalidate(paymentsProvider);
+      setState(() {
+        _pricingVersion++;
+      });
+    }
   }
 
   Future<T?> _showBlurredDialog<T>({
@@ -1758,10 +1767,12 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
         Expanded(
           child: _selectedDetailStudentSummary != null
               ? _StudentPaymentDetailDialog(
+                  key: ValueKey('${_selectedDetailStudentSummary!.studentId}'),
                   student: _selectedDetailStudentSummary!,
                   ref: ref,
                   isFullPage: true,
                   niveauId: _layoutSelectedNiveauId,
+                  pricingVersion: _pricingVersion,
                   onBack: () {
                     if (widget.initialStudentId != null && Navigator.canPop(context)) {
                       Navigator.pop(context);
@@ -4724,13 +4735,16 @@ class _StudentPaymentDetailDialog extends ConsumerStatefulWidget {
   final bool isFullPage;
   final VoidCallback? onBack;
   final String? niveauId;
+  final int pricingVersion;
 
   const _StudentPaymentDetailDialog({
+    super.key,
     required this.student,
     required this.ref,
     this.isFullPage = false,
     this.onBack,
     this.niveauId,
+    this.pricingVersion = 0,
   });
 
   @override
@@ -4759,11 +4773,24 @@ class _StudentPaymentDetailDialogState
   }
 
   @override
+  void didUpdateWidget(_StudentPaymentDetailDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pricingVersion != widget.pricingVersion ||
+        oldWidget.student.studentId != widget.student.studentId ||
+        oldWidget.niveauId != widget.niveauId) {
+      _loadStudentPayments();
+    }
+  }
+
+  @override
   void dispose() {
     super.dispose();
   }
 
   Future<void> _loadStudentPayments() async {
+    if (mounted && !_isLoading) {
+      setState(() => _isLoading = true);
+    }
     final seedPayments = <Map<String, dynamic>>[];
     try {
       final supabase = Supabase.instance.client;
@@ -5534,7 +5561,11 @@ class _StudentPaymentDetailDialogState
 
   Widget _buildSummaryRow() {
     final s = widget.student;
-    final progress = s.progressPercent;
+    final total = _totalAmount > 0 ? _totalAmount : s.totalAmount;
+    final paid = _paidAmount > 0 ? _paidAmount : s.paidAmount;
+    final paidCount = _paidPayments > 0 ? _paidPayments : s.paidPayments;
+    final totalCount = _totalPayments > 0 ? _totalPayments : s.totalPayments;
+    final progress = total > 0 ? (paid / total * 100).clamp(0.0, 100.0) : s.progressPercent;
     final isComplete = progress >= 100;
 
     return Padding(
@@ -5542,12 +5573,12 @@ class _StudentPaymentDetailDialogState
       child: Row(
         children: [
           _summaryPill(
-            '${s.paidAmount.toStringAsFixed(0)} TND',
-            'payé sur ${s.totalAmount.toStringAsFixed(0)}',
+            '${paid.toStringAsFixed(0)} TND',
+            'payé sur ${total.toStringAsFixed(0)}',
           ),
           const SizedBox(width: 10),
           _summaryPill(
-            '${s.paidPayments}/${s.totalPayments}',
+            '$paidCount/$totalCount',
             'paiements',
           ),
           const SizedBox(width: 10),
@@ -10042,10 +10073,10 @@ class _PaymentPricingDialogState extends State<_PaymentPricingDialog> {
         }
       }
 
-      await _loadPricing();
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        final messenger = ScaffoldMessenger.of(context);
+        Navigator.of(context).pop(true);
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Tarification enregistrée avec succès'),
             backgroundColor: Color(0xFF10B981),
