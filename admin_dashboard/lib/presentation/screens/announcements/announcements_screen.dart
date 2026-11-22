@@ -1214,7 +1214,6 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     await ref
         .read(announcementsProvider.notifier)
         .bulkTogglePin(selected, pinned);
-    _exitSelectionMode();
   }
 
   void _bulkImportant(bool important) async {
@@ -1226,7 +1225,6 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     await ref
         .read(announcementsProvider.notifier)
         .bulkToggleImportant(selected, important);
-    _exitSelectionMode();
   }
 
   void _bulkDeleteConfirm() {
@@ -1450,10 +1448,6 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
       filtered = filtered.where((a) => a.isPinned).toList();
     } else if (_filterStatus == 'important') {
       filtered = filtered.where((a) => a.isImportant).toList();
-    }
-
-    if (_selectionMode) {
-      return _buildAnnouncementsList(filtered);
     }
 
     return TabBarView(

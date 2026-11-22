@@ -4287,7 +4287,6 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       await ref.read(paymentsProvider.notifier).bulkMarkAsPaid(_selectedPayments.toList(), method: selectedMethod);
-                      setState(() => _selectedPayments.clear());
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Paiements marqués comme payés'), backgroundColor: Color(0xFF10B981)));
                     },
@@ -7178,10 +7177,6 @@ class _StudentPaymentDetailDialogState
         }
       }
 
-      setState(() {
-        _selectedPaymentIds.clear();
-      });
-
       await _loadStudentPayments();
 
       try {
@@ -7268,10 +7263,6 @@ class _StudentPaymentDetailDialogState
           }
         }
       }
-
-      setState(() {
-        _selectedPaymentIds.clear();
-      });
 
       await _loadStudentPayments();
 

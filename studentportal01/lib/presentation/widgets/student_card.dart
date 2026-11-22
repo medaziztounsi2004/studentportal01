@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../core/services/biometric_service.dart';
 import '../../data/models/user_model.dart';
 import '../../data/models/enrollment_model.dart';
 import '../../data/models/school_model.dart';
@@ -89,7 +91,9 @@ class _StudentCardState extends ConsumerState<StudentCard> {
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _pickAndUploadPhoto(ImageSource.camera);
+                  Future.delayed(const Duration(milliseconds: 200), () {
+                    if (mounted) _pickAndUploadPhoto(ImageSource.camera);
+                  });
                 },
               ),
               const SizedBox(height: 8),
@@ -109,7 +113,9 @@ class _StudentCardState extends ConsumerState<StudentCard> {
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  _pickAndUploadPhoto(ImageSource.gallery);
+                  Future.delayed(const Duration(milliseconds: 200), () {
+                    if (mounted) _pickAndUploadPhoto(ImageSource.gallery);
+                  });
                 },
               ),
             ],
@@ -121,13 +127,33 @@ class _StudentCardState extends ConsumerState<StudentCard> {
 
   Future<void> _pickAndUploadPhoto([ImageSource source = ImageSource.gallery]) async {
     if (_uploadingPhoto) return;
-    final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: source,
-      maxWidth: 1600,
-      maxHeight: 1600,
-      imageQuality: 92,
-    );
+
+    BiometricService.instance.setExternalIntentActive(true);
+    XFile? image;
+    try {
+      final picker = ImagePicker();
+      image = await picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 88,
+      );
+
+      // Support Android lost data recovery if camera caused activity recreation
+      if (image == null && defaultTargetPlatform == TargetPlatform.android) {
+        final lost = await picker.retrieveLostData();
+        if (lost.file != null) {
+          image = lost.file;
+        }
+      }
+    } catch (e) {
+      debugPrint('[StudentCard] Error picking photo: $e');
+    } finally {
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        BiometricService.instance.setExternalIntentActive(false);
+      });
+    }
+
     if (image == null) return;
 
     final rawBytes = await image.readAsBytes();

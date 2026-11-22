@@ -906,7 +906,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
       return SliverFillRemaining(
         hasScrollBody: false,
         child: EmptyStateGlassCard(
-          icon: Icons.event_available_rounded,
+          icon: Icons.event_busy_rounded,
           gradientColors: const [Color(0xFFEC4899), Color(0xFFF43F5E)],
           title: l10n.noAbsences,
           subtitle: l10n.noAbsencesDesc,
@@ -941,7 +941,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen>
             const SizedBox(height: 16),
             EmptyStateGlassCard(
               icon: Icons.search_off_rounded,
-              gradientColors: const [Color(0xFF64748B), Color(0xFF475569)],
+              gradientColors: const [Color(0xFFEC4899), Color(0xFFF43F5E)],
               title: l10n.noResults,
               subtitle: l10n.noSearchResultsDesc,
             ),

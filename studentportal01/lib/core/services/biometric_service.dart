@@ -11,6 +11,29 @@ class BiometricService {
   static const String _prefKey = 'biometric_lock_enabled';
   static const MethodChannel _deviceLockChannel = MethodChannel('com.studentportal.device_lock');
 
+  /// Tracks if the app has launched an external intent (camera, photo picker, file chooser)
+  /// to suppress lifecycle-triggered biometric authentication on resume.
+  bool _isExternalIntentActive = false;
+  DateTime? _intentEndTime;
+
+  bool get isExternalIntentActive => _isExternalIntentActive;
+
+  bool get isInIntentGracePeriod {
+    if (_isExternalIntentActive) return true;
+    if (_intentEndTime != null &&
+        DateTime.now().difference(_intentEndTime!).inMilliseconds < 3000) {
+      return true;
+    }
+    return false;
+  }
+
+  void setExternalIntentActive(bool active) {
+    _isExternalIntentActive = active;
+    if (!active) {
+      _intentEndTime = DateTime.now();
+    }
+  }
+
   /// Check if the device was locked (screen turned off / locked with PIN or biometrics)
   /// while the app was backgrounded. Resets the native lock flag.
   Future<bool> checkAndResetDeviceLocked() async {

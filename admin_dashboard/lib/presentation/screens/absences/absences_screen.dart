@@ -379,7 +379,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                         backgroundColor: AppColors.success,
                       ),
                     );
-                    ref.read(absencesProvider.notifier).clearSelection();
                   }
                 } finally {
                   if (mounted) setState(() => _isPerformingAction = false);
@@ -407,7 +406,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                         backgroundColor: AppColors.warning,
                       ),
                     );
-                    ref.read(absencesProvider.notifier).clearSelection();
                   }
                 } finally {
                   if (mounted) setState(() => _isPerformingAction = false);
@@ -931,7 +929,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                   final counted = await ref.read(absencesProvider.notifier).bulkToggleJustified(true);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$counted absence(s) marquée(s) justifiée(s)', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.success));
-                    ref.read(absencesProvider.notifier).clearSelection();
                   }
                 } finally {
                   if (mounted) setState(() => _isPerformingAction = false);
@@ -948,7 +945,6 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
                   final counted = await ref.read(absencesProvider.notifier).bulkToggleJustified(false);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$counted absence(s) marquée(s) non justifiée(s)', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.warning));
-                    ref.read(absencesProvider.notifier).clearSelection();
                   }
                 } finally {
                   if (mounted) setState(() => _isPerformingAction = false);

@@ -1372,14 +1372,14 @@ const SizedBox.shrink(),
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.successSoft,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFDF2F8),
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.event_available_outlined,
+              Icons.event_busy_rounded,
               size: 40,
-              color: AppColors.success,
+              color: Color(0xFFEC4899),
             ),
           ),
           const SizedBox(height: 16),
@@ -1833,7 +1833,6 @@ const SizedBox.shrink(),
       ref.invalidate(studentAbsencesProvider(widget.studentId));
       await ref.read(studentAbsencesProvider(widget.studentId).future);
       if (mounted) {
-        setState(() => _selectedAbsences.clear());
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

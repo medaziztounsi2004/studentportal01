@@ -55,6 +55,11 @@ class _BiometricLockOverlayState extends State<BiometricLockOverlay>
   Future<void> _handleAppResumed() async {
     if (_isAuthenticating) return;
 
+    if (BiometricService.instance.isInIntentGracePeriod) {
+      await BiometricService.instance.checkAndResetDeviceLocked();
+      return;
+    }
+
     final enabled = await BiometricService.instance.isBiometricLockEnabled();
     if (!enabled || !mounted) return;
 

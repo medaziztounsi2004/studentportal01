@@ -151,6 +151,12 @@ class AppTheme {
         color: AppColors.divider,
         thickness: 1,
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(100),
+        ),
+      ),
     );
   }
 
@@ -186,6 +192,12 @@ class AppTheme {
       dividerTheme: DividerThemeData(
         color: Colors.white.withValues(alpha: 0.12),
         thickness: 1,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(100),
+        ),
       ),
     );
   }

@@ -586,7 +586,7 @@ class AppTheme {
         backgroundColor: AppColors.slate900,
         contentTextStyle: GoogleFonts.plusJakartaSans(color: AppColors.surface),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius: BorderRadius.circular(100),
         ),
         behavior: SnackBarBehavior.floating,
       ),

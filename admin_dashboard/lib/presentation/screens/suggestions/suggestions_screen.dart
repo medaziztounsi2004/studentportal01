@@ -691,7 +691,6 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
                       await ref.read(suggestionsProvider.notifier).markAsRead(id);
                     }
                   }
-                  _clearSelection();
                 } finally {
                   if (mounted) setState(() => _isPerformingAction = false);
                 }

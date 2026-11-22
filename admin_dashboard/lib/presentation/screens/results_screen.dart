@@ -1059,13 +1059,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
                                     final avg = progress.semesterAverage!;
                                     final isPassing = avg >= 10.0;
                                     return Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
                                         color: isPassing ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                                        borderRadius: BorderRadius.circular(9999),
-                                        border: Border.all(
-                                          color: isPassing ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
-                                        ),
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -1073,8 +1070,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
                                           Text(
                                             avg.toStringAsFixed(2),
                                             style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
                                               color: isPassing ? const Color(0xFF059669) : const Color(0xFFDC2626),
                                             ),
                                           ),
@@ -1091,20 +1088,19 @@ class _ResultsScreenState extends State<ResultsScreen> {
                                     );
                                   } else {
                                     return Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFFFFBEB),
-                                        borderRadius: BorderRadius.circular(9999),
-                                        border: Border.all(color: const Color(0xFFFDE68A)),
+                                        color: const Color(0xFFFEF3C7),
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
                                         progress.totalSubjects > 0
                                             ? '${progress.collectedCount} / ${progress.totalSubjects} matière${progress.totalSubjects > 1 ? 's' : ''}'
                                             : '0 matière',
                                         style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFFB45309),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFFD97706),
                                         ),
                                       ),
                                     );
@@ -1362,7 +1358,18 @@ class _ResultsScreenState extends State<ResultsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 48, color: AppColors.textTertiary.withOpacity(0.5)),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Color(0xFFEFF6FF),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              size: 40,
+              color: const Color(0xFF3B82F6),
+            ),
+          ),
           const SizedBox(height: 16),
           Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           if (subtitle != null) ...[

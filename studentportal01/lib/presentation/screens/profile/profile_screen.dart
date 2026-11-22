@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' hide TextDirection;
@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/config/supabase_config.dart';
+import '../../../core/services/biometric_service.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/enrollment_model.dart';
@@ -43,13 +44,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _pickAndUploadPhoto(ImageSource source) async {
     if (_isUploadingPhoto) return;
 
-    final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: source,
-      maxWidth: 1600,
-      maxHeight: 1600,
-      imageQuality: 92,
-    );
+    BiometricService.instance.setExternalIntentActive(true);
+    XFile? image;
+    try {
+      final picker = ImagePicker();
+      image = await picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 88,
+      );
+
+      // Support Android lost data recovery if camera caused activity recreation
+      if (image == null && defaultTargetPlatform == TargetPlatform.android) {
+        final lost = await picker.retrieveLostData();
+        if (lost.file != null) {
+          image = lost.file;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ProfileScreen] Error picking photo: $e');
+    } finally {
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        BiometricService.instance.setExternalIntentActive(false);
+      });
+    }
 
     if (image == null) return;
 
@@ -117,7 +136,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             backgroundColor: const Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
           ),
         );
       }
@@ -135,7 +154,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             backgroundColor: const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
           ),
         );
       }
@@ -164,11 +183,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: _FloatingPhotoPickerCard(
                   onPickCamera: () {
                     Navigator.of(ctx).pop();
-                    _pickAndUploadPhoto(ImageSource.camera);
+                    Future.delayed(const Duration(milliseconds: 200), () {
+                      if (mounted) _pickAndUploadPhoto(ImageSource.camera);
+                    });
                   },
                   onPickGallery: () {
                     Navigator.of(ctx).pop();
-                    _pickAndUploadPhoto(ImageSource.gallery);
+                    Future.delayed(const Duration(milliseconds: 200), () {
+                      if (mounted) _pickAndUploadPhoto(ImageSource.gallery);
+                    });
                   },
                   onClose: () => Navigator.of(ctx).pop(),
                 ),

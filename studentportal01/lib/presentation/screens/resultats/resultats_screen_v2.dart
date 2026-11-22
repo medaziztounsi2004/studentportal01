@@ -583,7 +583,7 @@ class _ResultatsScreenV2State extends ConsumerState<ResultatsScreenV2>
             EmptyStateGlassCard(
               horizontalMargin: 0,
               icon: Icons.search_off_rounded,
-              gradientColors: const [Color(0xFF64748B), Color(0xFF475569)],
+              gradientColors: const [Color(0xFF3B82F6), Color(0xFF2563EB)],
               title: l10n.noResults,
               subtitle: l10n.noSearchResultsDesc,
             ),

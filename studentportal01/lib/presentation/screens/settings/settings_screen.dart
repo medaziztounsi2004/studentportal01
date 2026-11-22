@@ -61,6 +61,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             behavior: SnackBarBehavior.floating,
             backgroundColor: const Color(0xFFEF4444),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
           ),
         );
         return;
@@ -83,6 +84,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               behavior: SnackBarBehavior.floating,
               backgroundColor: const Color(0xFF10B981),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
             ),
           );
         }
@@ -117,7 +119,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         backgroundColor: const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
       ),
     );
   }
@@ -279,7 +281,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                                 backgroundColor: const Color(0xFFEF4444),
                                 behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                               ),
                             );
                             return;
@@ -295,7 +297,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                                 backgroundColor: const Color(0xFFEF4444),
                                 behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                               ),
                             );
                             return;
@@ -311,7 +313,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                                 backgroundColor: const Color(0xFFEF4444),
                                 behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                               ),
                             );
                             return;
@@ -333,7 +335,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   ),
                                   backgroundColor: const Color(0xFF10B981),
                                   behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                                 ),
                               );
                             }
@@ -352,7 +354,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   ),
                                   backgroundColor: const Color(0xFFEF4444),
                                   behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                                 ),
                               );
                             }
