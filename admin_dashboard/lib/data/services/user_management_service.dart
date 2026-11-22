@@ -159,6 +159,7 @@ class UserManagementService {
     required String userId,
     required String accountStatus,
   }) async {
+    final bool isActive = accountStatus == 'active';
     try {
       final response = await _client.functions.invoke(
         'manage-users',
@@ -169,6 +170,15 @@ class UserManagementService {
         },
       );
       if (response.status == 200 && response.data?['success'] == true) {
+        try {
+          await _client.from('users').update({
+            'is_active': isActive,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', userId);
+          await _client.from('enrollments').update({
+            'is_active': isActive,
+          }).eq('user_id', userId);
+        } catch (_) {}
         return true;
       }
     } catch (_) {}
@@ -178,9 +188,15 @@ class UserManagementService {
           .from('users')
           .update({
             'account_status': accountStatus,
+            'is_active': isActive,
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', userId);
+      try {
+        await _client.from('enrollments').update({
+          'is_active': isActive,
+        }).eq('user_id', userId);
+      } catch (_) {}
       return true;
     } catch (e) {
       debugPrint('UserManagementService.setAccountStatus error: $e');
@@ -194,6 +210,7 @@ class UserManagementService {
     required bool isActive,
   }) async {
     if (userIds.isEmpty) return true;
+    final targetAccountStatus = isActive ? 'active' : 'paused_unpaid';
 
     // 1. Primary: Direct RPC with SECURITY DEFINER
     try {
@@ -202,6 +219,12 @@ class UserManagementService {
         'p_is_active': isActive,
       });
       if (res != null && (res['success'] == true || res is Map)) {
+        try {
+          await _client.from('users').update({
+            'account_status': targetAccountStatus,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).inFilter('id', userIds);
+        } catch (_) {}
         return true;
       }
     } catch (e) {
@@ -219,6 +242,12 @@ class UserManagementService {
         },
       );
       if (response.status == 200 && response.data?['success'] == true) {
+        try {
+          await _client.from('users').update({
+            'account_status': targetAccountStatus,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).inFilter('id', userIds);
+        } catch (_) {}
         return true;
       }
     } catch (e) {
@@ -229,6 +258,7 @@ class UserManagementService {
     try {
       await _client.from('users').update({
         'is_active': isActive,
+        'account_status': targetAccountStatus,
         'updated_at': DateTime.now().toIso8601String(),
       }).inFilter('id', userIds);
       try {

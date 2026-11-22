@@ -648,7 +648,12 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       state = AsyncValue.data(
         state.value!.copyWith(
           users: currentUsers
-              .map((u) => u.id == userId ? u.copyWith(isActive: newActive) : u)
+              .map((u) => u.id == userId
+                  ? u.copyWith(
+                      isActive: newActive,
+                      accountStatus: newActive ? 'active' : 'paused_unpaid',
+                    )
+                  : u)
               .toList(),
         ),
       );
@@ -682,7 +687,12 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       state = AsyncValue.data(
         state.value!.copyWith(
           users: currentUsers
-              .map((u) => idSet.contains(u.id) ? u.copyWith(isActive: newActive) : u)
+              .map((u) => idSet.contains(u.id)
+                  ? u.copyWith(
+                      isActive: newActive,
+                      accountStatus: newActive ? 'active' : 'paused_unpaid',
+                    )
+                  : u)
               .toList(),
         ),
       );

@@ -591,6 +591,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   // ==================== HEADER ====================
   Widget _buildHeader(String fullName, Map<String, dynamic> user) {
     final isStudent = user['role'] == 'student';
+    final bool rawActive = user['is_active'] != false;
+    final String rawStatus = (user['account_status'] as String? ?? 'active').toLowerCase();
+    final bool isSuspended = _optimisticAccountStatus != null
+        ? (_optimisticAccountStatus == 'paused_unpaid')
+        : (!rawActive || rawStatus == 'paused_unpaid');
+
     return Container(
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
       decoration: const BoxDecoration(
@@ -612,7 +618,26 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(fullName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.3)),
+                Row(
+                  children: [
+                    Text(fullName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: -0.3)),
+                    if (isSuspended) ...[
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(100),
+                          border: Border.all(color: const Color(0xFFFECACA)),
+                        ),
+                        child: const Text(
+                          'Suspendu',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFDC2626)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 Text(
                   isStudent ? 'Profil étudiant' : 'Profil utilisateur',
                   style: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
@@ -663,14 +688,20 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   }
 
   Widget _buildAccountStatusButton(Map<String, dynamic> user) {
-    final status = (_optimisticAccountStatus ?? user['account_status'] as String? ?? 'active').toLowerCase();
-    final isPaused = status == 'paused_unpaid';
+    final bool rawActive = user['is_active'] != false;
+    final String rawStatus = (user['account_status'] as String? ?? 'active').toLowerCase();
+
+    final bool isPaused = _optimisticAccountStatus != null
+        ? (_optimisticAccountStatus == 'paused_unpaid')
+        : (!rawActive || rawStatus == 'paused_unpaid');
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isPaused ? const Color(0xFFFEF2F2) : Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border.withOpacity(0.6)),
+        border: Border.all(
+          color: isPaused ? const Color(0xFFFECACA) : AppColors.border.withOpacity(0.6),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -749,17 +780,22 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                   if (confirm != true) return;
 
                   final nextStatus = isPaused ? 'active' : 'paused_unpaid';
+                  final nextActive = isPaused;
+
                   // Instant optimistic UI update
                   setState(() {
                     _optimisticAccountStatus = nextStatus;
+                    user['is_active'] = nextActive;
+                    user['account_status'] = nextStatus;
                     _isTogglingAccountStatus = true;
                   });
+
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
                           nextStatus == 'paused_unpaid'
-                              ? 'Accès élève suspendu pour impayé.'
+                              ? 'Accès élève suspendu.'
                               : 'Accès élève réactivé.',
                         ),
                         backgroundColor: nextStatus == 'paused_unpaid'
@@ -771,16 +807,23 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                       ),
                     );
                   }
+
                   try {
-                    final ok = await UserManagementService.setAccountStatus(
+                    final okStatus = await UserManagementService.setAccountStatus(
                       userId: widget.userId,
                       accountStatus: nextStatus,
                     );
+                    final okArchive = await UserManagementService.toggleArchive(
+                      userIds: [widget.userId],
+                      isActive: nextActive,
+                    );
                     if (!mounted) return;
-                    if (!ok) {
+                    if (!okStatus && !okArchive) {
                       // Revert optimistic update on failure
                       setState(() {
                         _optimisticAccountStatus = isPaused ? 'paused_unpaid' : 'active';
+                        user['is_active'] = !nextActive;
+                        user['account_status'] = isPaused ? 'paused_unpaid' : 'active';
                       });
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -790,11 +833,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                         ),
                       );
+                    } else {
+                      ref.invalidate(userProfileDataProvider(widget.userId));
+                      ref.read(usersProvider.notifier).refresh(showLoading: false);
                     }
                   } catch (e) {
                     if (mounted) {
                       setState(() {
                         _optimisticAccountStatus = isPaused ? 'paused_unpaid' : 'active';
+                        user['is_active'] = !nextActive;
+                        user['account_status'] = isPaused ? 'paused_unpaid' : 'active';
                       });
                     }
                   } finally {
@@ -813,7 +861,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 ),
                 const SizedBox(width: 7),
                 Text(
-                  isPaused ? 'Suspendu (Impayé) — Réactiver' : 'Accès actif',
+                  isPaused ? 'Suspendu — Réactiver' : 'Accès actif',
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
@@ -1043,8 +1091,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     final niveauName = user['niveau_name'] as String?;
     final sectionName = user['section_name'] as String?;
     final gender = user['gender'] as String?;
-    final nationality = user['nationality'] as String?;
-    final dateOfBirth = user['date_of_birth'] as String?;
+    final String? nationality = user['nationality'] as String?;
+    final String? dateOfBirth = user['date_of_birth'] as String?;
+
+    final bool rawActive = user['is_active'] != false;
+    final String rawStatus = (user['account_status'] as String? ?? 'active').toLowerCase();
+    final bool isSuspended = _optimisticAccountStatus != null
+        ? (_optimisticAccountStatus == 'paused_unpaid')
+        : (!rawActive || rawStatus == 'paused_unpaid');
 
     String? dobFormatted;
     if (dateOfBirth != null) {
@@ -1102,6 +1156,21 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             },
             child: Text(fullName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.slate800), textAlign: TextAlign.center),
           ),
+          if (isSuspended) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              child: const Text(
+                'Suspendu',
+                style: TextStyle(color: Color(0xFFDC2626), fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
           const SizedBox(height: 6),
           // Role badge (hidden for students per design)
           if (!isStudent)
