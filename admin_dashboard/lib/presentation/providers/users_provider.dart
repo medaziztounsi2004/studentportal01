@@ -582,4 +582,83 @@ class UsersNotifier extends AsyncNotifier<UsersState> {
       return {'deleted': 0, 'failed': ids.length};
     }
   }
+
+  /// Toggle archive status for a single user (and sync enrollments if student)
+  Future<bool> toggleUserArchive(String userId, bool newActive) async {
+    // Optimistic UI update
+    if (state.value != null) {
+      final currentUsers = state.value!.users;
+      state = AsyncValue.data(
+        state.value!.copyWith(
+          users: currentUsers
+              .map((u) => u.id == userId ? u.copyWith(isActive: newActive) : u)
+              .toList(),
+        ),
+      );
+    }
+
+    try {
+      final now = DateTime.now().toIso8601String();
+      await _adminSupabase.from('users').update({
+        'is_active': newActive,
+        'updated_at': now,
+      }).eq('id', userId);
+
+      try {
+        await _adminSupabase.from('enrollments').update({
+          'is_active': newActive,
+        }).eq('user_id', userId);
+      } catch (enrollErr) {
+        debugPrint('UsersNotifier: enrollments archive update warning: $enrollErr');
+      }
+
+      await refresh();
+      return true;
+    } catch (e) {
+      debugPrint('UsersNotifier: toggleUserArchive error: $e');
+      await refresh();
+      return false;
+    }
+  }
+
+  /// Bulk toggle archive status for multiple users (and sync enrollments)
+  Future<bool> bulkToggleArchive(List<String> userIds, bool newActive) async {
+    if (userIds.isEmpty) return true;
+
+    // Optimistic UI update
+    if (state.value != null) {
+      final idSet = userIds.toSet();
+      final currentUsers = state.value!.users;
+      state = AsyncValue.data(
+        state.value!.copyWith(
+          users: currentUsers
+              .map((u) => idSet.contains(u.id) ? u.copyWith(isActive: newActive) : u)
+              .toList(),
+        ),
+      );
+    }
+
+    try {
+      final now = DateTime.now().toIso8601String();
+      await _adminSupabase.from('users').update({
+        'is_active': newActive,
+        'updated_at': now,
+      }).inFilter('id', userIds);
+
+      try {
+        await _adminSupabase.from('enrollments').update({
+          'is_active': newActive,
+        }).inFilter('user_id', userIds);
+      } catch (enrollErr) {
+        debugPrint('UsersNotifier: enrollments bulk archive update warning: $enrollErr');
+      }
+
+      await refresh();
+      return true;
+    } catch (e) {
+      debugPrint('UsersNotifier: bulkToggleArchive error: $e');
+      await refresh();
+      return false;
+    }
+  }
 }

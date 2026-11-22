@@ -877,10 +877,35 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
-                                u.fullName,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
-                                overflow: TextOverflow.ellipsis,
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      u.fullName,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color: u.isActive ? AppColors.textPrimary : AppColors.textTertiary,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (!u.isActive) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEF2F2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: const Color(0xFFFECACA), width: 0.8),
+                                      ),
+                                      child: const Text(
+                                        'Archivé',
+                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFFDC2626)),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               const SizedBox(height: 2),
                               Text(
@@ -1035,7 +1060,12 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                       _buildPopupItem('view', Icons.visibility_outlined, 'Voir profil', AppColors.success),
                       _buildPopupItem('edit', Icons.edit_outlined, 'Modifier', const Color(0xFF655DD5)),
                       _buildPopupItem('reset_password', Icons.lock_reset_outlined, 'Réinitialiser mot de passe', AppColors.textSecondary),
-                      _buildPopupItem('archive', Icons.archive_outlined, 'Archiver', AppColors.textSecondary),
+                      _buildPopupItem(
+                        'archive',
+                        u.isActive ? Icons.archive_outlined : Icons.unarchive_outlined,
+                        u.isActive ? 'Archiver' : 'Désarchiver',
+                        AppColors.textSecondary,
+                      ),
                       const PopupMenuDivider(),
                       _buildPopupItem('delete', Icons.delete_outline_rounded, 'Supprimer', AppColors.error),
                     ],
@@ -1245,7 +1275,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
               allArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
               allArchived ? 'Désarchiver' : 'Archiver',
               Colors.white70,
-              () => _bulkToggleArchive(allArchived),
+              () => _bulkToggleArchive(shouldArchive: !allArchived),
             ),
             if (hasStudents)
               _buildSelectionAction(
@@ -1957,80 +1987,97 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   }
 
   void _confirmArchive(BuildContext context, UserModel user) {
+    final willArchive = user.isActive;
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.08),
       builder: (ctx) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Row(
-          children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: AppColors.warningSoft, borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.archive_outlined, color: AppColors.warning, size: 18),
-            ),
-            const SizedBox(width: 12),
-            const Text('Archiver cet utilisateur ?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          ],
-        ),
-        content: Text('L\'utilisateur "${user.fullName}" sera archiv\u00e9.'),
-        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-        actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
             children: [
-              SizedBox(
-                height: 40,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF6B7280),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: willArchive ? AppColors.warningSoft : AppColors.successSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  willArchive ? Icons.archive_outlined : Icons.unarchive_outlined,
+                  color: willArchive ? AppColors.warning : AppColors.success,
+                  size: 18,
                 ),
               ),
               const SizedBox(width: 12),
-              SizedBox(
-                height: 40,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    final willArchive = user.isActive;
-                    try {
-                      await SupabaseConfig.adminClient.from('users').update({'is_active': !willArchive}).eq('id', user.id);
-                      ref.invalidate(usersProvider);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(willArchive ? 'Utilisateur archivé' : 'Utilisateur désarchivé'),
-                            backgroundColor: willArchive ? AppColors.warning : AppColors.success,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error));
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.archive_outlined, size: 16),
-                  label: const Text('Archiver', style: TextStyle(fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.warning,
-                    foregroundColor: Colors.white,
-                    elevation: 2,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
+              Text(
+                willArchive ? 'Archiver cet utilisateur ?' : 'Désarchiver cet utilisateur ?',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
             ],
           ),
-        ],
+          content: Text(
+            willArchive
+                ? 'L\'utilisateur "${user.fullName}" sera archivé.'
+                : 'L\'utilisateur "${user.fullName}" sera réactivé.',
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  height: 40,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final success = await ref
+                          .read(usersProvider.notifier)
+                          .toggleUserArchive(user.id, !willArchive);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              success
+                                  ? (willArchive
+                                      ? 'Utilisateur archivé'
+                                      : 'Utilisateur désarchivé')
+                                  : 'Échec de la modification du statut',
+                            ),
+                            backgroundColor: success
+                                ? (willArchive ? AppColors.warning : AppColors.success)
+                                : AppColors.error,
+                          ),
+                        );
+                      }
+                    },
+                    icon: Icon(willArchive ? Icons.archive_outlined : Icons.unarchive_outlined, size: 16),
+                    label: Text(willArchive ? 'Archiver' : 'Désarchiver', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: willArchive ? AppColors.warning : AppColors.success,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -2114,28 +2161,67 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   // ═══════════════════════════════════════════════════
   // BULK ACTIONS
   // ═══════════════════════════════════════════════════
-  Future<void> _bulkToggleArchive(bool currentlyArchived) async {
-    final newActive = currentlyArchived;
+  Future<void> _bulkToggleArchive({required bool shouldArchive}) async {
+    final selectedIds = _selectedUserIds.toList();
+    if (selectedIds.isEmpty) return;
+
+    final count = selectedIds.length;
+    final newActive = !shouldArchive;
+
+    setState(() {
+      _selectedUserIds.clear();
+      _isSelectionMode = false;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const IosLoader.small(color: Colors.white),
+              const SizedBox(width: 12),
+              Text(
+                shouldArchive
+                    ? 'Archivage de $count utilisateur(s) en cours...'
+                    : 'Désarchivage de $count utilisateur(s) en cours...',
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 15),
+          backgroundColor: const Color(0xFF655DD5),
+        ),
+      );
+    }
+
     try {
-      await SupabaseConfig.adminClient
-          .from('users')
-          .update({'is_active': newActive})
-          .inFilter('id', _selectedUserIds.toList());
-      ref.invalidate(usersProvider);
-      final count = _selectedUserIds.length;
-      setState(() => _selectedUserIds.clear());
+      final success = await ref
+          .read(usersProvider.notifier)
+          .bulkToggleArchive(selectedIds, newActive);
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(newActive ? '$count utilisateur(s) désarchivé(s)' : '$count utilisateur(s) archivé(s)'),
-            backgroundColor: newActive ? AppColors.success : AppColors.warning,
+            content: Text(
+              success
+                  ? (shouldArchive
+                      ? '$count utilisateur(s) archivé(s)'
+                      : '$count utilisateur(s) désarchivé(s)')
+                  : 'Échec de la modification du statut',
+            ),
+            backgroundColor: success
+                ? (shouldArchive ? AppColors.warning : AppColors.success)
+                : AppColors.error,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(UserFriendlyError.format(e)), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(UserFriendlyError.format(e)),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -2429,10 +2515,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
                                         decoration: BoxDecoration(
                                           color: isSelected ? const Color(0xFFEEECFB) : Colors.transparent,
                                           borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(
-                                            color: isSelected ? const Color(0xFF6D4CF6) : const Color(0xFFE2E8F0),
-                                            width: isSelected ? 1.5 : 1,
-                                          ),
+                                          border: isSelected
+                                              ? Border.all(color: Colors.transparent, width: 1)
+                                              : Border.all(color: const Color(0xFFE2E8F0), width: 1),
                                         ),
                                         child: Row(
                                           children: [
