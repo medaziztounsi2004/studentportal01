@@ -13,6 +13,9 @@ import '../widgets/results/single_student_grade_entry.dart';
 import '../widgets/admin_sidebar.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/undo_redo_toolbar_buttons.dart';
+import '../providers/undo_redo_provider.dart';
+import '../widgets/feedback_pill.dart';
 
 /// View mode for the results screen
 enum ResultsViewState {
@@ -218,7 +221,36 @@ class _ResultsScreenState extends State<ResultsScreen> {
                   provider.setSemester(activeSemesterId);
                 });
               }
-              return Scaffold(
+              return CallbackShortcuts(
+                bindings: {
+                  const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () async {
+                    final n = ref.read(undoRedoProvider.notifier);
+                    if (!ref.read(undoRedoProvider).canUndo('results')) return;
+                    final desc = await n.undo('results');
+                    if (context.mounted && desc != null) FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+                  },
+                  const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () async {
+                    final n = ref.read(undoRedoProvider.notifier);
+                    if (!ref.read(undoRedoProvider).canUndo('results')) return;
+                    final desc = await n.undo('results');
+                    if (context.mounted && desc != null) FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+                  },
+                  const SingleActivator(LogicalKeyboardKey.keyY, control: true): () async {
+                    final n = ref.read(undoRedoProvider.notifier);
+                    if (!ref.read(undoRedoProvider).canRedo('results')) return;
+                    final desc = await n.redo('results');
+                    if (context.mounted && desc != null) FeedbackPill.showSuccess(context, 'Action rétablie : $desc');
+                  },
+                  const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () async {
+                    final n = ref.read(undoRedoProvider.notifier);
+                    if (!ref.read(undoRedoProvider).canRedo('results')) return;
+                    final desc = await n.redo('results');
+                    if (context.mounted && desc != null) FeedbackPill.showSuccess(context, 'Action rétablie : $desc');
+                  },
+                },
+                child: Focus(
+                  autofocus: true,
+                  child: Scaffold(
                 backgroundColor: AppColors.background,
                 body: Stack(
                   children: [
@@ -258,6 +290,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     ],
                   ],
                 ),
+              ),
+              ),
               );
             },
           );
@@ -393,7 +427,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
             tooltip: 'Exporter',
             onPressed: () {},
           ),
-
+          const SizedBox(width: 8),
+          const UndoRedoToolbarButtons(scope: 'results'),
         ],
       ),
     );

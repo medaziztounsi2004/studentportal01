@@ -23,6 +23,9 @@ import '../../widgets/user_avatar.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/modern_animated_switch.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/feedback_pill.dart';
 
 /// Text formatter that capitalizes the first letter of each word
 class CapitalizeWordsFormatter extends TextInputFormatter {
@@ -410,11 +413,46 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     });
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('announcements')) return;
+    try {
+      final desc = await notifier.undo('announcements');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('announcements')) return;
+    try {
+      final desc = await notifier.redo('announcements');
+      if (mounted && desc != null) {
+        FeedbackPill.showSuccess(context, 'Action rétablie : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final announcementsAsync = ref.watch(announcementsProvider);
 
-    return Scaffold(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
@@ -473,6 +511,8 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
             ),
         ],
       ),
+    ),
+    ),
     );
   }
 
@@ -1004,6 +1044,12 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                   icon: Icons.print_outlined,
                   tooltip: 'Imprimer',
                   onPressed: _printPage,
+                ),
+                const SizedBox(width: 8),
+                UndoRedoToolbarButtons(
+                  scope: 'announcements',
+                  onUndo: _handleUndo,
+                  onRedo: _handleRedo,
                 ),
                 const SizedBox(width: 12),
                 SizedBox(

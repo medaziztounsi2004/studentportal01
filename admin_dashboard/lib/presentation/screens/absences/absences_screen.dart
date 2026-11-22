@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../providers/absences_provider.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../widgets/feedback_pill.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/user_avatar.dart';
@@ -90,13 +94,48 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
     );
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('absences')) return;
+    try {
+      final desc = await notifier.undo('absences');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('absences')) return;
+    try {
+      final desc = await notifier.redo('absences');
+      if (mounted && desc != null) {
+        FeedbackPill.showSuccess(context, 'Action rétablie : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final absencesAsync = ref.watch(absencesProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          body: Stack(
         children: [
           Row(
             children: [
@@ -140,6 +179,8 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
           ],
         ],
       ),
+    ),
+    ),
     );
   }
 
@@ -266,7 +307,12 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
             },
           ),
           const SizedBox(width: 8),
-          const SizedBox(width: 16),
+          UndoRedoToolbarButtons(
+            scope: 'absences',
+            onUndo: _handleUndo,
+            onRedo: _handleRedo,
+          ),
+          const SizedBox(width: 12),
           SizedBox(
             height: 40,
             child: ElevatedButton.icon(

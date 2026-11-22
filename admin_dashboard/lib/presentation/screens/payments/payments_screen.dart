@@ -16,6 +16,9 @@ import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/feedback_pill.dart';
 import '../users/user_profile_screen.dart';
 
 // Maps UI plan-type keys to/from the Postgres enum values.
@@ -351,13 +354,48 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
     super.dispose();
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('payments')) return;
+    try {
+      final desc = await notifier.undo('payments');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('payments')) return;
+    try {
+      final desc = await notifier.redo('payments');
+      if (mounted && desc != null) {
+        FeedbackPill.showSuccess(context, 'Action rétablie : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final paymentsAsync = ref.watch(paymentsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F6F8),
-      body: Stack(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF6F6F8),
+          body: Stack(
         children: [
           Row(
             children: [
@@ -436,6 +474,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
           ],
         ],
       ),
+    ),
+    ),
     );
   }
 
@@ -545,13 +585,29 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
             onPressed: () => setState(() => _showFilters = !_showFilters),
           ),
 
+          // Default payment plan settings button
+          SizedBox(
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: () => _showDefaultPaymentMethodDialog(context),
+              icon: const Icon(Icons.tune_rounded, size: 16),
+              label: const Text('Plan par défaut', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF334155),
+                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+
           const SizedBox(width: 8),
 
-          // Default payment plan settings button
-          _buildHeaderIconButton(
-            icon: Icons.tune_rounded,
-            tooltip: 'Plan de paiement par défaut',
-            onPressed: () => _showDefaultPaymentMethodDialog(context),
+          UndoRedoToolbarButtons(
+            scope: 'payments',
+            onUndo: _handleUndo,
+            onRedo: _handleRedo,
           ),
 
           const SizedBox(width: 12),

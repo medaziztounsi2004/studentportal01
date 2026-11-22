@@ -21,11 +21,15 @@ import '../../providers/documents_provider.dart';
 import '../../providers/grade_levels_provider.dart';
 import '../../providers/semesters_provider.dart';
 import '../../providers/users_provider.dart';
+import 'package:flutter/services.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/ios_loader.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/feedback_pill.dart';
 
 class DocumentsScreen extends ConsumerStatefulWidget {
   const DocumentsScreen({super.key});
@@ -719,6 +723,32 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     );
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('documents')) return;
+    try {
+      final desc = await notifier.undo('documents');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('documents')) return;
+    try {
+      final desc = await notifier.redo('documents');
+      if (mounted && desc != null) {
+        FeedbackPill.showSuccess(context, 'Action rétablie : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final docsAsync = ref.watch(documentsProvider);
@@ -736,7 +766,16 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       }
     }
 
-    return Scaffold(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
@@ -824,6 +863,8 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
             _buildRightDetailDrawer(_selectedDocForDetail!, semesters),
         ],
       ),
+    ),
+    ),
     );
   }
 
@@ -972,8 +1013,13 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
               });
             },
           ),
+          const SizedBox(width: 8),
+          UndoRedoToolbarButtons(
+            scope: 'documents',
+            onUndo: _handleUndo,
+            onRedo: _handleRedo,
+          ),
           const SizedBox(width: 16),
-
           // Primary Add Button
           SizedBox(
             height: 40,

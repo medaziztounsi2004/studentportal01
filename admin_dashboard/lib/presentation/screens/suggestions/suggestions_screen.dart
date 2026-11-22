@@ -12,10 +12,14 @@ import '../../providers/suggestions_provider.dart';
 import '../../providers/classes_provider.dart';
 import '../../providers/grade_levels_provider.dart';
 import '../../../data/models/class_model.dart';
+import 'package:flutter/services.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/admin_sort_dropdown.dart';
 import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/feedback_pill.dart';
 import '../users/user_profile_screen.dart';
 
 // =====================================================
@@ -434,11 +438,46 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
     });
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('suggestions')) return;
+    try {
+      final desc = await notifier.undo('suggestions');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('suggestions')) return;
+    try {
+      final desc = await notifier.redo('suggestions');
+      if (mounted && desc != null) {
+        FeedbackPill.showSuccess(context, 'Action rétablie : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final suggestionsAsync = ref.watch(suggestionsProvider);
 
-    return Scaffold(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
@@ -494,6 +533,8 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             ),
         ],
       ),
+    ),
+    ),
     );
   }
 
@@ -607,6 +648,12 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             tooltip: 'Filtres',
             isActive: _showFilters || _hasActiveFilters(suggestionsAsync),
             onPressed: () => setState(() => _showFilters = !_showFilters),
+          ),
+          const SizedBox(width: 8),
+          UndoRedoToolbarButtons(
+            scope: 'suggestions',
+            onUndo: _handleUndo,
+            onRedo: _handleRedo,
           ),
           const SizedBox(width: 8),
           _buildHeaderIconButton(

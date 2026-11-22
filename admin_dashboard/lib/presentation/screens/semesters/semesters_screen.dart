@@ -162,6 +162,8 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
             ],
           ),
           const Spacer(),
+          const UndoRedoToolbarButtons(scope: 'semesters'),
+          const SizedBox(width: 8),
           // Academic year configuration button
           SizedBox(
             height: 40,
@@ -191,8 +193,6 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          const UndoRedoToolbarButtons(scope: 'semesters'),
-          const SizedBox(width: 12),
           // Add button
           SizedBox(
             height: 40,
@@ -2673,37 +2673,27 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section header with legend (icon removed per request)
-          Row(
-            children: [
-              const Text(
-                'Partition de l\'année scolaire',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-              const Spacer(),
-              _buildLegendDot(_brand, state.periodLabelPlural),
-              const SizedBox(width: 14),
-              _buildLegendDot(const Color(0xFFD97706), 'Vacances'),
-              const SizedBox(width: 14),
-              _buildLegendDot(const Color(0xFFDC2626), 'Examens'),
-            ],
+          // Section header (legend dots removed per user request)
+          const Text(
+            'Partition de l\'année scolaire',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1E293B),
+            ),
           ),
 
           const SizedBox(height: 12),
 
-          // Proportional segmented bar of blocks - compact, clean pill design
+          // Proportional segmented bar of blocks - compact, clean, smaller pill design
           if (items.isNotEmpty)
             ClipRRect(
-              borderRadius: BorderRadius.circular(100),
+              borderRadius: BorderRadius.circular(6),
               child: Container(
-                height: 22,
+                height: 18,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(100),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
                   children: segments.map((seg) {
@@ -2716,7 +2706,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             margin: const EdgeInsets.symmetric(horizontal: 0.75),
                             decoration: BoxDecoration(
                               color: const Color(0xFFE2E8F0),
-                              borderRadius: BorderRadius.circular(100),
+                              borderRadius: BorderRadius.circular(4),
                             ),
                           ),
                         ),
@@ -2730,7 +2720,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                           margin: const EdgeInsets.symmetric(horizontal: 0.75),
                           decoration: BoxDecoration(
                             color: seg.item!.color,
-                            borderRadius: BorderRadius.circular(100),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           alignment: Alignment.center,
                           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -2739,10 +2729,10 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
                               color: Colors.white,
-                              letterSpacing: 0.2,
+                              letterSpacing: 0.1,
                             ),
                           ),
                         ),
@@ -2762,7 +2752,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
               ),
             ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           // Month names placed directly under the rectangle visual at their correct places
           if (yearMonths.isNotEmpty)
@@ -2783,17 +2773,17 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                     children: [
                       Container(
                         width: 1.5,
-                        height: 5,
+                        height: 4,
                         color: isCur ? _brand : const Color(0xFFCBD5E1),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       Text(
                         monthsFr[mDate.month - 1],
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: isCur ? FontWeight.w800 : FontWeight.w600,
+                          fontSize: 10,
+                          fontWeight: isCur ? FontWeight.w700 : FontWeight.w500,
                           color: isCur ? _brand : const Color(0xFF64748B),
                         ),
                       ),
@@ -2804,31 +2794,6 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLegendDot(Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF64748B),
-          ),
-        ),
-      ],
     );
   }
 

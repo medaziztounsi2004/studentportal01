@@ -1,11 +1,15 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/building_models.dart';
 import '../../providers/building_provider.dart';
 import '../../widgets/admin_sidebar.dart';
 import '../../widgets/skeleton_loader.dart';
+import '../../widgets/undo_redo_toolbar_buttons.dart';
+import '../../providers/undo_redo_provider.dart';
+import '../../widgets/feedback_pill.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/error_messages.dart';
 
@@ -96,30 +100,67 @@ class _BuildingStructureScreenState
     }
   }
 
+  Future<void> _handleUndo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canUndo('structure')) return;
+    try {
+      final desc = await notifier.undo('structure');
+      if (mounted && desc != null) {
+        FeedbackPill.showUndo(context, message: 'Action annulée : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible d\'annuler : $e');
+    }
+  }
+
+  Future<void> _handleRedo() async {
+    final notifier = ref.read(undoRedoProvider.notifier);
+    if (!ref.read(undoRedoProvider).canRedo('structure')) return;
+    try {
+      final desc = await notifier.redo('structure');
+      if (mounted && desc != null) {
+        FeedbackPill.showSuccess(context, 'Action rétablie : $desc');
+      }
+    } catch (e) {
+      if (mounted) FeedbackPill.showError(context, 'Impossible de rétablir : $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final stateAsync = ref.watch(buildingProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Row(
-        children: [
-          const AdminSidebar(currentRoute: '/structure'),
-          Expanded(
-            child: Column(
-              children: [
-                _buildTopBar(context, stateAsync),
-                Expanded(
-                  child: stateAsync.when(
-                    loading: () => const BuildingStructureSkeletonLoader(),
-                    error: (e, _) => _buildErrorState(e),
-                    data: (state) => _buildContent(context, state),
-                  ),
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () => _handleUndo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () => _handleRedo(),
+        const SingleActivator(LogicalKeyboardKey.keyY, meta: true): () => _handleRedo(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          body: Row(
+            children: [
+              const AdminSidebar(currentRoute: '/structure'),
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildTopBar(context, stateAsync),
+                    Expanded(
+                      child: stateAsync.when(
+                        loading: () => const BuildingStructureSkeletonLoader(),
+                        error: (e, _) => _buildErrorState(e),
+                        data: (state) => _buildContent(context, state),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -215,6 +256,12 @@ class _BuildingStructureScreenState
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: 12),
+          UndoRedoToolbarButtons(
+            scope: 'structure',
+            onUndo: _handleUndo,
+            onRedo: _handleRedo,
           ),
           const SizedBox(width: 16),
           SizedBox(
