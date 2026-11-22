@@ -793,8 +793,8 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
     );
   }
 
-  void _showPricingConfigDialog(BuildContext context) {
-    _showBlurredDialog(
+  void _showPricingConfigDialog(BuildContext context) async {
+    await _showBlurredDialog(
       context: context,
       child: _PaymentPricingDialog(
         allNiveaux: _allNiveaux,
@@ -802,6 +802,10 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
         allClasses: _allClasses,
       ),
     );
+    if (mounted) {
+      ref.invalidate(paymentsProvider);
+      setState(() {});
+    }
   }
 
   void _showDefaultPaymentMethodDialog(BuildContext context) {
@@ -1757,6 +1761,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
                   student: _selectedDetailStudentSummary!,
                   ref: ref,
                   isFullPage: true,
+                  niveauId: _layoutSelectedNiveauId,
                   onBack: () {
                     if (widget.initialStudentId != null && Navigator.canPop(context)) {
                       Navigator.pop(context);
@@ -4718,12 +4723,14 @@ class _StudentPaymentDetailDialog extends ConsumerStatefulWidget {
   final WidgetRef ref;
   final bool isFullPage;
   final VoidCallback? onBack;
+  final String? niveauId;
 
   const _StudentPaymentDetailDialog({
     required this.student,
     required this.ref,
     this.isFullPage = false,
     this.onBack,
+    this.niveauId,
   });
 
   @override
@@ -4834,10 +4841,16 @@ class _StudentPaymentDetailDialogState
 
       // 3. Query database via Supabase
       List<dynamic> enrollmentList = [];
+      String? schoolId;
+      String? academicYearId;
+      String? niveauId = widget.niveauId;
+      String? sectionId;
+      String? studentClassId = widget.student.classId;
+
       try {
         final enrollments = await SupabaseConfig.adminClient
             .from('enrollments')
-            .select('id, school_id, class_id, academic_year_id, classes(id, school_id, niveau_id, section_id)')
+            .select('id, user_id, class_id, classes(id, name, niveau_id, section_id)')
             .eq('user_id', widget.student.studentId);
         enrollmentList = (enrollments as List?) ?? [];
       } catch (e) {
@@ -4845,7 +4858,7 @@ class _StudentPaymentDetailDialogState
         try {
           final enrollments = await supabase
               .from('enrollments')
-              .select('id, school_id, class_id, academic_year_id, classes(id, school_id, niveau_id, section_id)')
+              .select('id, user_id, class_id, classes(id, name, niveau_id, section_id)')
               .eq('user_id', widget.student.studentId);
           enrollmentList = (enrollments as List?) ?? [];
         } catch (_) {}
@@ -4856,7 +4869,7 @@ class _StudentPaymentDetailDialogState
         try {
           final enrollments = await SupabaseConfig.adminClient
               .from('enrollments')
-              .select('id, school_id, class_id, academic_year_id, classes(id, school_id, niveau_id, section_id)')
+              .select('id, user_id, class_id, classes(id, name, niveau_id, section_id)')
               .eq('id', widget.student.studentId);
           enrollmentList = (enrollments as List?) ?? [];
         } catch (_) {}
@@ -4864,19 +4877,53 @@ class _StudentPaymentDetailDialogState
 
       final enrollmentIds = enrollmentList.map((e) => e['id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
 
-      String? schoolId;
-      String? academicYearId;
-      String? niveauId;
-      String? sectionId;
       if (enrollmentList.isNotEmpty) {
         final firstEnrollment = enrollmentList.first;
-        schoolId = firstEnrollment['school_id'] as String?;
-        academicYearId = firstEnrollment['academic_year_id'] as String?;
+        studentClassId ??= firstEnrollment['class_id']?.toString();
         final cls = firstEnrollment['classes'] as Map<String, dynamic>?;
-        schoolId ??= cls?['school_id'] as String?;
-        niveauId = cls?['niveau_id'] as String?;
-        sectionId = cls?['section_id'] as String?;
+        niveauId ??= cls?['niveau_id']?.toString();
+        sectionId ??= cls?['section_id']?.toString();
       }
+
+      // If niveauId or sectionId is still null, look up by studentClassId or className
+      if (niveauId == null && studentClassId != null && studentClassId.isNotEmpty) {
+        try {
+          final cRow = await supabase
+              .from('classes')
+              .select('id, name, niveau_id, section_id')
+              .eq('id', studentClassId)
+              .maybeSingle();
+          if (cRow != null) {
+            niveauId = cRow['niveau_id']?.toString();
+            sectionId ??= cRow['section_id']?.toString();
+          }
+        } catch (_) {}
+      }
+
+      if (niveauId == null && widget.student.className != null && widget.student.className!.isNotEmpty) {
+        try {
+          final cRow = await supabase
+              .from('classes')
+              .select('id, name, niveau_id, section_id')
+              .ilike('name', widget.student.className!.trim())
+              .maybeSingle();
+          if (cRow != null) {
+            niveauId = cRow['niveau_id']?.toString();
+            sectionId ??= cRow['section_id']?.toString();
+          }
+        } catch (_) {}
+      }
+
+      // Safe schoolId lookup from student user row or current user
+      try {
+        final stUser = await supabase
+            .from('users')
+            .select('school_id')
+            .eq('id', widget.student.studentId)
+            .maybeSingle();
+        schoolId = stUser?['school_id']?.toString();
+      } catch (_) {}
+
       if (schoolId == null) {
         final user = supabase.auth.currentUser;
         if (user != null) {
@@ -4886,7 +4933,8 @@ class _StudentPaymentDetailDialogState
           } catch (_) {}
         }
       }
-      if (academicYearId == null && schoolId != null) {
+
+      if (schoolId != null) {
         try {
           final ayRow = await supabase
               .from('academic_years')
@@ -4990,13 +5038,10 @@ class _StudentPaymentDetailDialogState
         try {
           final pricingRows = await SupabaseConfig.adminClient
               .from('payment_pricing')
-              .select('id, category, amount, section_id, niveau_id, academic_year_id, is_active')
+              .select('id, category, amount, section_id, niveau_id, academic_year_id')
               .eq('school_id', schoolId)
-              .eq('niveau_id', niveauId)
-              .eq('is_active', true) as List<dynamic>;
+              .eq('niveau_id', niveauId) as List<dynamic>;
 
-          // Only consider rows that belong to current academic year or null (fallback).
-          // Discard rows belonging to other academic years or other sections.
           final categoryPricing = <String, double>{};
           for (final pr in pricingRows) {
             final cat = pr['category']?.toString();
@@ -5004,18 +5049,16 @@ class _StudentPaymentDetailDialogState
             final prSecId = pr['section_id']?.toString();
             final prYearId = pr['academic_year_id']?.toString();
 
-            if (cat == null || cat == 'scolarite' || amt <= 0) continue;
-            // Ignore tariffs from different academic years
+            if (cat == null || _normalizeCategory(cat) == 'scolarite' || amt <= 0) continue;
+            // Ignore tariffs from different academic years only if specific year is set and doesn't match
             if (prYearId != null && academicYearId != null && prYearId != academicYearId) continue;
-            // Ignore tariffs from different sections
+            // Ignore tariffs from different sections only if tariff is specific to another section
             if (prSecId != null && sectionId != null && prSecId != sectionId) continue;
 
             final isExactYear = prYearId != null && prYearId == academicYearId;
             final isExactSection = prSecId != null && prSecId == sectionId;
 
-            if (!categoryPricing.containsKey(cat)) {
-              categoryPricing[cat] = amt;
-            } else if (isExactYear || isExactSection) {
+            if (!categoryPricing.containsKey(cat) || isExactYear || isExactSection) {
               categoryPricing[cat] = amt;
             }
           }
@@ -5025,9 +5068,10 @@ class _StudentPaymentDetailDialogState
             final amt = entry.value;
             if (amt <= 0) continue;
 
+            final normCat = _normalizeCategory(cat);
             final alreadyHasPayment = uniquePayments.any((p) {
               final pCat = p['category'] ?? (p['payment_plans'] as Map?)?['category'];
-              return pCat == cat;
+              return _normalizeCategory(pCat?.toString()) == normCat;
             });
 
             if (!alreadyHasPayment) {
@@ -5476,7 +5520,6 @@ class _StudentPaymentDetailDialogState
       decoration: BoxDecoration(
         color: AppColors.slate100,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.slate200),
       ),
       child: Text(
         label,
@@ -6126,13 +6169,19 @@ class _StudentPaymentDetailDialogState
     try {
       final supabase = Supabase.instance.client;
       if (payment != null && payment['is_synthetic'] == true) {
-        final enrollments = await supabase
-            .from('enrollments')
-            .select('id, school_id')
-            .eq('user_id', widget.student.studentId);
-        final schId = (enrollments as List).isNotEmpty
-            ? (enrollments.first['school_id'] ?? '11111111-1111-1111-1111-111111111111')
-            : '11111111-1111-1111-1111-111111111111';
+        String schId = '11111111-1111-1111-1111-111111111111';
+        try {
+          final uRow = await supabase.from('users').select('school_id').eq('id', widget.student.studentId).maybeSingle();
+          if (uRow?['school_id'] != null) {
+            schId = uRow!['school_id'].toString();
+          } else {
+            final curr = supabase.auth.currentUser;
+            if (curr != null) {
+              final cRow = await supabase.from('users').select('school_id').eq('id', curr.id).maybeSingle();
+              if (cRow?['school_id'] != null) schId = cRow!['school_id'].toString();
+            }
+          }
+        } catch (_) {}
         await supabase.from('payments').insert({
           'student_id': widget.student.studentId,
           'school_id': schId,
@@ -6456,13 +6505,19 @@ class _StudentPaymentDetailDialogState
       try {
         final paymentId = payment['id'].toString();
         if (paymentId.startsWith('pricing_')) {
-          final enrollments = await SupabaseConfig.adminClient
-              .from('enrollments')
-              .select('id, school_id')
-              .eq('user_id', widget.student.studentId);
-          final schId = (enrollments as List).isNotEmpty
-              ? (enrollments.first['school_id'] ?? '11111111-1111-1111-1111-111111111111')
-              : '11111111-1111-1111-1111-111111111111';
+          String schId = '11111111-1111-1111-1111-111111111111';
+          try {
+            final uRow = await SupabaseConfig.adminClient.from('users').select('school_id').eq('id', widget.student.studentId).maybeSingle();
+            if (uRow?['school_id'] != null) {
+              schId = uRow!['school_id'].toString();
+            } else {
+              final curr = Supabase.instance.client.auth.currentUser;
+              if (curr != null) {
+                final cRow = await SupabaseConfig.adminClient.from('users').select('school_id').eq('id', curr.id).maybeSingle();
+                if (cRow?['school_id'] != null) schId = cRow!['school_id'].toString();
+              }
+            }
+          } catch (_) {}
           await SupabaseConfig.adminClient.from('payments').insert({
             'student_id': widget.student.studentId,
             'school_id': schId,
@@ -7209,13 +7264,19 @@ class _StudentPaymentDetailDialogState
 
       if (syntheticIds.isNotEmpty) {
         try {
-          final enrollments = await SupabaseConfig.adminClient
-              .from('enrollments')
-              .select('id, school_id')
-              .eq('user_id', widget.student.studentId);
-          final schId = (enrollments as List).isNotEmpty
-              ? (enrollments.first['school_id'] ?? '11111111-1111-1111-1111-111111111111')
-              : '11111111-1111-1111-1111-111111111111';
+          String schId = '11111111-1111-1111-1111-111111111111';
+          try {
+            final uRow = await SupabaseConfig.adminClient.from('users').select('school_id').eq('id', widget.student.studentId).maybeSingle();
+            if (uRow?['school_id'] != null) {
+              schId = uRow!['school_id'].toString();
+            } else {
+              final curr = Supabase.instance.client.auth.currentUser;
+              if (curr != null) {
+                final cRow = await SupabaseConfig.adminClient.from('users').select('school_id').eq('id', curr.id).maybeSingle();
+                if (cRow?['school_id'] != null) schId = cRow!['school_id'].toString();
+              }
+            }
+          } catch (_) {}
           final toInsert = syntheticIds.map((sId) {
             final p = _payments.firstWhere(
               (item) => item['id'] == sId,

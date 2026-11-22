@@ -1322,14 +1322,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         },
                       ),
                       sectionsSpace: 3,
-                      centerSpaceRadius: 40,
+                      centerSpaceRadius: 46,
                       startDegreeOffset: -90,
                       sections: filieres.isEmpty
                           ? [
                               PieChartSectionData(
                                 value: 100,
                                 color: const Color(0xFFF1F5F9),
-                                radius: 18,
+                                radius: 16,
                                 showTitle: false,
                               )
                             ]
@@ -1346,7 +1346,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     : (hasSelection
                                         ? Color(f.colorValue).withValues(alpha: 0.35)
                                         : Color(f.colorValue)),
-                                radius: isSelected ? 26 : 18, // Zooms in when clicked!
+                                radius: isSelected ? 22 : 16, // Zooms in when clicked!
                                 borderSide: isSelected
                                     ? const BorderSide(color: Colors.white, width: 2.5)
                                     : BorderSide.none,
@@ -1357,64 +1357,75 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
 
                 // Center Text (Shows selected partition value & info on click)
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_selectedFiliereIndex != null &&
-                        _selectedFiliereIndex! < filieres.length) ...[
-                      Text(
-                        '${filieres[_selectedFiliereIndex!].count}',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Color(filieres[_selectedFiliereIndex!].colorValue),
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      Text(
-                        '${filieres[_selectedFiliereIndex!].percentage.toInt()}%',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          filieres[_selectedFiliereIndex!].label,
-                          style: const TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF64748B),
+                SizedBox(
+                  width: 76,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_selectedFiliereIndex != null &&
+                          _selectedFiliereIndex! < filieres.length) ...[
+                        Text(
+                          '${filieres[_selectedFiliereIndex!].count}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            height: 1.0,
+                            fontWeight: FontWeight.w800,
+                            color: Color(filieres[_selectedFiliereIndex!].colorValue),
+                            letterSpacing: -0.5,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
                         ),
-                      ),
-                    ] else ...[
-                      Text(
-                        filieres.isNotEmpty
-                            ? '${filieres.fold<int>(0, (sum, f) => sum + f.count)}'
-                            : '$totalStudents',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.5,
+                        const SizedBox(height: 2),
+                        Text(
+                          '${filieres[_selectedFiliereIndex!].percentage.toInt()}%',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            height: 1.0,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                          ),
                         ),
-                      ),
-                      const Text(
-                        'Élèves',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF94A3B8),
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Text(
+                            filieres[_selectedFiliereIndex!].label,
+                            style: const TextStyle(
+                              fontSize: 9,
+                              height: 1.05,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF64748B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
                         ),
-                      ),
+                      ] else ...[
+                        Text(
+                          filieres.isNotEmpty
+                              ? '${filieres.fold<int>(0, (sum, f) => sum + f.count)}'
+                              : '$totalStudents',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            height: 1.0,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Élèves',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            height: 1.0,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ],
             ),
