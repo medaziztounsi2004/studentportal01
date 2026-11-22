@@ -97,30 +97,39 @@ class BackupService {
 
     debugPrint('[BackupService] Starting full backup for school $schoolId');
 
-    // 1. Fetch tables
-    final schoolFuture = client.from('schools').select().eq('id', schoolId).maybeSingle();
-    final academicYearsFuture = client.from('academic_years').select().eq('school_id', schoolId);
-    final semestersFuture = client.from('semesters').select().eq('school_id', schoolId);
-    final vacationsFuture = client.from('vacation_periods').select().eq('school_id', schoolId);
-    final examsFuture = client.from('exam_periods').select().eq('school_id', schoolId);
-    final buildingsFuture = client.from('buildings').select().eq('school_id', schoolId);
-    final floorsFuture = client.from('floors').select().eq('school_id', schoolId);
-    final roomsFuture = client.from('rooms').select().eq('school_id', schoolId);
-    final subjectsFuture = client.from('subjects').select().eq('school_id', schoolId);
-    final curriculumFuture = client.from('curriculum').select().eq('school_id', schoolId);
-    final classesFuture = client.from('classes').select().eq('school_id', schoolId);
-    final usersFuture = client.from('users').select().eq('school_id', schoolId);
-    final enrollmentsFuture = client.from('enrollments').select();
-    final absencesFuture = client.from('absence_records').select().eq('school_id', schoolId);
-    final gradesFuture = client.from('grades').select().eq('school_id', schoolId);
-    final gradeComponentsFuture = client.from('grade_components').select();
-    final teacherAssignmentsFuture = client.from('teacher_assignments').select().eq('school_id', schoolId);
-    final timetableSlotsFuture = client.from('timetable_slots').select().eq('school_id', schoolId);
-    final paymentsFuture = client.from('payments').select().eq('school_id', schoolId);
-    final paymentPlansFuture = client.from('payment_plans').select().eq('school_id', schoolId);
-    final announcementsGlobalFuture = client.from('announcements_global').select().eq('school_id', schoolId);
-    final announcementsClassFuture = client.from('announcements_class').select();
-    final suggestionsFuture = client.from('suggestions').select().eq('school_id', schoolId);
+    // 1. Fetch tables with safe error handling
+    Future<dynamic> safeFetch(Future<dynamic> Function() fetcher, [dynamic defaultValue = const []]) async {
+      try {
+        return await fetcher();
+      } catch (e) {
+        debugPrint('[BackupService] Table fetch error: $e');
+        return defaultValue;
+      }
+    }
+
+    final schoolFuture = safeFetch(() => client.from('schools').select().eq('id', schoolId).maybeSingle(), null);
+    final academicYearsFuture = safeFetch(() => client.from('academic_years').select().eq('school_id', schoolId));
+    final semestersFuture = safeFetch(() => client.from('semesters').select().eq('school_id', schoolId));
+    final vacationsFuture = safeFetch(() => client.from('vacation_periods').select().eq('school_id', schoolId));
+    final examsFuture = safeFetch(() => client.from('exam_periods').select().eq('school_id', schoolId));
+    final buildingsFuture = safeFetch(() => client.from('buildings').select().eq('school_id', schoolId));
+    final floorsFuture = safeFetch(() => client.from('floors').select().eq('school_id', schoolId));
+    final roomsFuture = safeFetch(() => client.from('rooms').select().eq('school_id', schoolId));
+    final subjectsFuture = safeFetch(() => client.from('subjects').select().eq('school_id', schoolId));
+    final curriculumFuture = safeFetch(() => client.from('curriculum').select().eq('school_id', schoolId));
+    final classesFuture = safeFetch(() => client.from('classes').select().eq('school_id', schoolId));
+    final usersFuture = safeFetch(() => client.from('users').select().eq('school_id', schoolId));
+    final enrollmentsFuture = safeFetch(() => client.from('enrollments').select());
+    final absencesFuture = safeFetch(() => client.from('absence_records').select());
+    final gradesFuture = safeFetch(() => client.from('grades').select().eq('school_id', schoolId));
+    final gradeComponentsFuture = safeFetch(() => client.from('grade_components').select());
+    final teacherAssignmentsFuture = safeFetch(() => client.from('teacher_assignments').select().eq('school_id', schoolId));
+    final timetableSlotsFuture = safeFetch(() => client.from('timetable_slots').select().eq('school_id', schoolId));
+    final paymentsFuture = safeFetch(() => client.from('payments').select().eq('school_id', schoolId));
+    final paymentPlansFuture = safeFetch(() => client.from('payment_plans').select().eq('school_id', schoolId));
+    final announcementsGlobalFuture = safeFetch(() => client.from('announcements_global').select().eq('school_id', schoolId));
+    final announcementsClassFuture = safeFetch(() => client.from('announcements_class').select());
+    final suggestionsFuture = safeFetch(() => client.from('suggestions').select().eq('school_id', schoolId));
 
     final results = await Future.wait<dynamic>([
       schoolFuture,
@@ -347,7 +356,16 @@ class BackupService {
       bool isDue = false;
 
       if (lastBackup == null) {
-        isDue = true;
+        // Initialize timestamp without forcing an immediate background run on first page visit
+        await saveBackupConfig(
+          schoolId,
+          BackupConfig(
+            cycle: config.cycle,
+            autoEnabled: config.autoEnabled,
+            lastBackupAt: now,
+          ),
+        );
+        return;
       } else {
         final diff = now.difference(lastBackup);
         if (config.cycle == 'daily' && diff.inHours >= 24) {

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/config/supabase_config.dart';
 import '../../data/services/backup_service.dart';
 import 'auth_provider.dart';
 
@@ -44,25 +46,44 @@ final backupProvider = NotifierProvider<BackupNotifier, BackupState>(BackupNotif
 class BackupNotifier extends Notifier<BackupState> {
   @override
   BackupState build() {
-    _load();
+    ref.listen(authProvider, (previous, next) {
+      if (previous?.user?.schoolId != next.user?.schoolId && next.user?.schoolId != null) {
+        _load();
+      }
+    });
+
+    Future.microtask(() => _load());
     return BackupState(isLoading: true);
   }
 
-  String? _getSchoolId() {
-    return ref.read(authProvider).user?.schoolId;
+  Future<String?> _resolveSchoolId() async {
+    final authSchoolId = ref.read(authProvider).user?.schoolId;
+    if (authSchoolId != null && authSchoolId.isNotEmpty) return authSchoolId;
+
+    final currentUserId = SupabaseConfig.client.auth.currentUser?.id;
+    if (currentUserId == null) return null;
+
+    try {
+      final userResp = await SupabaseConfig.adminClient
+          .from('users')
+          .select('school_id')
+          .eq('id', currentUserId)
+          .maybeSingle();
+      return userResp?['school_id'] as String?;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _load() async {
-    final schoolId = _getSchoolId();
+    final schoolId = await _resolveSchoolId();
     if (schoolId == null) {
       state = state.copyWith(isLoading: false);
       return;
     }
 
     try {
-      // Also check background auto-backup if due
-      await BackupService.checkAndRunScheduledBackup(schoolId);
-
+      // 1. Instantly load previous backups and config without blocking
       final backups = await BackupService.getBackups(schoolId);
       final config = await BackupService.getBackupConfig(schoolId);
 
@@ -71,6 +92,18 @@ class BackupNotifier extends Notifier<BackupState> {
         backups: backups,
         config: config,
       );
+
+      // 2. Perform schedule check asynchronously in background
+      Future.microtask(() async {
+        try {
+          await BackupService.checkAndRunScheduledBackup(schoolId);
+          final freshBackups = await BackupService.getBackups(schoolId);
+          final freshConfig = await BackupService.getBackupConfig(schoolId);
+          state = state.copyWith(backups: freshBackups, config: freshConfig);
+        } catch (e) {
+          debugPrint('[BackupNotifier] Background check error: $e');
+        }
+      });
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -85,7 +118,7 @@ class BackupNotifier extends Notifier<BackupState> {
   }
 
   Future<bool> triggerManualBackup() async {
-    final schoolId = _getSchoolId();
+    final schoolId = await _resolveSchoolId();
     if (schoolId == null) {
       state = state.copyWith(errorMessage: 'Établissement introuvable');
       return false;
@@ -118,7 +151,7 @@ class BackupNotifier extends Notifier<BackupState> {
   }
 
   Future<void> updateCycle(String newCycle) async {
-    final schoolId = _getSchoolId();
+    final schoolId = await _resolveSchoolId();
     if (schoolId == null) return;
 
     final updatedConfig = BackupConfig(
@@ -132,7 +165,7 @@ class BackupNotifier extends Notifier<BackupState> {
   }
 
   Future<void> toggleAutoBackup(bool enabled) async {
-    final schoolId = _getSchoolId();
+    final schoolId = await _resolveSchoolId();
     if (schoolId == null) return;
 
     final updatedConfig = BackupConfig(

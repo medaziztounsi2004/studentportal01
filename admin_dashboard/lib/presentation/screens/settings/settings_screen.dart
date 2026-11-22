@@ -877,7 +877,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _brand.withOpacity(0.25)),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Row(
             children: [
@@ -1190,11 +1190,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             value: backupState.config.cycle,
+                            borderRadius: BorderRadius.circular(12),
+                            dropdownColor: Colors.white,
+                            elevation: 4,
                             icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: Color(0xFF64748B)),
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
                             items: const [
@@ -1425,19 +1427,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6D4CF6), Color(0xFF5B3EE0)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6D4CF6).withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
@@ -1448,10 +1440,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.security_rounded, color: Colors.white, size: 26),
+                  child: const Icon(Icons.shield_outlined, color: Color(0xFF475569), size: 26),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -1461,17 +1453,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       const Text(
                         'Protection & Sauvegarde des Données',
                         style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1E293B),
+                          fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Dernière sauvegarde : $lastDate • Cycle : $cycleLabel • ${state.backups.length} instantanés',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
+                        'Dernière sauvegarde : $lastDate • Cycle : $cycleLabel • ${state.backups.length} instantané${state.backups.length > 1 ? 's' : ''}',
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
                           fontSize: 13,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
