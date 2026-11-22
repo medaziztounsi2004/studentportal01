@@ -32,13 +32,19 @@ $$;
 GRANT EXECUTE ON FUNCTION public.toggle_user_active_status(UUID[], BOOLEAN) TO authenticated, anon, service_role;
 
 -- 2. Synchronize existing user data across is_active and account_status
-UPDATE public.users
-SET account_status = 'paused_unpaid'
-WHERE is_active = false AND account_status = 'active';
+DO $$
+BEGIN
+  PERFORM set_config('app.bypass_privilege_check', 'on', true);
 
-UPDATE public.users
-SET is_active = false
-WHERE account_status IN ('paused_unpaid', 'suspended') AND is_active = true;
+  UPDATE public.users
+  SET account_status = 'paused_unpaid'
+  WHERE is_active = false AND account_status = 'active';
+
+  UPDATE public.users
+  SET is_active = false
+  WHERE account_status IN ('paused_unpaid', 'suspended') AND is_active = true;
+END;
+$$;
 
 -- 3. Dedicated authoritative function to verify access lock state
 CREATE OR REPLACE FUNCTION public.check_user_access_status()
