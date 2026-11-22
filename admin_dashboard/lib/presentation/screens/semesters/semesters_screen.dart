@@ -1496,12 +1496,12 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
       return gaps;
     }
 
+    bool isSubmitting = false;
     showDialog(
       context: context,
       barrierColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          bool isSubmitting = false;
           final label = selectedType == 'trimestre' ? 'Trimestre' : selectedType == 'single' ? 'Période' : 'Semestre';
           final autoGaps = computeAutoGaps();
 
@@ -2499,13 +2499,16 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
 
   Widget _buildYearPartitionGraph(BuildContext context, SemestersState state, AcademicYearModel year) {
     final now = DateTime.now();
-    final monthsFr = ['JANV.', 'FÉVR.', 'MARS', 'AVR.', 'MAI', 'JUIN', 'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.'];
+    final monthsFr = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
     final shortDateFormat = DateFormat('d MMM', 'fr');
+
+    final startYear = DateTime(year.startDate.year, year.startDate.month, year.startDate.day);
+    final endYear = DateTime(year.endDate.year, year.endDate.month, year.endDate.day);
 
     // 1. Month list for timeline markings
     final List<DateTime> yearMonths = [];
-    DateTime mCursor = DateTime(year.startDate.year, year.startDate.month);
-    final endMonth = DateTime(year.endDate.year, year.endDate.month);
+    DateTime mCursor = DateTime(startYear.year, startYear.month);
+    final endMonth = DateTime(endYear.year, endYear.month);
     while (!mCursor.isAfter(endMonth)) {
       yearMonths.add(mCursor);
       mCursor = DateTime(mCursor.year, mCursor.month + 1);
@@ -2554,24 +2557,78 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
       ));
     }
 
-    items.sort((a, b) => a.start.compareTo(b.start));
-    final totalYearDays = math.max(1, year.endDate.difference(year.startDate).inDays);
+    // 3. Build continuous non-overlapping timeline segments from startYear to endYear
+    final Set<DateTime> boundaryDates = {startYear, endYear.add(const Duration(days: 1))};
+    for (final item in items) {
+      final s = DateTime(item.start.year, item.start.month, item.start.day);
+      final e = DateTime(item.end.year, item.end.month, item.end.day).add(const Duration(days: 1));
+      if (!s.isBefore(startYear) && !s.isAfter(endYear)) boundaryDates.add(s);
+      if (!e.isBefore(startYear) && !e.isAfter(endYear.add(const Duration(days: 1)))) boundaryDates.add(e);
+    }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+    final sortedDates = boundaryDates.toList()..sort();
+    final List<_TimelineSegment> segments = [];
+
+    for (int i = 0; i < sortedDates.length - 1; i++) {
+      final segStart = sortedDates[i];
+      final segEndExclusive = sortedDates[i + 1];
+      final segEnd = segEndExclusive.subtract(const Duration(days: 1));
+      if (segEnd.isBefore(segStart)) continue;
+
+      final days = segEnd.difference(segStart).inDays + 1;
+      if (days <= 0) continue;
+
+      // Priority: exam > vacation > semester
+      _PartitionItem? activeItem;
+      for (final it in items.where((x) => x.type == 'exam')) {
+        if (!segStart.isBefore(it.start) && !segEnd.isAfter(it.end)) {
+          activeItem = it;
+          break;
+        }
+      }
+      if (activeItem == null) {
+        for (final it in items.where((x) => x.type == 'vacation')) {
+          if (!segStart.isBefore(it.start) && !segEnd.isAfter(it.end)) {
+            activeItem = it;
+            break;
+          }
+        }
+      }
+      if (activeItem == null) {
+        for (final it in items.where((x) => x.type == 'semester')) {
+          if (!segStart.isBefore(it.start) && !segEnd.isAfter(it.end)) {
+            activeItem = it;
+            break;
+          }
+        }
+      }
+
+      if (segments.isNotEmpty && segments.last.item?.id == activeItem?.id && segments.last.item?.type == activeItem?.type) {
+        final prev = segments.removeLast();
+        segments.add(_TimelineSegment(
+          start: prev.start,
+          end: segEnd,
+          days: prev.days + days,
+          item: activeItem,
+        ));
+      } else {
+        segments.add(_TimelineSegment(
+          start: segStart,
+          end: segEnd,
+          days: days,
+          item: activeItem,
+        ));
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section header with legend
+          // Section header with legend (icon removed per request)
           Row(
             children: [
-              const Icon(Icons.auto_graph_rounded, size: 16, color: _brand),
-              const SizedBox(width: 8),
               const Text(
                 'Partition de l\'année scolaire',
                 style: TextStyle(
@@ -2589,7 +2646,7 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
             ],
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
           // Proportional segmented bar of blocks
           if (items.isNotEmpty)
@@ -2598,27 +2655,40 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
               child: Container(
                 height: 32,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
+                  color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
-                  children: items.map((item) {
-                    final days = math.max(1, item.end.difference(item.start).inDays);
-                    final flex = math.max(1, ((days / totalYearDays) * 100).round());
+                  children: segments.map((seg) {
+                    if (seg.item == null) {
+                      return Expanded(
+                        flex: seg.days,
+                        child: Tooltip(
+                          message: '${shortDateFormat.format(seg.start)} → ${shortDateFormat.format(seg.end)} (${seg.days} j)\nNon configuré',
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 0.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
                     return Expanded(
-                      flex: flex,
+                      flex: seg.days,
                       child: Tooltip(
-                        message: '${item.name}\n${shortDateFormat.format(item.start)} → ${shortDateFormat.format(item.end)} ($days jours)',
+                        message: '${seg.item!.name}\n${shortDateFormat.format(seg.start)} → ${shortDateFormat.format(seg.end)} (${seg.days} j)',
                         child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 1),
+                          margin: const EdgeInsets.symmetric(horizontal: 0.5),
                           decoration: BoxDecoration(
-                            color: item.color,
+                            color: seg.item!.color,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           alignment: Alignment.center,
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           child: Text(
-                            item.name,
+                            seg.item!.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -2644,98 +2714,45 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
               ),
             ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
 
-          // Month Timeline Markings (matching the Period Card month graph)
+          // Month names placed directly under the rectangle visual at their correct places
           if (yearMonths.isNotEmpty)
-            SizedBox(
-              height: 80,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: yearMonths.length,
-                itemBuilder: (context, i) {
-                  final mDate = yearMonths[i];
-                  final isCur = mDate.year == now.year && mDate.month == now.month;
-                  final isLast = i == yearMonths.length - 1;
-                  return Row(
+            Row(
+              children: yearMonths.map((mDate) {
+                DateTime mStart = DateTime(mDate.year, mDate.month, 1);
+                if (mStart.isBefore(startYear)) mStart = startYear;
+                DateTime nextM = DateTime(mDate.year, mDate.month + 1, 1);
+                DateTime mEnd = nextM.subtract(const Duration(days: 1));
+                if (mEnd.isAfter(endYear)) mEnd = endYear;
+                final daysInMonth = math.max(1, mEnd.difference(mStart).inDays + 1);
+                final isCur = mDate.year == now.year && mDate.month == now.month;
+
+                return Expanded(
+                  flex: daysInMonth,
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (i == 0) const SizedBox(width: 4),
-                      Column(
-                        children: [
-                          Text(
-                            monthsFr[mDate.month - 1],
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: isCur ? _brand : AppColors.textTertiary,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: isCur ? _brand : _brandLight,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isCur ? _brand : _brand.withOpacity(0.3),
-                                width: isCur ? 2 : 1,
-                              ),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '${i + 1}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: isCur ? Colors.white : _brand,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          if (isCur)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: _brandLight,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'En cours',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: _brand,
-                                ),
-                              ),
-                            )
-                          else
-                            Text(
-                              '${mDate.year}',
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: AppColors.textTertiary,
-                              ),
-                            ),
-                        ],
+                      Container(
+                        width: 1.5,
+                        height: 5,
+                        color: isCur ? _brand : const Color(0xFFCBD5E1),
                       ),
-                      if (!isLast)
-                        Container(
-                          margin: const EdgeInsets.only(top: 17),
-                          width: 24,
-                          height: 2,
-                          decoration: BoxDecoration(
-                            color: _brand.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(1),
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        monthsFr[mDate.month - 1],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isCur ? FontWeight.w800 : FontWeight.w600,
+                          color: isCur ? _brand : const Color(0xFF64748B),
                         ),
-                      if (isLast) const SizedBox(width: 4),
+                      ),
                     ],
-                  );
-                },
-              ),
+                  ),
+                );
+              }).toList(),
             ),
         ],
       ),
@@ -3361,5 +3378,19 @@ class _PartitionItem {
     required this.color,
     required this.lightColor,
     required this.icon,
+  });
+}
+
+class _TimelineSegment {
+  final DateTime start;
+  final DateTime end;
+  final int days;
+  final _PartitionItem? item;
+
+  _TimelineSegment({
+    required this.start,
+    required this.end,
+    required this.days,
+    this.item,
   });
 }
