@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' hide TextDirection;
@@ -10,6 +11,7 @@ import '../../../core/theme/responsive.dart';
 import '../../../core/router/app_router.dart';
 import '../../../data/models/document_model.dart';
 import '../../../data/services/offline_cache_service.dart';
+import '../../../data/services/student_seen_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_context_provider.dart';
 import '../../widgets/animated_search_header.dart';
@@ -41,6 +43,9 @@ class ReadDocumentsNotifier extends StateNotifier<Set<String>> {
 
   ReadDocumentsNotifier(this.userId) : super({}) {
     _loadFromCache();
+    if (userId.isNotEmpty && userId != 'default_user') {
+      _syncRemote();
+    }
   }
 
   void _loadFromCache() {
@@ -54,11 +59,36 @@ class ReadDocumentsNotifier extends StateNotifier<Set<String>> {
     }
   }
 
+  Future<void> _syncRemote() async {
+    if (userId.isEmpty || userId == 'default_user') return;
+    try {
+      final remoteIds = await StudentSeenService.fetchSeenIds(
+        userId,
+        [StudentSeenService.typeDocument],
+      );
+      if (remoteIds.isNotEmpty) {
+        final merged = Set<String>.from(state)..addAll(remoteIds);
+        if (merged.length != state.length) {
+          state = merged;
+          await OfflineCacheService.instance.setJson('$_storagePrefix$userId', merged.toList());
+        }
+      }
+      unawaited(StudentSeenService.syncPendingQueue());
+    } catch (e) {
+      debugPrint('ReadDocumentsNotifier _syncRemote error: $e');
+    }
+  }
+
+  Future<void> syncRemote() => _syncRemote();
+
   Future<void> markAsRead(String id) async {
     if (state.contains(id)) return;
     final updated = Set<String>.from(state)..add(id);
     state = updated;
     await OfflineCacheService.instance.setJson('$_storagePrefix$userId', updated.toList());
+    if (userId.isNotEmpty && userId != 'default_user') {
+      unawaited(StudentSeenService.markItemSeen(userId, StudentSeenService.typeDocument, id));
+    }
   }
 
   bool isRead(String id) => state.contains(id);

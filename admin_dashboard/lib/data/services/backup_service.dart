@@ -130,6 +130,7 @@ class BackupService {
     final announcementsGlobalFuture = safeFetch(() => client.from('announcements_global').select().eq('school_id', schoolId));
     final announcementsClassFuture = safeFetch(() => client.from('announcements_class').select());
     final suggestionsFuture = safeFetch(() => client.from('suggestions').select().eq('school_id', schoolId));
+    final seenItemsFuture = safeFetch(() => client.from('student_seen_items').select());
 
     final results = await Future.wait<dynamic>([
       schoolFuture,
@@ -155,6 +156,7 @@ class BackupService {
       announcementsGlobalFuture,
       announcementsClassFuture,
       suggestionsFuture,
+      seenItemsFuture,
     ]);
 
     final schoolData = results[0];
@@ -180,12 +182,17 @@ class BackupService {
     final announcementsGlobal = (results[20] as List?) ?? [];
     final allAnnouncementsClass = (results[21] as List?) ?? [];
     final suggestions = (results[22] as List?) ?? [];
+    final allSeenItems = (results[23] as List?) ?? [];
 
     // Filter enrollments and grade components belonging to this school's classes/grades
     final schoolClassIds = classes.map((c) => c['id']).toSet();
     final schoolUserIds = users.map((u) => u['id']).toSet();
     final filteredEnrollments = allEnrollments.where((e) =>
       schoolClassIds.contains(e['class_id']) || schoolUserIds.contains(e['user_id'])
+    ).toList();
+
+    final filteredSeenItems = allSeenItems.where((si) =>
+      schoolUserIds.contains(si['student_id'])
     ).toList();
 
     final schoolGradeIds = grades.map((g) => g['id']).toSet();
@@ -211,6 +218,7 @@ class BackupService {
       'buildings': buildings.length,
       'floors': floors.length,
       'rooms': rooms.length,
+      'student_seen_items': filteredSeenItems.length,
     };
 
     final payload = {
@@ -243,6 +251,7 @@ class BackupService {
         'announcements_global': announcementsGlobal,
         'announcements_class': filteredAnnouncementsClass,
         'suggestions': suggestions,
+        'student_seen_items': filteredSeenItems,
       }
     };
 

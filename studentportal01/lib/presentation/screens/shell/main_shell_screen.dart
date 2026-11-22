@@ -10,6 +10,7 @@ import '../../providers/suggestions_provider.dart';
 import '../../widgets/bubble_nav_bar.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../data/services/offline_cache_service.dart';
+import '../../../data/services/student_seen_service.dart';
 import '../documents/documents_screen.dart';
 
 /// Wraps authenticated app shell to manage FCM token sync and Supabase Realtime
@@ -94,6 +95,7 @@ class _RealtimeNotificationWrapperState
       final userId = Supabase.instance.client.auth.currentSession?.user.id;
       if (userId != null) {
         _loadAlertedIds(userId);
+        unawaited(StudentSeenService.preloadAll(userId));
         unawaited(LocalNotificationService.syncDeviceToken(userId).catchError((_) {}));
       }
       await Future.delayed(const Duration(milliseconds: 1000));

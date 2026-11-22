@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../data/services/offline_cache_service.dart';
+import '../../data/services/student_seen_service.dart';
 import 'auth_provider.dart';
 
 /// Model for attachment
@@ -560,6 +562,9 @@ class ReadAnnouncementsNotifier extends StateNotifier<Set<String>> {
 
   ReadAnnouncementsNotifier(this.userId) : super({}) {
     _loadFromCache();
+    if (userId.isNotEmpty && userId != 'default_user') {
+      _syncRemote();
+    }
   }
 
   void _loadFromCache() {
@@ -573,17 +578,45 @@ class ReadAnnouncementsNotifier extends StateNotifier<Set<String>> {
     }
   }
 
-  Future<void> markAsRead(String id) async {
+  Future<void> _syncRemote() async {
+    if (userId.isEmpty || userId == 'default_user') return;
+    try {
+      final remoteIds = await StudentSeenService.fetchSeenIds(
+        userId,
+        [StudentSeenService.typeAnnouncement, StudentSeenService.typeMessage],
+      );
+      if (remoteIds.isNotEmpty) {
+        final merged = Set<String>.from(state)..addAll(remoteIds);
+        if (merged.length != state.length) {
+          state = merged;
+          await OfflineCacheService.instance.setJson('$_storagePrefix$userId', merged.toList());
+        }
+      }
+      unawaited(StudentSeenService.syncPendingQueue());
+    } catch (e) {
+      debugPrint('ReadAnnouncementsNotifier _syncRemote error: $e');
+    }
+  }
+
+  Future<void> syncRemote() => _syncRemote();
+
+  Future<void> markAsRead(String id, {String itemType = StudentSeenService.typeAnnouncement}) async {
     if (state.contains(id)) return;
     final updated = Set<String>.from(state)..add(id);
     state = updated;
     await OfflineCacheService.instance.setJson('$_storagePrefix$userId', updated.toList());
+    if (userId.isNotEmpty && userId != 'default_user') {
+      unawaited(StudentSeenService.markItemSeen(userId, itemType, id));
+    }
   }
 
-  Future<void> markAllAsRead(List<String> ids) async {
+  Future<void> markAllAsRead(List<String> ids, {String itemType = StudentSeenService.typeAnnouncement}) async {
     final updated = Set<String>.from(state)..addAll(ids);
     state = updated;
     await OfflineCacheService.instance.setJson('$_storagePrefix$userId', updated.toList());
+    if (userId.isNotEmpty && userId != 'default_user') {
+      unawaited(StudentSeenService.markItemsSeen(userId, itemType, ids));
+    }
   }
 
   bool isRead(String id) => state.contains(id);

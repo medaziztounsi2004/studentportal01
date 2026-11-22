@@ -17,6 +17,7 @@ import '../../widgets/ios_loader.dart';
 import '../../widgets/notifications_screen_skeleton.dart';
 import '../../widgets/ios_photo_gallery_viewer.dart';
 import '../../../core/utils/file_download_helper.dart';
+import '../../../data/services/student_seen_service.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   final String? initialNotificationId;
@@ -1139,7 +1140,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         overshootScale: 1.055,
         delayNavigation: false,
         onTap: () {
-          ref.read(readAnnouncementsProvider.notifier).markAsRead(announcement.id);
+          ref.read(readAnnouncementsProvider.notifier).markAsRead(announcement.id, itemType: StudentSeenService.typeAnnouncement);
           _showAnnouncementDetail(announcement);
         },
         child: ClipRRect(
@@ -1683,7 +1684,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   }
 
   void _showAnnouncementDetail(dynamic announcement) {
-    ref.read(readAnnouncementsProvider.notifier).markAsRead(announcement.id);
+    ref.read(readAnnouncementsProvider.notifier).markAsRead(announcement.id, itemType: StudentSeenService.typeAnnouncement);
     final l10n = AppLocalizations.of(context);
     final color = _getTypeColor(announcement.announcementType);
     final icon = _getTypeIcon(announcement.announcementType);

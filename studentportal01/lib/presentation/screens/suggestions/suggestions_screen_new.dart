@@ -590,7 +590,7 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
         overshootScale: 1.055,
         delayNavigation: false,
         onTap: () {
-          if (suggestion.replies.isNotEmpty) {
+          if (suggestion.replies.isNotEmpty || suggestion.isRead) {
             ref.read(readRepliedSuggestionsProvider.notifier).markAsRead(suggestion.id);
           }
           _showSuggestionDetail(suggestion);
@@ -923,6 +923,9 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen>
   }
 
   void _showSuggestionDetail(Suggestion suggestion) {
+    if (suggestion.replies.isNotEmpty || suggestion.isRead) {
+      ref.read(readRepliedSuggestionsProvider.notifier).markAsRead(suggestion.id);
+    }
     final l10n = AppLocalizations.of(context);
     final typeColor = _getTypeColor(suggestion.suggestionType);
     final typeIcon = _getTypeIcon(suggestion.suggestionType);
