@@ -2685,62 +2685,12 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
             ),
             const SizedBox(height: 10),
 
-            // Partition pills summary (Semesters, Vacations, Exams as sleek pills)
-            if (items.isNotEmpty) ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: items.map((it) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                    decoration: BoxDecoration(
-                      color: it.lightColor,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: it.color.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: it.color,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          it.name,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: it.color,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${shortDateFormat.format(it.start)} → ${shortDateFormat.format(it.end)}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: it.color.withValues(alpha: 0.85),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-            ],
-
             // Proportional segmented bar of pills - compact, clean, sleek
             if (items.isNotEmpty)
               ClipRRect(
                 borderRadius: BorderRadius.circular(100),
                 child: Container(
-                  height: 10,
+                  height: 16,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(100),
@@ -2771,6 +2721,19 @@ class _SemestersScreenState extends ConsumerState<SemestersScreen> {
                             decoration: BoxDecoration(
                               color: seg.item!.color,
                               borderRadius: BorderRadius.circular(100),
+                            ),
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(
+                              seg.item!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                                letterSpacing: 0.1,
+                              ),
                             ),
                           ),
                         ),
