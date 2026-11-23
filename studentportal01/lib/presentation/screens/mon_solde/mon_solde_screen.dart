@@ -645,6 +645,8 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
             displayPayments,
             l10n,
             currentSemester,
+            semesters,
+            yearDates,
           ),
 
           // Categories Section (only displayed if categories have configured prices or payments)
@@ -693,6 +695,8 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     List<PaymentInfo> displayPayments,
     AppLocalizations l10n,
     SemesterInfo? currentSemester,
+    List<SemesterInfo> semesters,
+    ({DateTime? start, DateTime? end})? yearDates,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -714,25 +718,28 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
             title: l10n.noPayments,
             subtitle: l10n.translate('no_payments_desc'),
           )
-        else if (planType == 'monthly')
-          _buildMonthlyPaymentGrid(displayPayments, currentSemester)
         else
-          ...displayPayments.map(
-            (payment) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _GlassyPaymentCard(payment: payment, currency: l10n.translate('currency_tnd')),
-            ),
+          _buildPaymentScheduleCarousel(
+            displayPayments,
+            planType,
+            semesters,
+            yearDates,
+            currentSemester,
           ),
         const SizedBox(height: 28),
       ],
     );
   }
 
-  Widget _buildMonthlyPaymentGrid(
+  Widget _buildPaymentScheduleCarousel(
     List<PaymentInfo> payments,
+    String planType,
+    List<SemesterInfo> semesters,
+    ({DateTime? start, DateTime? end})? yearDates,
     SemesterInfo? currentSemester,
   ) {
     final l10n = AppLocalizations.of(context);
+    final lang = l10n.locale.languageCode;
     final now = DateTime.now();
 
     // Always find the payment matching the actual current month first
@@ -780,12 +787,102 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
           p.dueDate!.month == now.month,
     );
 
+    // For annual and semester plans, compute month range labels (e.g. "SEPT - DÉC", "JANV - JUIN")
+    List<String>? periodLabels;
+    if (planType != 'monthly') {
+      periodLabels = _computeSchedulePeriodLabels(
+        planType: planType,
+        count: payments.length,
+        semesters: semesters,
+        yearDates: yearDates,
+        payments: payments,
+        lang: lang,
+      );
+    }
+
     return _PaymentCarousel(
       payments: payments,
       currency: l10n.translate('currency_tnd'),
       initialIndex: initialIndex,
       currentMonthIndex: currentMonthIdx,
+      periodLabels: periodLabels,
     );
+  }
+
+  List<String> _computeSchedulePeriodLabels({
+    required String planType,
+    required int count,
+    required List<SemesterInfo> semesters,
+    required ({DateTime? start, DateTime? end})? yearDates,
+    required List<PaymentInfo> payments,
+    required String lang,
+  }) {
+    final monthFormat = DateFormat.MMM(lang);
+    final sortedSemesters = [...semesters]..sort((a, b) => a.number.compareTo(b.number));
+
+    final defaultStart = yearDates?.start ??
+        sortedSemesters.firstOrNull?.startDate ??
+        payments.firstOrNull?.dueDate ??
+        DateTime(DateTime.now().year, 9, 1);
+    final defaultEnd = yearDates?.end ??
+        sortedSemesters.lastOrNull?.endDate ??
+        DateTime(defaultStart.year + 1, 6, 30);
+
+    String formatRange(DateTime start, DateTime end) {
+      final s = monthFormat.format(start).replaceAll('.', '').toUpperCase();
+      final e = monthFormat.format(end).replaceAll('.', '').toUpperCase();
+      return '$s - $e';
+    }
+
+    if (planType == 'annual' || count <= 1) {
+      return [formatRange(defaultStart, defaultEnd)];
+    }
+
+    final labels = <String>[];
+
+    // If semesters has exact matching count with dates
+    if (sortedSemesters.length == count &&
+        sortedSemesters.every((s) => s.startDate != null && s.endDate != null)) {
+      for (final s in sortedSemesters) {
+        labels.add(formatRange(s.startDate!, s.endDate!));
+      }
+      return labels;
+    }
+
+    // Partition the year span into `count` segments
+    final totalMonths = ((defaultEnd.year - defaultStart.year) * 12 +
+            (defaultEnd.month - defaultStart.month) +
+            1)
+        .clamp(1, 12);
+    final monthsPerPart = (totalMonths / count).ceil().clamp(1, 12);
+
+    for (int i = 0; i < count; i++) {
+      DateTime partStart;
+      if (i < payments.length && payments[i].dueDate != null) {
+        partStart = payments[i].dueDate!;
+      } else {
+        partStart = DateTime(defaultStart.year, defaultStart.month + (i * monthsPerPart), 1);
+      }
+
+      DateTime partEnd;
+      if (i + 1 < count) {
+        if (i + 1 < payments.length && payments[i + 1].dueDate != null) {
+          // Finish month is month before next payment
+          partEnd = DateTime(payments[i + 1].dueDate!.year, payments[i + 1].dueDate!.month - 1, 1);
+          if (partEnd.isBefore(partStart)) {
+            partEnd = partStart;
+          }
+        } else {
+          partEnd = DateTime(defaultStart.year, defaultStart.month + ((i + 1) * monthsPerPart) - 1, 1);
+        }
+      } else {
+        partEnd = defaultEnd;
+      }
+
+      labels.add(formatRange(partStart, partEnd));
+    }
+
+    return labels;
   }
 
   // Builds the payment schedule.  When real payments exist (admin has created
@@ -1154,12 +1251,14 @@ class _PaymentCarousel extends StatefulWidget {
   final String currency;
   final int initialIndex;
   final int currentMonthIndex;
+  final List<String>? periodLabels;
 
   const _PaymentCarousel({
     required this.payments,
     required this.currency,
     this.initialIndex = 0,
     this.currentMonthIndex = -1,
+    this.periodLabels,
   });
 
   @override
@@ -1355,6 +1454,9 @@ class _PaymentCarouselState extends State<_PaymentCarousel>
                           isCenter: isCenter,
                           absDistance: absDistance,
                           isCurrentMonth: index == widget.currentMonthIndex,
+                          periodLabel: (widget.periodLabels != null && index < widget.periodLabels!.length)
+                              ? widget.periodLabels![index]
+                              : null,
                         );
 
                         if (blurSigma > 0.1) {
@@ -1470,6 +1572,7 @@ class _PaymentCircleCard extends StatelessWidget {
   final bool isCenter;
   final double absDistance;
   final bool isCurrentMonth;
+  final String? periodLabel;
 
   const _PaymentCircleCard({
     super.key,
@@ -1478,6 +1581,7 @@ class _PaymentCircleCard extends StatelessWidget {
     required this.isCenter,
     this.absDistance = 0,
     this.isCurrentMonth = false,
+    this.periodLabel,
   });
 
   @override
@@ -1485,9 +1589,14 @@ class _PaymentCircleCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final lang = l10n.locale.languageCode;
     final monthFormat = DateFormat.MMM(lang);
-    final monthLabel = payment.dueDate != null
-        ? monthFormat.format(payment.dueDate!).replaceAll('.', '').toUpperCase()
-        : '';
+    final String monthLabel;
+    if (periodLabel != null && periodLabel!.isNotEmpty) {
+      monthLabel = periodLabel!;
+    } else if (payment.dueDate != null) {
+      monthLabel = monthFormat.format(payment.dueDate!).replaceAll('.', '').toUpperCase();
+    } else {
+      monthLabel = '';
+    }
     final isPaid = payment.status == 'paid';
     final isOverdue =
         !isPaid &&
@@ -1533,11 +1642,14 @@ class _PaymentCircleCard extends StatelessWidget {
           Text(
             monthLabel,
             style: TextStyle(
-              fontSize: 14.0,
+              fontSize: monthLabel.contains('-') ? 12.0 : 14.0,
               fontWeight: FontWeight.w600,
               color: monthColor,
-              letterSpacing: 0.8,
+              letterSpacing: monthLabel.contains('-') ? 0.4 : 0.8,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 2),
           Text(
@@ -1975,135 +2087,6 @@ class _GlassyCategoryCard extends StatelessWidget {
   }
 }
 
-// Glassy Payment Card
-class _GlassyPaymentCard extends StatelessWidget {
-  final PaymentInfo payment;
-  final String currency;
-
-  const _GlassyPaymentCard({required this.payment, required this.currency});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final dateFormat = DateFormat('dd/MM/yyyy');
-    final isPaid = payment.status == 'paid';
-    final isOverdue =
-        !isPaid &&
-        payment.dueDate != null &&
-        payment.dueDate!.isBefore(DateTime.now());
-
-    Color statusColor;
-    IconData statusIcon;
-    String statusText;
-
-    if (isPaid) {
-      statusColor = const Color(0xFF10B981);
-      statusIcon = Icons.check_circle_rounded;
-      statusText = l10n.statusPaid;
-    } else if (isOverdue) {
-      statusColor = const Color(0xFFEF4444);
-      statusIcon = Icons.warning_rounded;
-      statusText = l10n.statusOverdue;
-    } else {
-      statusColor = const Color(0xFFF59E0B);
-      statusIcon = Icons.schedule_rounded;
-      statusText = l10n.statusPending;
-    }
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _showPaymentDetailsDialog(context, payment, currency, dateFormat),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: statusColor.withValues(alpha: 0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Icon(statusIcon, color: statusColor, size: 24),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.dueDateLabel,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.grey.shade800,
-                    ),
-                  ),
-                  if (payment.dueDate != null)
-                    Text(
-                      dateFormat.format(payment.dueDate!),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${_formatCurrency(payment.amount)} $currency',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatCurrency(double amount) {
-    final formatter = NumberFormat('#,###', 'fr_FR');
-    return formatter.format(amount);
-  }
-}
 
 void _showPaymentDetailsDialog(
   BuildContext context,

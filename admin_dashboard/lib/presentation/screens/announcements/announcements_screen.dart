@@ -316,6 +316,154 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
   DateTime? _filterDateTo;
   bool _showFilters = false;
 
+  // Academic hierarchy filters
+  String? _filterNiveauId;
+  String? _filterSectionId;
+  String? _filterClassId;
+
+  List<Map<String, dynamic>> _filterNiveaux = [];
+  List<Map<String, dynamic>> _filterSections = [];
+  List<Map<String, dynamic>> _filterNiveauSections = [];
+  List<Map<String, dynamic>> _filterClasses = [];
+  final Map<String, Map<String, dynamic>> _classById = {};
+  final Map<String, Map<String, dynamic>> _classByName = {};
+  final Map<String, Set<String>> _studentClassIds = {};
+
+  List<Map<String, dynamic>> get _availableFilterSections {
+    if (_filterNiveauId == null) {
+      return _filterSections;
+    }
+    final mappedSectionIds = _filterNiveauSections
+        .where((ns) => ns['niveau_id']?.toString() == _filterNiveauId)
+        .map((ns) => ns['section_id']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    for (final c in _filterClasses) {
+      if (c['niveau_id']?.toString() == _filterNiveauId && c['section_id'] != null) {
+        mappedSectionIds.add(c['section_id'].toString());
+      }
+    }
+
+    return _filterSections
+        .where((s) => mappedSectionIds.contains(s['id']?.toString()))
+        .toList();
+  }
+
+  List<Map<String, dynamic>> get _availableFilterClasses {
+    return _filterClasses.where((c) {
+      if (_filterNiveauId != null && c['niveau_id']?.toString() != _filterNiveauId) {
+        return false;
+      }
+      if (_filterSectionId != null && c['section_id']?.toString() != _filterSectionId) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  Set<String> _getAnnouncementClassIds(AnnouncementModel a) {
+    final classIds = <String>{};
+
+    if (a.targetClassId != null && a.targetClassId!.isNotEmpty) {
+      classIds.add(a.targetClassId!);
+    }
+    if (a.payload['class_id'] != null) {
+      classIds.add(a.payload['class_id'].toString());
+    }
+    if (a.payload['target_class_id'] != null) {
+      classIds.add(a.payload['target_class_id'].toString());
+    }
+    if (a.payload['target_classes'] is List) {
+      for (final item in a.payload['target_classes']) {
+        if (item != null) {
+          final str = item.toString();
+          if (_classById.containsKey(str)) {
+            classIds.add(str);
+          } else if (_classByName.containsKey(str.toLowerCase().trim())) {
+            classIds.add(_classByName[str.toLowerCase().trim()]!['id'].toString());
+          }
+        }
+      }
+    }
+    if (a.payload['classes'] is List) {
+      for (final item in a.payload['classes']) {
+        if (item != null) {
+          final str = item.toString();
+          if (_classById.containsKey(str)) {
+            classIds.add(str);
+          } else if (_classByName.containsKey(str.toLowerCase().trim())) {
+            classIds.add(_classByName[str.toLowerCase().trim()]!['id'].toString());
+          }
+        }
+      }
+    }
+    if (a.className != null && a.className!.isNotEmpty) {
+      final lower = a.className!.toLowerCase().trim();
+      if (_classByName.containsKey(lower)) {
+        classIds.add(_classByName[lower]!['id'].toString());
+      }
+    }
+
+    final sId = a.targetStudentId;
+    if (sId != null && _studentClassIds.containsKey(sId)) {
+      classIds.addAll(_studentClassIds[sId]!);
+    }
+
+    return classIds;
+  }
+
+  bool _matchesAcademicFilters(AnnouncementModel a) {
+    if (_filterNiveauId == null && _filterSectionId == null && _filterClassId == null) {
+      return true;
+    }
+
+    final classIds = _getAnnouncementClassIds(a);
+
+    // 1. Classe filter
+    if (_filterClassId != null) {
+      return classIds.contains(_filterClassId);
+    }
+
+    // 2. Filière (section) filter
+    if (_filterSectionId != null) {
+      if (a.payload['section_id']?.toString() == _filterSectionId ||
+          a.payload['target_section_id']?.toString() == _filterSectionId) {
+        if (_filterNiveauId == null) return true;
+        if (a.payload['niveau_id']?.toString() == _filterNiveauId ||
+            a.payload['target_niveau_id']?.toString() == _filterNiveauId) {
+          return true;
+        }
+      }
+      for (final cid in classIds) {
+        final c = _classById[cid];
+        if (c != null && c['section_id']?.toString() == _filterSectionId) {
+          if (_filterNiveauId == null || c['niveau_id']?.toString() == _filterNiveauId) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // 3. Niveau filter
+    if (_filterNiveauId != null) {
+      if (a.payload['niveau_id']?.toString() == _filterNiveauId ||
+          a.payload['target_niveau_id']?.toString() == _filterNiveauId) {
+        return true;
+      }
+      for (final cid in classIds) {
+        final c = _classById[cid];
+        if (c != null && c['niveau_id']?.toString() == _filterNiveauId) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    return true;
+  }
+
   // Multi-select state
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
@@ -346,10 +494,59 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     } catch (_) {}
   }
 
+  Future<void> _loadFilterMetadata() async {
+    final supabase = Supabase.instance.client;
+    try {
+      final futures = await Future.wait([
+        supabase.from('niveaux').select('id, name, code, cycle, display_order').order('display_order').catchError((_) => []),
+        supabase.from('sections').select('id, name, code').order('name').catchError((_) => []),
+        supabase.from('niveau_sections').select('niveau_id, section_id').catchError((_) => []),
+        supabase.from('classes').select('id, name, niveau_id, section_id').order('name').catchError((_) => []),
+        supabase.from('enrollments').select('user_id, class_id').catchError((_) => []),
+      ]);
+
+      if (!mounted) return;
+
+      final niveaux = List<Map<String, dynamic>>.from(futures[0] as List);
+      final sections = List<Map<String, dynamic>>.from(futures[1] as List);
+      final niveauSections = List<Map<String, dynamic>>.from(futures[2] as List);
+      final classes = List<Map<String, dynamic>>.from(futures[3] as List);
+      final enrollments = List<Map<String, dynamic>>.from(futures[4] as List);
+
+      _classById.clear();
+      _classByName.clear();
+      for (final c in classes) {
+        final id = c['id']?.toString();
+        final name = c['name']?.toString().toLowerCase().trim();
+        if (id != null) _classById[id] = c;
+        if (name != null && name.isNotEmpty) _classByName[name] = c;
+      }
+
+      _studentClassIds.clear();
+      for (final e in enrollments) {
+        final uid = e['user_id']?.toString();
+        final cid = e['class_id']?.toString();
+        if (uid != null && cid != null) {
+          _studentClassIds.putIfAbsent(uid, () => {}).add(cid);
+        }
+      }
+
+      setState(() {
+        _filterNiveaux = niveaux;
+        _filterSections = sections;
+        _filterNiveauSections = niveauSections;
+        _filterClasses = classes;
+      });
+    } catch (e) {
+      debugPrint('Error loading filter metadata: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _loadStudentLookup();
+    _loadFilterMetadata();
     _tabController = TabController(length: 4, vsync: this);
 
     // Handle navigation with pre-selected student
@@ -589,6 +786,93 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                             crossAxisAlignment:
                                 CrossAxisAlignment.start,
                             children: [
+                              // Niveau
+                              const Text('NIVEAU',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1.0,
+                                      color: AppColors.slate400)),
+                              const SizedBox(height: 12),
+                              _buildStyledDropdown<String?>(
+                                value: _filterNiveaux.any((n) => n['id']?.toString() == _filterNiveauId) ? _filterNiveauId : null,
+                                defaultValue: null,
+                                items: [
+                                  const DropdownMenuItem(value: null, child: Text('Tous les niveaux')),
+                                  ..._filterNiveaux.map((n) => DropdownMenuItem(
+                                    value: n['id']?.toString(),
+                                    child: Text(n['name']?.toString() ?? n['code']?.toString() ?? 'Niveau'),
+                                  )),
+                                ],
+                                onChanged: (v) => setState(() {
+                                  _filterNiveauId = v;
+                                  if (_filterSectionId != null &&
+                                      !_availableFilterSections.any((s) => s['id']?.toString() == _filterSectionId)) {
+                                    _filterSectionId = null;
+                                  }
+                                  if (_filterClassId != null &&
+                                      !_availableFilterClasses.any((c) => c['id']?.toString() == _filterClassId)) {
+                                    _filterClassId = null;
+                                  }
+                                  _currentPage = 0;
+                                }),
+                              ),
+                              const SizedBox(height: 28),
+
+                              // Filière
+                              const Text('FILIÈRE',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1.0,
+                                      color: AppColors.slate400)),
+                              const SizedBox(height: 12),
+                              _buildStyledDropdown<String?>(
+                                value: _availableFilterSections.any((s) => s['id']?.toString() == _filterSectionId) ? _filterSectionId : null,
+                                defaultValue: null,
+                                items: [
+                                  const DropdownMenuItem(value: null, child: Text('Toutes les filières')),
+                                  ..._availableFilterSections.map((s) => DropdownMenuItem(
+                                    value: s['id']?.toString(),
+                                    child: Text(s['name']?.toString() ?? s['code']?.toString() ?? 'Filière'),
+                                  )),
+                                ],
+                                onChanged: (v) => setState(() {
+                                  _filterSectionId = v;
+                                  if (_filterClassId != null &&
+                                      !_availableFilterClasses.any((c) => c['id']?.toString() == _filterClassId)) {
+                                    _filterClassId = null;
+                                  }
+                                  _currentPage = 0;
+                                }),
+                              ),
+                              const SizedBox(height: 28),
+
+                              // Classe
+                              const Text('CLASSE',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1.0,
+                                      color: AppColors.slate400)),
+                              const SizedBox(height: 12),
+                              _buildStyledDropdown<String?>(
+                                value: _availableFilterClasses.any((c) => c['id']?.toString() == _filterClassId) ? _filterClassId : null,
+                                defaultValue: null,
+                                items: [
+                                  const DropdownMenuItem(value: null, child: Text('Toutes les classes')),
+                                  ..._availableFilterClasses.map((c) => DropdownMenuItem(
+                                    value: c['id']?.toString(),
+                                    child: Text(c['name']?.toString() ?? 'Classe'),
+                                  )),
+                                ],
+                                onChanged: (v) => setState(() {
+                                  _filterClassId = v;
+                                  _currentPage = 0;
+                                }),
+                              ),
+                              const SizedBox(height: 28),
+
                               // Type
                               const Text('TYPE D\'ANNONCE',
                                   style: TextStyle(
@@ -716,7 +1000,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 24, vertical: 20),
                         decoration: const BoxDecoration(
-                          color: Color(0xFFFAFAFB),
+                           color: Color(0xFFFAFAFB),
                           border: Border(
                               top: BorderSide(
                                   color: Color(0xFFE5E7EB))),
@@ -728,6 +1012,9 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                                 height: 48,
                                 child: OutlinedButton(
                                   onPressed: () => setState(() {
+                                    _filterNiveauId = null;
+                                    _filterSectionId = null;
+                                    _filterClassId = null;
                                     _filterType = null;
                                     _filterDateFrom = null;
                                     _filterDateTo = null;
@@ -1030,7 +1317,14 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                 _buildHeaderIconButton(
                   icon: Icons.filter_list_rounded,
                   tooltip: 'Filtres',
-                  isActive: _filterType != null || _filterDateFrom != null || _filterDateTo != null || _showFilters,
+                  isActive: _filterType != null ||
+                      _filterDateFrom != null ||
+                      _filterDateTo != null ||
+                      _filterStatus != 'all' ||
+                      _filterNiveauId != null ||
+                      _filterSectionId != null ||
+                      _filterClassId != null ||
+                      _showFilters,
                   onPressed: () => setState(() => _showFilters = !_showFilters),
                 ),
                 const SizedBox(width: 8),
@@ -1496,6 +1790,11 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
       filtered = filtered.where((a) => a.isImportant).toList();
     }
 
+    // Apply academic filters (Niveau -> Filière -> Classe)
+    if (_filterNiveauId != null || _filterSectionId != null || _filterClassId != null) {
+      filtered = filtered.where(_matchesAcademicFilters).toList();
+    }
+
     return TabBarView(
       controller: _tabController,
       children: [
@@ -1515,7 +1814,10 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
         _filterType != null ||
         _filterDateFrom != null ||
         _filterDateTo != null ||
-        _filterStatus != 'all';
+        _filterStatus != 'all' ||
+        _filterNiveauId != null ||
+        _filterSectionId != null ||
+        _filterClassId != null;
 
     if (list.isEmpty) {
       return Center(
@@ -1552,6 +1854,9 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
                 onPressed: () => setState(() {
                   _searchController.clear();
                   _searchQuery = '';
+                  _filterNiveauId = null;
+                  _filterSectionId = null;
+                  _filterClassId = null;
                   _filterType = null;
                   _filterDateFrom = null;
                   _filterDateTo = null;

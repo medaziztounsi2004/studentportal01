@@ -908,15 +908,19 @@ class _EmploiScreenState extends ConsumerState<EmploiScreen>
                         bottom: i * rowHeight,
                         width: timeColWidth,
                         height: rowHeight,
-                        child: Center(
-                          child: RotatedBox(
-                            quarterTurns: 3,
-                            child: Text(
-                              _timeSlots[i],
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: isCurrentHour ? FontWeight.w800 : FontWeight.w600,
-                                color: isCurrentHour ? const Color(0xFFEA580C) : Colors.grey.shade600,
+                        child: Align(
+                          alignment: Alignment.bottomLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 4, bottom: 2),
+                            child: RotatedBox(
+                              quarterTurns: 3,
+                              child: Text(
+                                _timeSlots[i],
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isCurrentHour ? FontWeight.w800 : FontWeight.w600,
+                                  color: isCurrentHour ? const Color(0xFFEA580C) : Colors.grey.shade600,
+                                ),
                               ),
                             ),
                           ),
