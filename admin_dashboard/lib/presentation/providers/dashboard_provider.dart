@@ -183,7 +183,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       final paymentsResp = await _supabase
           .from('payments')
           .select('amount, status, paid_at, created_at, school_id')
-          .or('school_id.eq.$schoolId,school_id.is.null');
+          .eq('school_id', schoolId);
 
       for (final p in paymentsResp as List) {
         final amt = (p['amount'] as num?)?.toDouble() ?? 0.0;
@@ -273,7 +273,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       final resp = await _supabase
           .from('payments')
           .select('id, amount, status, paid_at, due_date, created_at, school_id')
-          .or('school_id.eq.$schoolId,school_id.is.null');
+          .eq('school_id', schoolId);
       payments = List<Map<String, dynamic>>.from(resp as List);
     } catch (e) {
       debugPrint('Error loading payments in _loadCashflows: $e');
@@ -516,7 +516,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       final paymentsResp = await _supabase
           .from('payments')
           .select('amount, status, payment_plans(category, description)')
-          .or('school_id.eq.$schoolId,school_id.is.null');
+          .eq('school_id', schoolId);
 
       final categoryTotals = <String, double>{};
       double grandTotal = 0;
@@ -535,7 +535,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
         final plans = await _supabase
             .from('payment_plans')
             .select('category, description, amount_total')
-            .or('school_id.eq.$schoolId,school_id.is.null');
+            .eq('school_id', schoolId);
 
         for (final p in (plans as List)) {
           final amt = (p['amount_total'] as num?)?.toDouble() ?? 0.0;
@@ -618,9 +618,14 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
           .select('id, name, capacity, section_id, sections(id, name, code, color, display_order), niveau_id, niveaux(id, name, code, cycle, display_order)')
           .eq('school_id', schoolId);
 
+      final classList = List<Map<String, dynamic>>.from(classesResp as List);
+      if (classList.isEmpty) return const [];
+
+      final classIds = classList.map((c) => c['id'].toString()).toList();
       final enrollmentsResp = await _supabase
           .from('enrollments')
-          .select('class_id');
+          .select('class_id')
+          .inFilter('class_id', classIds);
 
       final Map<String, int> classEnrollmentCounts = {};
       int totalEnrolled = 0;
@@ -632,19 +637,21 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
         }
       }
 
+      if (totalEnrolled == 0) return const [];
+
       final Map<String, int> counts = {};
 
-      for (final c in (classesResp as List)) {
+      for (final c in classList) {
         final sec = c['sections'] as Map<String, dynamic>?;
         final niv = c['niveaux'] as Map<String, dynamic>?;
 
         final label = sec?['name'] ?? (niv?['cycle'] == 'base' ? 'Cycle de Base' : 'Tronc Commun');
         final cid = c['id']?.toString() ?? '';
-        final classCount = (totalEnrolled > 0)
-            ? (classEnrollmentCounts[cid] ?? 0)
-            : ((c['capacity'] as num?)?.toInt() ?? 25);
+        final classCount = classEnrollmentCounts[cid] ?? 0;
 
-        counts[label] = (counts[label] ?? 0) + classCount;
+        if (classCount > 0) {
+          counts[label] = (counts[label] ?? 0) + classCount;
+        }
       }
 
       final grandTotal = counts.values.fold<int>(0, (a, b) => a + b);
@@ -717,7 +724,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       final slots = await _supabase
           .from('timetable_slots')
           .select('id, day_of_week, start_time, end_time, room, teacher_name, timetable_type, subject_offerings(id, class_id, classes(id, name, school_id), subjects(name), users(full_name))')
-          .limit(30);
+          .limit(50);
 
       final events = <DashboardCalendarEvent>[];
       for (final s in (slots as List)) {
@@ -764,103 +771,11 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
         ));
       }
 
-      if (events.isNotEmpty) return events;
-    } catch (_) {}
-
-    // Default rich sample events for days of the week
-    return [
-      DashboardCalendarEvent(
-        id: '1',
-        title: 'Conseil Pédagogique - 2S Math',
-        time: '9:00 - 10:30 AM',
-        duration: '90m',
-        room: 'Salle R1',
-        classId: 'demo-c1',
-        className: '2S Mathématiques',
-        teacherName: 'Dr. Ben Salem',
-        teacherInitials: 'BS',
-        isExam: false,
-        dayOfWeek: 1, // Lun
-      ),
-      DashboardCalendarEvent(
-        id: '2',
-        title: 'Devoir Synthèse Physique',
-        time: '11:00 - 12:30 PM',
-        duration: '90m',
-        room: 'Labo Sc.',
-        classId: 'demo-c2',
-        className: '3S Sc. Expérimentales',
-        teacherName: 'Mme. Trabelsi',
-        teacherInitials: 'MT',
-        isExam: true,
-        dayOfWeek: 1, // Lun
-      ),
-      DashboardCalendarEvent(
-        id: '3',
-        title: 'Cours Algorithmique & Python',
-        time: '08:30 - 10:00 AM',
-        duration: '90m',
-        room: 'Lab Info 2',
-        classId: 'demo-c3',
-        className: '4ème Informatique',
-        teacherName: 'Mr. Jaziri',
-        teacherInitials: 'MJ',
-        isExam: false,
-        dayOfWeek: 2, // Mar
-      ),
-      DashboardCalendarEvent(
-        id: '4',
-        title: 'Examen Blanc Mathématiques',
-        time: '10:30 - 13:00 PM',
-        duration: '150m',
-        room: 'Amphi A',
-        classId: 'demo-c1',
-        className: '4ème Bac Math',
-        teacherName: 'Dr. Ben Salem',
-        teacherInitials: 'BS',
-        isExam: true,
-        dayOfWeek: 2, // Mar
-      ),
-      DashboardCalendarEvent(
-        id: '5',
-        title: 'Travaux Pratiques SVT',
-        time: '14:00 - 16:00 PM',
-        duration: '120m',
-        room: 'Lab Bio',
-        classId: 'demo-c2',
-        className: '1ère Année S2',
-        teacherName: 'Mme. Ayari',
-        teacherInitials: 'MA',
-        isExam: false,
-        dayOfWeek: 3, // Mer
-      ),
-      DashboardCalendarEvent(
-        id: '6',
-        title: 'Session Anglais Technique',
-        time: '09:00 - 10:30 AM',
-        duration: '90m',
-        room: 'Salle 12',
-        classId: 'demo-c4',
-        className: '3ème Éco & Gestion',
-        teacherName: 'Mme. Smith',
-        teacherInitials: 'ES',
-        isExam: false,
-        dayOfWeek: 4, // Jeu
-      ),
-      DashboardCalendarEvent(
-        id: '7',
-        title: 'Examen Philosophie',
-        time: '11:00 - 13:00 PM',
-        duration: '120m',
-        room: 'Salle B3',
-        classId: 'demo-c5',
-        className: '4ème Lettres',
-        teacherName: 'Mr. Gharbi',
-        teacherInitials: 'MG',
-        isExam: true,
-        dayOfWeek: 5, // Ven
-      ),
-    ];
+      return events;
+    } catch (e) {
+      debugPrint('Error loading calendar events: $e');
+      return const [];
+    }
   }
 
   Future<List<AttendanceLevelItem>> _loadAttendanceLevels(String schoolId) async {
@@ -883,8 +798,6 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
 
       // Map classId -> niveauId
       final Map<String, String> classToNiveau = {};
-      final Map<String, int> niveauStudentCounts = {};
-
       for (final c in (classesResp as List)) {
         final cid = c['id']?.toString();
         final nid = c['niveau_id']?.toString();
@@ -893,12 +806,17 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
         }
       }
 
-      // 3. Fetch enrollments to get student count per niveau
+      // If this school has NO classes, return empty list (never invent fake cohorts)
+      if (classToNiveau.isEmpty) return const [];
+
+      // 3. Fetch enrollments for classes of this school to get student count per niveau
       final enrollmentsResp = await _supabase
           .from('enrollments')
-          .select('id, class_id');
+          .select('id, class_id')
+          .inFilter('class_id', classToNiveau.keys.toList());
 
       final Map<String, String> enrollmentToNiveau = {};
+      final Map<String, int> niveauStudentCounts = {};
       for (final e in (enrollmentsResp as List)) {
         final eid = e['id']?.toString();
         final cid = e['class_id']?.toString();
@@ -909,50 +827,58 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
         }
       }
 
-      // 4. Fetch absences for the school
-      final absencesResp = await _supabase
-          .from('absence_records')
-          .select('enrollment_id, hours_absent')
-          .or('school_id.eq.$schoolId,school_id.is.null');
+      // If no students are enrolled in this school's classes, return empty list
+      if (enrollmentToNiveau.isEmpty) return const [];
 
+      // 4. Fetch absences strictly for this school's enrolled students
       final Map<String, double> absenceHoursByNiveau = {};
-      for (final a in (absencesResp as List)) {
-        final eid = a['enrollment_id']?.toString();
-        final hours = (a['hours_absent'] as num?)?.toDouble() ?? 2.0;
-        if (eid != null && enrollmentToNiveau.containsKey(eid)) {
-          final nid = enrollmentToNiveau[eid]!;
-          absenceHoursByNiveau[nid] = (absenceHoursByNiveau[nid] ?? 0.0) + hours;
+      final enrollmentIds = enrollmentToNiveau.keys.toList();
+      if (enrollmentIds.isNotEmpty) {
+        final absencesResp = await _supabase
+            .from('absence_records')
+            .select('enrollment_id, hours_absent')
+            .inFilter('enrollment_id', enrollmentIds);
+
+        for (final a in (absencesResp as List)) {
+          final eid = a['enrollment_id']?.toString();
+          final hours = (a['hours_absent'] as num?)?.toDouble() ?? 2.0;
+          if (eid != null && enrollmentToNiveau.containsKey(eid)) {
+            final nid = enrollmentToNiveau[eid]!;
+            absenceHoursByNiveau[nid] = (absenceHoursByNiveau[nid] ?? 0.0) + hours;
+          }
         }
       }
 
-      // 5. Calculate real attendance rate per niveau
+      // 5. Calculate real ABSENCE rate per niveau (only for niveaux present in this school with enrolled students)
       final List<AttendanceLevelItem> items = [];
       for (final n in niveauxList) {
         final nid = n['id']?.toString();
+        if (nid == null || !classToNiveau.values.contains(nid)) continue;
+
+        final studentCount = niveauStudentCounts[nid] ?? 0;
+        if (studentCount == 0) continue;
+
         final name = (n['name'] ?? n['code'] ?? 'Niveau').toString();
-        final studentCount = (nid != null && (niveauStudentCounts[nid] ?? 0) > 0)
-            ? niveauStudentCounts[nid]!
-            : 25; // standard base cohort
-        final absenceHours = nid != null ? (absenceHoursByNiveau[nid] ?? 0.0) : 0.0;
+        final absenceHours = absenceHoursByNiveau[nid] ?? 0.0;
 
         // Nominal monthly class hours = 120 hrs per student
         final totalExpectedHours = studentCount * 120.0;
-        final rawRate = totalExpectedHours > 0
-            ? ((totalExpectedHours - absenceHours) / totalExpectedHours).clamp(0.0, 1.0)
-            : 1.0;
+        final rawAbsenceRate = totalExpectedHours > 0
+            ? (absenceHours / totalExpectedHours).clamp(0.0, 1.0)
+            : 0.0;
 
         items.add(AttendanceLevelItem(
           levelName: name,
-          rate: rawRate,
-          label: '${(rawRate * 100).toStringAsFixed(0)}%',
+          rate: rawAbsenceRate,
+          label: '${(rawAbsenceRate * 100).toStringAsFixed(1)}%',
         ));
       }
 
       return items;
     } catch (e) {
       debugPrint('Error loading real attendance levels: $e');
+      return const [];
     }
-    return const [];
   }
 
   String _getInitials(String name) {

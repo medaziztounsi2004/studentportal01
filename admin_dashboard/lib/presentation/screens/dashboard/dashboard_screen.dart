@@ -250,7 +250,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               final bool hasInvoices = kpis.totalPaymentsDue > 0;
               final bool isRecExcellent = recRate >= 75.0 && hasInvoices;
               final bool isRecModerate = recRate >= 50.0 && recRate < 75.0 && hasInvoices;
-              final bool isRecPoor = recRate < 50.0 && hasInvoices;
 
               final revIconColor = !hasInvoices
                   ? const Color(0xFF6D4CF6)
@@ -273,7 +272,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               final bool hasThisMonth = kpis.thisMonthRevenue > 0;
               final bool hasLastMonth = kpis.lastMonthRevenue > 0;
               final bool isGrowthPositive = hasThisMonth && (kpis.thisMonthRevenue >= kpis.lastMonthRevenue || !hasLastMonth);
-              final bool isGrowthNegative = (hasLastMonth && kpis.thisMonthRevenue < kpis.lastMonthRevenue) || (!hasThisMonth && hasLastMonth);
               final bool isGrowthFlatZero = !hasThisMonth && !hasLastMonth;
 
               final mRevIcon = isGrowthFlatZero
@@ -389,7 +387,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   iconBgColor: stBg,
                   title: 'Total Inscriptions',
                   value: NumberFormat.decimalPattern().format(totalSt),
-                  trend: totalSt > 0 ? (isStPerfect ? '100% actifs' : '${activeSt} actifs') : '0 élève',
+                  trend: totalSt > 0 ? (isStPerfect ? '100% actifs' : '$activeSt actifs') : '0 élève',
                   trendLabel: totalSt > 0
                       ? (isStPerfect
                           ? 'tous les élèves inscrits'
@@ -492,7 +490,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           const SizedBox(height: 24),
 
-          // ── ROW 3: THREE CARDS (Filière 30%, Calendrier & Séances 40%, Présence 30%) ──
+          // ── ROW 3: THREE CARDS (Filière 30%, Calendrier & Séances 40%, Absence 30%) ──
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 1050;
@@ -514,7 +512,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     const SizedBox(width: 18),
 
-                    // Taux de Présence par Niveau (30%)
+                    // Taux d'Absence par Niveau (30%)
                     Expanded(
                       flex: 3,
                       child: _buildAttendanceByLevelCard(context, state),
@@ -1825,7 +1823,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.science_outlined, // Science icon
+                            Icons.class_outlined,
                             size: 15,
                             color: _selectedCalendarTab == 0 ? const Color(0xFF6D4CF6) : const Color(0xFF94A3B8),
                           ),
@@ -1888,13 +1886,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
           // Event List
           if (filteredEvents.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: Text(
-                  isExamTab ? 'Aucun examen prévu ce jour-là' : 'Aucune séance prévue ce jour-là',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isExamTab ? Icons.assignment_outlined : Icons.event_note_rounded,
+                    size: 26,
+                    color: const Color(0xFFCBD5E1),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isExamTab ? 'Aucun examen programmé ce jour' : 'Aucune séance programmée ce jour',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 3),
+                  const Text(
+                    'Les cours et examens s\'afficheront dès leur programmation',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             )
           else
@@ -2030,6 +2056,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _buildAttendanceByLevelCard(BuildContext context, DashboardState state) {
     final levels = state.attendanceLevels;
 
+    Color getAbsenceColor(double rate) {
+      if (rate <= 0.05) return const Color(0xFF10B981); // Emerald Green: 0-5% absence (healthy)
+      if (rate <= 0.15) return const Color(0xFFF59E0B); // Amber: 5-15% absence (moderate)
+      return const Color(0xFFEF4444); // Red: > 15% absence (alert)
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -2057,7 +2089,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: const [
                     Text(
-                      'Taux de Présence par Niveau',
+                      'Taux d\'Absence par Niveau',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -2087,55 +2119,81 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
           // Slim Horizontal Progress Bars List
           if (levels.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'Aucune donnée d\'absence enregistrée',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.event_available_rounded, size: 28, color: Color(0xFFCBD5E1)),
+                  SizedBox(height: 8),
+                  Text(
+                    'Aucune donnée d\'absence enregistrée',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Les taux d\'absence s\'afficheront dès l\'appel en classe',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             )
           else
             for (int i = 0; i < levels.length; i++) ...[
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              Builder(
+                builder: (context) {
+                  final rate = levels[i].rate;
+                  final color = getAbsenceColor(rate);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          levels[i].levelName,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF0F172A),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              levels[i].levelName,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0F172A),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          Text(
+                            levels[i].label,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: color,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        levels[i].label,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF6D4CF6),
+                      const SizedBox(height: 5),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: rate,
+                          backgroundColor: const Color(0xFFF1F5F9),
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                          minHeight: 6, // Slim elegant height
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 5),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: levels[i].rate,
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6D4CF6)),
-                      minHeight: 6, // Slim elegant height
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
               if (i < levels.length - 1) const SizedBox(height: 11),
             ],
