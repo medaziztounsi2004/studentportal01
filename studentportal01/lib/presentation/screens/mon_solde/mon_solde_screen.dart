@@ -75,12 +75,10 @@ class PaymentCategoryData {
   double get progressPercent => amount > 0 ? (paid / amount) * 100 : 0;
 }
 
-// Payment categories breakdown provider - returns all categories with active plans or pricing
+// Payment categories breakdown provider - returns all categories with active plans or payments
 final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
   final plansAsync = ref.watch(paymentsDataProvider);
   final plans = plansAsync.asData?.value ?? [];
-  final pricingAsync = ref.watch(pricingFallbackProvider);
-  final pricing = pricingAsync.asData?.value ?? {};
 
   final Map<PaymentCategory, double> amounts = {};
   final Map<PaymentCategory, double> paid = {};
@@ -91,21 +89,25 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
       plan.description ?? plan.planType,
     );
 
-    // If individual payments have their own specific categories
-    final paymentsWithCat = plan.payments.where((p) =>
-        (p.category != null && p.category!.isNotEmpty) ||
-        (p.description != null && p.description!.isNotEmpty)).toList();
-
-    if (paymentsWithCat.isNotEmpty) {
+    if (plan.payments.isNotEmpty) {
       for (final payment in plan.payments) {
         final pCat = _mapCategory(
           payment.category ?? plan.category,
-          payment.description ?? payment.notes ?? plan.description,
+          payment.notes ?? payment.description ?? plan.description,
         );
         amounts[pCat] = (amounts[pCat] ?? 0) + payment.amount;
-        if (payment.isPaid || payment.status.toLowerCase() == 'paid' || payment.paidAt != null) {
+        if (payment.isPaid ||
+            payment.status.toLowerCase() == 'paid' ||
+            payment.paidAt != null) {
           paid[pCat] = (paid[pCat] ?? 0) + payment.amount;
         }
+      }
+      // Ensure plan category amount is at least as large as plan.amountTotal
+      if ((amounts[planCat] ?? 0) < plan.amountTotal) {
+        amounts[planCat] = plan.amountTotal;
+      }
+      if ((paid[planCat] ?? 0) < plan.totalPaid) {
+        paid[planCat] = plan.totalPaid;
       }
     } else {
       amounts[planCat] = (amounts[planCat] ?? 0) + plan.amountTotal;
@@ -113,15 +115,7 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
     }
   }
 
-  // Fill in pricing fallback for categories with 0 configured amount
-  for (final entry in pricing.entries) {
-    final cat = _mapCategory(entry.key);
-    if ((amounts[cat] ?? 0) == 0 && entry.value > 0) {
-      amounts[cat] = entry.value;
-    }
-  }
-
-  // Only return categories that have an active plan or a configured price (> 0)
+  // Only return categories that the student actually has configured payments or plans for (> 0)
   return PaymentCategory.values
       .where((cat) => (amounts[cat] ?? 0) > 0 || (paid[cat] ?? 0) > 0)
       .map((cat) {
@@ -551,6 +545,8 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
       latestPlansByCategory.putIfAbsent(cat, () => p);
     }
     final dedupedPlans = latestPlansByCategory.values.toList();
+    final categoryTotal = categories.fold<double>(0, (sum, c) => sum + c.amount);
+    final categoryPaid = categories.fold<double>(0, (sum, c) => sum + c.paid);
 
     final allPlansTotal = dedupedPlans.fold<double>(
       0,
@@ -558,9 +554,11 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     );
     final allPaidAmount = dedupedPlans.fold<double>(0, (sum, p) => sum + p.totalPaid);
     final pricingTotal = pricing.values.fold<double>(0, (sum, v) => sum + v);
-    final totalAmount = allPlansTotal > 0 ? allPlansTotal : pricingTotal;
-    final paidAmount = allPaidAmount;
-    final remainingAmount = totalAmount - paidAmount;
+    final totalAmount = categoryTotal > 0
+        ? categoryTotal
+        : (allPlansTotal > 0 ? allPlansTotal : pricingTotal);
+    final paidAmount = categoryTotal > 0 ? categoryPaid : allPaidAmount;
+    final remainingAmount = (totalAmount - paidAmount).clamp(0.0, double.infinity);
     final progressPercent = totalAmount > 0
         ? (paidAmount / totalAmount) * 100
         : 0.0;

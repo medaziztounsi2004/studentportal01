@@ -7,6 +7,8 @@
 /// Use these canonical functions instead.
 library;
 
+import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/connectivity_service.dart';
 import 'offline_cache_service.dart';
@@ -516,17 +518,23 @@ class PaymentPlanInfo {
 
   factory PaymentPlanInfo.fromJson(Map<String, dynamic> json) {
     return PaymentPlanInfo(
-      planId: json['plan_id'] ?? '',
-      planType: json['plan_type'] ?? '',
+      planId: json['plan_id']?.toString() ?? json['id']?.toString() ?? '',
+      planType: json['plan_type']?.toString() ?? '',
       amountTotal: (json['amount_total'] as num?)?.toDouble() ?? 0,
-      currency: json['currency'] ?? 'TND',
-      description: json['description'],
-      category: json['category'],
-      academicYear: json['academic_year'],
+      currency: json['currency']?.toString() ?? 'TND',
+      description: json['description']?.toString(),
+      category: json['category']?.toString(),
+      academicYear: json['academic_year']?.toString(),
       payments: (json['payments'] as List?)
           ?.map((e) {
             final m = Map<String, dynamic>.from(e as Map<String, dynamic>);
-            m['category'] ??= json['category'];
+            final noteCat = m['notes']?.toString();
+            final directCat = m['category']?.toString();
+            m['category'] = (directCat != null && directCat.isNotEmpty && directCat != 'null')
+                ? directCat
+                : (noteCat != null && noteCat.isNotEmpty && noteCat != 'null')
+                    ? noteCat
+                    : json['category'];
             m['description'] ??= json['description'];
             return PaymentInfo.fromJson(m);
           })
@@ -580,17 +588,31 @@ class PaymentInfo {
   });
 
   factory PaymentInfo.fromJson(Map<String, dynamic> json) {
+    final rawCat = json['category']?.toString();
+    final rawNotes = json['notes']?.toString();
+    final rawDesc = json['description']?.toString();
+    final plan = json['payment_plans'] as Map<String, dynamic>?;
+    final planCat = plan?['category']?.toString() ?? plan?['description']?.toString();
+
+    final resolvedCat = (rawCat != null && rawCat.isNotEmpty && rawCat != 'null')
+        ? rawCat
+        : (planCat != null && planCat.isNotEmpty && planCat != 'null')
+            ? planCat
+            : (rawNotes != null && rawNotes.isNotEmpty && rawNotes != 'null')
+                ? rawNotes
+                : rawDesc;
+
     return PaymentInfo(
-      id: json['id'] ?? '',
+      id: json['id']?.toString() ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
-      dueDate: json['due_date'] != null ? DateTime.tryParse(json['due_date']) : null,
-      paidAt: json['paid_at'] != null ? DateTime.tryParse(json['paid_at']) : null,
-      method: json['method'],
-      status: json['status'] ?? 'pending',
-      reference: json['reference'],
-      notes: json['notes'],
-      category: json['category']?.toString(),
-      description: json['description']?.toString(),
+      dueDate: json['due_date'] != null ? DateTime.tryParse(json['due_date'].toString()) : null,
+      paidAt: json['paid_at'] != null ? DateTime.tryParse(json['paid_at'].toString()) : null,
+      method: json['method']?.toString(),
+      status: json['status']?.toString() ?? 'pending',
+      reference: json['reference']?.toString(),
+      notes: rawNotes,
+      category: resolvedCat,
+      description: rawDesc,
     );
   }
 
@@ -1077,93 +1099,276 @@ class CoreDataService {
     }
 
     try {
-      final result = await _client.rpc('get_payments_for_student', params: {
-        'p_user_id': userId,
-      }).timeout(const Duration(seconds: 4));
-      if (result is List && result.isNotEmpty) {
-        final list = result
-            .map((e) => PaymentPlanInfo.fromJson(e as Map<String, dynamic>))
-            .toList();
-        OfflineCacheService.instance.setJson(
-          cacheKey,
-          list.map((e) => e.toJson()).toList(),
-        );
-        OfflineCacheService.instance.setJson(
-          'payments_latest',
-          list.map((e) => e.toJson()).toList(),
-        );
-        ConnectivityService.instance.reportNetworkSuccess();
-        return list;
-      }
-    } catch (e) {
-      ConnectivityService.instance.reportNetworkError(e);
-    }
+      final supabase = _client;
 
-    // Fallback: direct table queries on payment_plans & payments via enrollments
-    try {
-      final enrollmentsResp = await _client
-          .from('enrollments')
-          .select('id')
-          .eq('user_id', userId)
-          .timeout(const Duration(seconds: 4));
-      final enrollmentIds = (enrollmentsResp as List)
+      // 1. Fetch student context / enrollment info
+      List<dynamic> enrollmentList = [];
+      String? schoolId;
+      String? niveauId;
+      String? sectionId;
+
+      try {
+        final enrResp = await supabase
+            .from('enrollments')
+            .select('id, user_id, class_id, classes(id, name, niveau_id, section_id)')
+            .eq('user_id', userId)
+            .timeout(const Duration(seconds: 4));
+        enrollmentList = (enrResp as List?) ?? [];
+      } catch (_) {}
+
+      if (enrollmentList.isNotEmpty) {
+        final firstEnr = enrollmentList.first;
+        final cls = firstEnr['classes'] as Map<String, dynamic>?;
+        niveauId = cls?['niveau_id']?.toString();
+        sectionId = cls?['section_id']?.toString();
+      }
+
+      try {
+        final uRow = await supabase
+            .from('users')
+            .select('school_id, niveau_id, section_id')
+            .eq('id', userId)
+            .maybeSingle()
+            .timeout(const Duration(seconds: 3));
+        schoolId = uRow?['school_id']?.toString();
+        niveauId ??= uRow?['niveau_id']?.toString();
+        sectionId ??= uRow?['section_id']?.toString();
+      } catch (_) {}
+
+      final enrollmentIds = enrollmentList
           .map((e) => e['id']?.toString() ?? '')
           .where((id) => id.isNotEmpty)
           .toList();
 
-      if (enrollmentIds.isNotEmpty) {
-        final plansResp = await _client
-            .from('payment_plans')
-            .select('*, payments(*)')
-            .filter('enrollment_id', 'in', enrollmentIds)
-            .timeout(const Duration(seconds: 4));
-
-        final list = (plansResp as List).map((p) {
-          final paymentsRaw = (p['payments'] as List?) ?? [];
-          final paymentsList = paymentsRaw.map((e) {
-            final m = Map<String, dynamic>.from(e as Map<String, dynamic>);
-            m['category'] ??= p['category'];
-            m['description'] ??= p['description'];
-            return PaymentInfo.fromJson(m);
-          }).toList();
-
-          final totalPaid = paymentsList
-              .where((item) =>
-                  item.status.toLowerCase() == 'paid' || item.paidAt != null)
-              .fold<double>(0.0, (sum, item) => sum + item.amount);
-          final amountTotal = (p['amount_total'] as num?)?.toDouble() ?? 0.0;
-          final planType = p['plan_type']?.toString() ?? '';
-          final description = p['description']?.toString();
-
-          return PaymentPlanInfo(
-            planId: p['id']?.toString() ?? '',
-            planType: planType,
-            amountTotal: amountTotal,
-            currency: p['currency']?.toString() ?? 'TND',
-            description: description,
-            category: p['category']?.toString(),
-            academicYear: p['academic_year']?.toString(),
-            payments: paymentsList,
-            totalPaid: totalPaid,
-            remaining: (amountTotal - totalPaid).clamp(0.0, double.infinity),
-          );
-        }).toList();
-
-        if (list.isNotEmpty) {
-          OfflineCacheService.instance.setJson(
-            cacheKey,
-            list.map((e) => e.toJson()).toList(),
-          );
-          OfflineCacheService.instance.setJson(
-            'payments_latest',
-            list.map((e) => e.toJson()).toList(),
-          );
-          ConnectivityService.instance.reportNetworkSuccess();
-          return list;
+      // 2. Fetch plans via RPC or direct query
+      List<Map<String, dynamic>> rawPlans = [];
+      try {
+        final rpcResp = await supabase.rpc('get_payments_for_student', params: {
+          'p_user_id': userId,
+        }).timeout(const Duration(seconds: 4));
+        if (rpcResp is List && rpcResp.isNotEmpty) {
+          rawPlans = List<Map<String, dynamic>>.from(rpcResp);
         }
+      } catch (_) {}
+
+      if (rawPlans.isEmpty && enrollmentIds.isNotEmpty) {
+        try {
+          final plansResp = await supabase
+              .from('payment_plans')
+              .select('*, payments(*)')
+              .filter('enrollment_id', 'in', enrollmentIds)
+              .timeout(const Duration(seconds: 4));
+          if (plansResp.isNotEmpty) {
+            rawPlans = List<Map<String, dynamic>>.from(plansResp);
+          }
+        } catch (_) {}
+      }
+
+      // 3. ALWAYS fetch direct payments from payments table (by student_id and by payment_plan_id)
+      final allPaymentsMap = <String, Map<String, dynamic>>{};
+
+      // Extract existing payments from rawPlans
+      for (final plan in rawPlans) {
+        final paymentsRaw = plan['payments'] as List?;
+        if (paymentsRaw != null) {
+          for (final p in paymentsRaw) {
+            final pMap = Map<String, dynamic>.from(p as Map<String, dynamic>);
+            final pid = pMap['id']?.toString() ?? '';
+            if (pid.isNotEmpty) {
+              pMap['plan_category'] = plan['category'];
+              pMap['plan_description'] = plan['description'];
+              allPaymentsMap[pid] = pMap;
+            }
+          }
+        }
+      }
+
+      // Fetch from payments table by student_id
+      try {
+        final directPayments = await supabase
+            .from('payments')
+            .select('*, payment_plans(id, plan_type, category, description)')
+            .eq('student_id', userId)
+            .order('due_date', ascending: true)
+            .timeout(const Duration(seconds: 4));
+        for (final p in (directPayments as List)) {
+          final pMap = Map<String, dynamic>.from(p as Map<String, dynamic>);
+          final pid = pMap['id']?.toString() ?? '';
+          if (pid.isNotEmpty) {
+            allPaymentsMap[pid] = pMap;
+          }
+        }
+      } catch (_) {}
+
+      // If plans had IDs, also fetch any payments by plan ID
+      final planIds = rawPlans
+          .map((p) => p['plan_id']?.toString() ?? p['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      if (planIds.isNotEmpty) {
+        try {
+          final byPlan = await supabase
+              .from('payments')
+              .select('*, payment_plans(id, plan_type, category, description)')
+              .inFilter('payment_plan_id', planIds)
+              .order('due_date', ascending: true)
+              .timeout(const Duration(seconds: 4));
+          for (final p in (byPlan as List)) {
+            final pMap = Map<String, dynamic>.from(p as Map<String, dynamic>);
+            final pid = pMap['id']?.toString() ?? '';
+            if (pid.isNotEmpty) {
+              allPaymentsMap[pid] = pMap;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Helper to determine category matching admin dashboard
+      String resolveCategory(Map<String, dynamic> p) {
+        final directCat = p['category']?.toString();
+        if (directCat != null && directCat.isNotEmpty && directCat != 'null') {
+          return directCat;
+        }
+        final plan = p['payment_plans'] as Map<String, dynamic>?;
+        final planCat = plan?['category']?.toString() ??
+            plan?['description']?.toString() ??
+            p['plan_category']?.toString() ??
+            p['plan_description']?.toString();
+        if (planCat != null && planCat.isNotEmpty && planCat != 'null') {
+          return planCat;
+        }
+        final notes = p['notes']?.toString();
+        if (notes != null && notes.isNotEmpty && notes != 'null') {
+          return notes;
+        }
+        final desc = p['description']?.toString();
+        if (desc != null && desc.isNotEmpty && desc != 'null') {
+          return desc;
+        }
+        return 'scolarite';
+      }
+
+      // 4. Fetch tariffs for this student's specific niveau (EXACTLY LIKE ADMIN DASHBOARD)
+      if (niveauId != null && schoolId != null) {
+        try {
+          final pricingRows = await supabase
+              .from('payment_pricing')
+              .select('id, category, amount, section_id, niveau_id, academic_year_id')
+              .eq('school_id', schoolId)
+              .eq('niveau_id', niveauId)
+              .timeout(const Duration(seconds: 4)) as List<dynamic>;
+
+          for (final pr in pricingRows) {
+            final cat = pr['category']?.toString();
+            final amt = (pr['amount'] as num?)?.toDouble() ?? 0.0;
+            final prSecId = pr['section_id']?.toString();
+            if (cat == null || amt <= 0) continue;
+            if (cat.toLowerCase() == 'scolarite') continue;
+            if (prSecId != null && sectionId != null && prSecId != sectionId) continue;
+
+            final alreadyHas = allPaymentsMap.values.any((p) {
+              final pCat = resolveCategory(p).toLowerCase().trim();
+              return pCat == cat.toLowerCase().trim();
+            });
+
+            if (!alreadyHas) {
+              final synthId = 'pricing_$cat';
+              allPaymentsMap[synthId] = {
+                'id': synthId,
+                'amount': amt,
+                'status': 'pending',
+                'category': cat,
+                'due_date': DateTime.now().toIso8601String(),
+                'paid_at': null,
+                'notes': cat,
+                'is_synthetic': true,
+              };
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 5. Convert all payments to PaymentInfo instances
+      final convertedPayments = <PaymentInfo>[];
+      for (final p in allPaymentsMap.values) {
+        final cat = resolveCategory(p);
+        p['category'] = cat;
+        convertedPayments.add(PaymentInfo.fromJson(p));
+      }
+
+      // 6. Build the result list of PaymentPlanInfo:
+      // A) Tuition plan (scolarite)
+      final scolaritePayments = convertedPayments
+          .where((p) => resolveCategory({'category': p.category, 'notes': p.notes}).toLowerCase() == 'scolarite')
+          .toList()
+        ..sort((a, b) => (a.dueDate ?? DateTime(2100)).compareTo(b.dueDate ?? DateTime(2100)));
+
+      // Find original scolarite plan metadata if available
+      final originalTuitionPlan = rawPlans.firstWhereOrNull((p) {
+        final c = p['category']?.toString().toLowerCase() ?? '';
+        return c.isEmpty || c == 'scolarite';
+      });
+
+      final tuitionTotal = scolaritePayments.fold<double>(0.0, (s, p) => s + p.amount);
+      final tuitionPaid = scolaritePayments.where((p) => p.isPaid).fold<double>(0.0, (s, p) => s + p.amount);
+      final origAmountTotal = (originalTuitionPlan?['amount_total'] as num?)?.toDouble() ?? 0.0;
+
+      final resultPlans = <PaymentPlanInfo>[];
+
+      if (scolaritePayments.isNotEmpty || originalTuitionPlan != null) {
+        resultPlans.add(PaymentPlanInfo(
+          planId: originalTuitionPlan?['plan_id']?.toString() ?? originalTuitionPlan?['id']?.toString() ?? 'scolarite_main',
+          planType: originalTuitionPlan?['plan_type']?.toString() ?? 'monthly',
+          amountTotal: origAmountTotal > tuitionTotal ? origAmountTotal : tuitionTotal,
+          currency: originalTuitionPlan?['currency']?.toString() ?? 'TND',
+          description: originalTuitionPlan?['description']?.toString() ?? 'Scolarité',
+          category: 'scolarite',
+          academicYear: originalTuitionPlan?['academic_year']?.toString(),
+          payments: scolaritePayments,
+          totalPaid: tuitionPaid,
+          remaining: ((origAmountTotal > tuitionTotal ? origAmountTotal : tuitionTotal) - tuitionPaid).clamp(0.0, double.infinity),
+        ));
+      }
+
+      // B) Each non-scolarite category gets its own PaymentPlanInfo
+      final nonScolaritePayments = convertedPayments
+          .where((p) => resolveCategory({'category': p.category, 'notes': p.notes}).toLowerCase() != 'scolarite')
+          .toList();
+
+      final paymentsByCat = <String, List<PaymentInfo>>{};
+      for (final p in nonScolaritePayments) {
+        final catKey = (p.category ?? p.notes ?? 'autres').toLowerCase().trim();
+        paymentsByCat.putIfAbsent(catKey, () => []).add(p);
+      }
+
+      for (final entry in paymentsByCat.entries) {
+        final catName = entry.key;
+        final catPayments = entry.value;
+        final catTotal = catPayments.fold<double>(0.0, (s, p) => s + p.amount);
+        final catPaid = catPayments.where((p) => p.isPaid).fold<double>(0.0, (s, p) => s + p.amount);
+
+        resultPlans.add(PaymentPlanInfo(
+          planId: 'plan_$catName',
+          planType: 'single',
+          amountTotal: catTotal,
+          currency: 'TND',
+          description: catName,
+          category: catName,
+          payments: catPayments,
+          totalPaid: catPaid,
+          remaining: (catTotal - catPaid).clamp(0.0, double.infinity),
+        ));
+      }
+
+      if (resultPlans.isNotEmpty) {
+        OfflineCacheService.instance.setJson(cacheKey, resultPlans.map((e) => e.toJson()).toList());
+        OfflineCacheService.instance.setJson('payments_latest', resultPlans.map((e) => e.toJson()).toList());
+        ConnectivityService.instance.reportNetworkSuccess();
+        return resultPlans;
       }
     } catch (e) {
       ConnectivityService.instance.reportNetworkError(e);
+      debugPrint('Error in getPaymentsForStudent: $e');
     }
 
     // Offline / Server down fallback from cache
