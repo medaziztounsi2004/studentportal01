@@ -96,6 +96,13 @@ class PlatformNotifier extends Notifier<PlatformState> {
     return _currentState;
   }
 
+  void clearError() {
+    _currentState = _currentState.copyWith(errorMessage: null);
+    try {
+      state = _currentState;
+    } catch (_) {}
+  }
+
   Future<void> loadAll() async {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) {
@@ -531,10 +538,35 @@ class PlatformNotifier extends Notifier<PlatformState> {
     int dailyAiMessages = 30,
     int? maxStudents,
   }) async {
+    String? createdSchoolId;
     try {
       final effectiveCode = (code != null && code.trim().isNotEmpty ? code : name)
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+      // Check if an abandoned/incomplete school exists with this code (0 users)
+      // from a previous crashed creation, and clean it up before inserting.
+      try {
+        final existingSchool = await _supabase
+            .from('schools')
+            .select('id')
+            .eq('code', effectiveCode)
+            .maybeSingle();
+
+        if (existingSchool != null) {
+          final existingId = existingSchool['id'] as String;
+          final users = await _supabase
+              .from('users')
+              .select('id')
+              .eq('school_id', existingId);
+          if (users.isEmpty) {
+            debugPrint('[Console] Cleaning up orphan school $existingId with code $effectiveCode');
+            await _supabase.from('schools').delete().eq('id', existingId);
+          }
+        }
+      } catch (cleanErr) {
+        debugPrint('[Console] Pre-cleanup check warning (non-fatal): $cleanErr');
+      }
 
       final school = await _supabase.from('schools').insert({
         'name': name,
@@ -546,7 +578,8 @@ class PlatformNotifier extends Notifier<PlatformState> {
         'is_active': true,
       }).select().single();
 
-      final schoolId = school['id'] as String;
+      createdSchoolId = school['id'] as String;
+      final schoolId = createdSchoolId;
 
       await _supabase.from('ai_school_quotas').upsert({
         'school_id': schoolId,
@@ -556,19 +589,38 @@ class PlatformNotifier extends Notifier<PlatformState> {
         'daily_messages_per_student': dailyAiMessages,
         'is_quota_exceeded': false,
         'kill_switch_enabled': false,
-      });
+      }, onConflict: 'school_id');
 
-      await _supabase.from('school_subscriptions').upsert({
-        'school_id': schoolId,
-        'plan_id': planId,
-        'status': 'active',
-        'billing_cycle': billingCycle,
-        'current_period_start': DateTime.now().toIso8601String(),
-        'current_period_end': billingCycle == 'yearly'
-            ? DateTime.now().add(const Duration(days: 365)).toIso8601String()
-            : DateTime.now().add(const Duration(days: 30)).toIso8601String(),
-        if (maxStudents != null) 'notes': 'Capacité max élèves: $maxStudents',
-      });
+      // The trigger 'trigger_school_subscription_auto' automatically creates a trial
+      // subscription row in school_subscriptions upon school insertion.
+      // We must specify onConflict: 'school_id' (or update) to avoid 23505 unique constraint violation.
+      try {
+        await _supabase.from('school_subscriptions').upsert({
+          'school_id': schoolId,
+          'plan_id': planId,
+          'status': 'active',
+          'billing_cycle': billingCycle,
+          'current_period_start': DateTime.now().toIso8601String(),
+          'current_period_end': billingCycle == 'yearly'
+              ? DateTime.now().add(const Duration(days: 365)).toIso8601String()
+              : DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+          if (maxStudents != null) 'notes': 'Capacité max élèves: $maxStudents',
+          'updated_at': DateTime.now().toIso8601String(),
+        }, onConflict: 'school_id');
+      } catch (subErr) {
+        debugPrint('[Console] Upsert onConflict error ($subErr), falling back to update:');
+        await _supabase.from('school_subscriptions').update({
+          'plan_id': planId,
+          'status': 'active',
+          'billing_cycle': billingCycle,
+          'current_period_start': DateTime.now().toIso8601String(),
+          'current_period_end': billingCycle == 'yearly'
+              ? DateTime.now().add(const Duration(days: 365)).toIso8601String()
+              : DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+          if (maxStudents != null) 'notes': 'Capacité max élèves: $maxStudents',
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('school_id', schoolId);
+      }
 
       final userResult = await UserManagementService.createUser(
         email: directorEmail,
@@ -585,14 +637,30 @@ class PlatformNotifier extends Notifier<PlatformState> {
       }
 
       // Pre-seed default educational data (Collège/Lycée system, without partitions, empty classes)
-      await SchoolDataSeeder.seedSchool(
-        client: _supabase,
-        schoolId: schoolId,
-      );
+      try {
+        await SchoolDataSeeder.seedSchool(
+          client: _supabase,
+          schoolId: schoolId,
+        );
+      } catch (seederErr) {
+        debugPrint('[Console] SchoolDataSeeder warning (non-fatal): $seederErr');
+      }
 
       await loadAll();
       return true;
     } catch (e) {
+      debugPrint('[Console] createSchool failed: $e');
+      if (createdSchoolId != null) {
+        try {
+          final users = await _supabase.from('users').select('id').eq('school_id', createdSchoolId);
+          if (users.isEmpty) {
+            debugPrint('[Console] Rolling back incomplete school $createdSchoolId');
+            await _supabase.from('schools').delete().eq('id', createdSchoolId);
+          }
+        } catch (rollbackErr) {
+          debugPrint('[Console] Rollback error: $rollbackErr');
+        }
+      }
       _currentState = _currentState.copyWith(errorMessage: 'Échec création école: $e');
       try { state = _currentState; } catch (_) {}
       return false;

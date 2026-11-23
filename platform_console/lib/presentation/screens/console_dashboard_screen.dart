@@ -105,7 +105,7 @@ class _ConsoleDashboardScreenState
                 Expanded(
                   child: platformState.isLoading
                       ? _skeletonForRoute()
-                      : platformState.errorMessage != null
+                      : (platformState.errorMessage != null && platformState.schools.isEmpty)
                           ? _buildErrorState(platformState.errorMessage!, tr)
                           : _pageForRoute(platformState, tr, authState.user),
                 ),
@@ -371,6 +371,7 @@ class _ConsoleDashboardScreenState
     return Center(
       child: Container(
         padding: const EdgeInsets.all(28),
+        constraints: const BoxConstraints(maxWidth: 520),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -385,15 +386,26 @@ class _ConsoleDashboardScreenState
             Text(
               message,
               style: const TextStyle(color: ConsoleColors.textSecondary),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => ref.read(platformProvider.notifier).loadAll(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ConsoleColors.brand,
-                foregroundColor: Colors.white,
-              ),
-              child: Text(tr.refreshTooltip),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton(
+                  onPressed: () => ref.read(platformProvider.notifier).clearError(),
+                  child: const Text('Fermer'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: () => ref.read(platformProvider.notifier).loadAll(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ConsoleColors.brand,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text(tr.refreshTooltip),
+                ),
+              ],
             ),
           ],
         ),
@@ -4109,6 +4121,7 @@ class _ConsoleDashboardScreenState
     BuildContext context,
     List<Map<String, dynamic>> plans,
   ) {
+    ref.read(platformProvider.notifier).clearError();
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final directorNameCtrl = TextEditingController();
@@ -4678,6 +4691,7 @@ class _ConsoleDashboardScreenState
                                         return;
                                       }
 
+                                      final messenger = ScaffoldMessenger.of(context);
                                       setSbState(() => creating = true);
                                       final ok = await ref.read(platformProvider.notifier).createSchool(
                                         name: name,
@@ -4694,7 +4708,7 @@ class _ConsoleDashboardScreenState
 
                                       if (ctx.mounted) Navigator.pop(ctx);
                                       if (!mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      messenger.showSnackBar(
                                         SnackBar(
                                           content: Text(ok
                                               ? 'Établissement "$name" créé avec succès !'
