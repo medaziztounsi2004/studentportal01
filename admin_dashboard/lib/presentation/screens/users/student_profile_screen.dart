@@ -49,40 +49,45 @@ final studentProfileProvider =
             .eq('student_id', studentId)
             .order('created_at', ascending: false);
 
-        // Get absences for current month (for graph)
+        // Collect all enrollment IDs for this student
+        final List<String> enrollmentIds = [];
+        if (currentEnrollment != null && currentEnrollment['id'] != null) {
+          enrollmentIds.add(currentEnrollment['id'].toString());
+        }
+        for (final e in (enrollments as List)) {
+          final idStr = e['id']?.toString();
+          if (idStr != null && !enrollmentIds.contains(idStr)) {
+            enrollmentIds.add(idStr);
+          }
+        }
+
+        // Get absences specifically for this student
         final now = DateTime.now();
         final startOfMonth = DateTime(now.year, now.month, 1);
         final endOfMonth = DateTime(now.year, now.month + 1, 0);
 
         List<Map<String, dynamic>> monthlyAbsences = [];
-        try {
-          monthlyAbsences = await supabase
-              .from('absence_records')
-              .select('date, hours_absent, justified')
-              .gte('date', startOfMonth.toIso8601String().split('T')[0])
-              .lte('date', endOfMonth.toIso8601String().split('T')[0])
-              .order('date');
-
-          // Filter for this student's enrollment
-          if (currentEnrollment != null) {
-            monthlyAbsences = (monthlyAbsences as List)
-                .where((a) => true) // We'd filter by enrollment_id if joined
-                .toList()
-                .cast<Map<String, dynamic>>();
-          }
-        } catch (_) {}
-
-        // Get total absences count
         int totalAbsences = 0;
         try {
-          final absCount = await supabase
+          final absResp = await supabase
               .from('absence_records')
-              .select('id')
-              .count();
-          totalAbsences = absCount.count;
+              .select('id, date, hours_absent, justified, reason')
+              .eq('student_id', studentId)
+              .order('date', ascending: false);
+          monthlyAbsences = (absResp as List).cast<Map<String, dynamic>>();
+
+          if (monthlyAbsences.isEmpty && enrollmentIds.isNotEmpty) {
+            final fallbackResp = await supabase
+                .from('absence_records')
+                .select('id, date, hours_absent, justified, reason')
+                .inFilter('enrollment_id', enrollmentIds)
+                .order('date', ascending: false);
+            monthlyAbsences = (fallbackResp as List).cast<Map<String, dynamic>>();
+          }
+          totalAbsences = monthlyAbsences.length;
         } catch (_) {}
 
-        // Get payment history and calculate payment accuracy
+        // Get payment history specifically for this student
         List<Map<String, dynamic>> payments = [];
         double paymentAccuracy = 0;
         int onTimePayments = 0;
@@ -91,37 +96,33 @@ final studentProfileProvider =
         double totalDue = 0;
 
         try {
-          payments = await supabase
-              .from('payments')
-              .select(
-                'amount, status, due_date, paid_at, description, created_at',
-              )
-              .order('created_at', ascending: false);
+          if (enrollmentIds.isNotEmpty) {
+            final pResp = await supabase
+                .from('payments')
+                .select('amount, status, due_date, paid_at, description, created_at, payment_plans!inner(enrollment_id)')
+                .inFilter('payment_plans.enrollment_id', enrollmentIds)
+                .order('created_at', ascending: false);
+            payments = (pResp as List).cast<Map<String, dynamic>>();
+          }
 
           for (final p in payments) {
             final amount = (p['amount'] as num?)?.toDouble() ?? 0;
-
             if (p['status'] == 'paid') {
               totalPaid += amount;
-
-              // Check if paid on time
               if (p['due_date'] != null && p['paid_at'] != null) {
                 final dueDate = DateTime.parse(p['due_date']);
                 final paidAt = DateTime.parse(p['paid_at']);
-                if (paidAt.isBefore(dueDate) ||
-                    paidAt.isAtSameMomentAs(dueDate)) {
+                if (paidAt.isBefore(dueDate) || paidAt.isAtSameMomentAs(dueDate)) {
                   onTimePayments++;
                 } else {
                   latePayments++;
                 }
               } else {
-                onTimePayments++; // Assume on time if no due date
+                onTimePayments++;
               }
             } else {
               totalDue += amount;
-              if (p['status'] == 'overdue') {
-                latePayments++;
-              }
+              if (p['status'] == 'overdue') latePayments++;
             }
           }
 
@@ -131,14 +132,18 @@ final studentProfileProvider =
           }
         } catch (_) {}
 
-        // Get grades
+        // Get grades specifically for this student
         List<Map<String, dynamic>> grades = [];
         try {
-          grades = await supabase
-              .from('grades')
-              .select('grade_value, status, subjects(name)')
-              .order('created_at', ascending: false)
-              .limit(10);
+          if (enrollmentIds.isNotEmpty) {
+            final gResp = await supabase
+                .from('grades')
+                .select('id, grade_value, status, subjects(name)')
+                .inFilter('enrollment_id', enrollmentIds)
+                .order('created_at', ascending: false)
+                .limit(20);
+            grades = (gResp as List).cast<Map<String, dynamic>>();
+          }
         } catch (_) {}
 
         // Get timetable
@@ -997,52 +1002,83 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   }
 
   Widget _buildQuickStats(BuildContext context, StudentProfileData data) {
+    // 1. Absences color: 0 -> green (#10B981), 1-2 -> amber (#F59E0B), >2 -> red (#EF4444)
+    final totalAbs = data.totalAbsences;
+    final absColor = totalAbs == 0
+        ? const Color(0xFF10B981)
+        : (totalAbs <= 2 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+    final absIcon = totalAbs == 0 ? Icons.event_available_outlined : Icons.event_busy_outlined;
+
+    // 2. Payé color: if paid > 0 -> green (#10B981); if paid == 0 && due > 0 -> red (#EF4444); else slate (#64748B)
+    final totalPaid = data.totalPaid;
+    final totalDue = data.totalDue;
+    final payColor = (totalPaid > 0)
+        ? const Color(0xFF10B981)
+        : (totalDue > 0 ? const Color(0xFFEF4444) : const Color(0xFF64748B));
+
+    // 3. En attente (Debt): if due == 0 -> green (#10B981) (0 debt is great!); if due > 0 -> red (#EF4444) (unpaid debt!)
+    final dueColor = totalDue == 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final dueIcon = totalDue == 0 ? Icons.check_circle_outline : Icons.schedule_outlined;
+    final dueLabel = totalDue == 0 ? 'À jour (0 dû)' : 'En attente';
+
+    // 4. Moyenne color: >= 10.0 -> green (#10B981); 8.0-9.9 -> amber (#F59E0B); < 8.0 -> red (#EF4444); N/A -> slate (#64748B)
+    double? avgGrade;
+    final scored = data.grades.where((g) => g['grade_value'] != null).toList();
+    if (scored.isNotEmpty) {
+      final sum = scored.map((g) => (g['grade_value'] as num).toDouble()).reduce((a, b) => a + b);
+      avgGrade = sum / scored.length;
+    }
+    final gradeColor = avgGrade == null
+        ? const Color(0xFF64748B)
+        : (avgGrade >= 10.0
+            ? const Color(0xFF10B981)
+            : (avgGrade >= 8.0 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)));
+    final gradeValue = avgGrade != null ? '${avgGrade.toStringAsFixed(1)} / 20' : 'N/A';
+
+    // 5. Suggestions color: if pending -> amber (#F59E0B); if resolved -> green (#10B981); if 0 -> slate (#64748B)
+    final bool hasPending = data.suggestions.any((s) => s['status'] == 'pending');
+    final bool hasResolved = data.suggestions.isNotEmpty && !hasPending;
+    final suggColor = hasPending
+        ? const Color(0xFFF59E0B)
+        : (hasResolved ? const Color(0xFF10B981) : const Color(0xFF64748B));
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
           _QuickStatCard(
             icon: Icons.message_outlined,
-            label: 'Suggestions',
+            label: hasPending ? 'Suggestions (attente)' : 'Suggestions',
             value: '${data.suggestions.length}',
-            color: const Color(0xFF3B82F6),
+            color: suggColor,
           ),
           const SizedBox(width: 16),
           _QuickStatCard(
-            icon: Icons.event_busy_outlined,
-            label: 'Absences',
-            value: '${data.totalAbsences}',
-            color: const Color(0xFFEF4444),
+            icon: absIcon,
+            label: totalAbs == 0 ? 'Absences (parfait)' : 'Absences',
+            value: '$totalAbs',
+            color: absColor,
           ),
           const SizedBox(width: 16),
           _QuickStatCard(
             icon: Icons.check_circle_outline,
-            label: 'Payé',
-            value: '${data.totalPaid.toStringAsFixed(0)} TND',
-            color: const Color(0xFF10B981),
+            label: 'Total Payé',
+            value: '${totalPaid.toStringAsFixed(0)} TND',
+            color: payColor,
           ),
           const SizedBox(width: 16),
           _QuickStatCard(
-            icon: Icons.schedule_outlined,
-            label: 'En attente',
-            value: '${data.totalDue.toStringAsFixed(0)} TND',
-            color: const Color(0xFFF59E0B),
+            icon: dueIcon,
+            label: dueLabel,
+            value: '${totalDue.toStringAsFixed(0)} TND',
+            color: dueColor,
           ),
           const SizedBox(width: 16),
           _QuickStatCard(
             icon: Icons.grade_outlined,
-            label: 'Moyenne',
-            value: data.grades.isNotEmpty
-                ? (data.grades
-                              .map(
-                                (g) =>
-                                    (g['grade_value'] as num?)?.toDouble() ?? 0,
-                              )
-                              .reduce((a, b) => a + b) /
-                          data.grades.length)
-                      .toStringAsFixed(1)
-                : 'N/A',
-            color: const Color(0xFF8B5CF6),
+            label: avgGrade != null ? (avgGrade >= 10.0 ? 'Moyenne (admis)' : 'Moyenne (alerte)') : 'Moyenne',
+            value: gradeValue,
+            color: gradeColor,
           ),
         ],
       ),

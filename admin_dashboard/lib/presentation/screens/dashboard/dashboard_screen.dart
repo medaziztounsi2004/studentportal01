@@ -244,69 +244,196 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 980;
+
+              // 1. Total Revenus (dynamic status based on actual collection health)
+              final recRate = kpis.recoveryRate;
+              final bool hasInvoices = kpis.totalPaymentsDue > 0;
+              final bool isRecExcellent = recRate >= 75.0 && hasInvoices;
+              final bool isRecModerate = recRate >= 50.0 && recRate < 75.0 && hasInvoices;
+              final bool isRecPoor = recRate < 50.0 && hasInvoices;
+
+              final revIconColor = !hasInvoices
+                  ? const Color(0xFF6D4CF6)
+                  : (isRecExcellent
+                      ? const Color(0xFF10B981)
+                      : (isRecModerate ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)));
+              final revIconBg = !hasInvoices
+                  ? const Color(0xFFF5F3FF)
+                  : (isRecExcellent
+                      ? const Color(0xFFECFDF5)
+                      : (isRecModerate ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2)));
+              final revTrendColor = !hasInvoices
+                  ? const Color(0xFF64748B)
+                  : (isRecExcellent
+                      ? const Color(0xFF10B981)
+                      : (isRecModerate ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)));
+              final bool? revTrendUp = !hasInvoices ? null : isRecExcellent;
+
+              // 2. Revenus ce mois (dynamic arrow, green up, red down, neutral when flat/zero)
+              final bool hasThisMonth = kpis.thisMonthRevenue > 0;
+              final bool hasLastMonth = kpis.lastMonthRevenue > 0;
+              final bool isGrowthPositive = hasThisMonth && (kpis.thisMonthRevenue >= kpis.lastMonthRevenue || !hasLastMonth);
+              final bool isGrowthNegative = (hasLastMonth && kpis.thisMonthRevenue < kpis.lastMonthRevenue) || (!hasThisMonth && hasLastMonth);
+              final bool isGrowthFlatZero = !hasThisMonth && !hasLastMonth;
+
+              final mRevIcon = isGrowthFlatZero
+                  ? Icons.receipt_long_outlined
+                  : (isGrowthPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded);
+              final mRevColor = isGrowthFlatZero
+                  ? const Color(0xFF64748B)
+                  : (isGrowthPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444));
+              final mRevBg = isGrowthFlatZero
+                  ? const Color(0xFFF1F5F9)
+                  : (isGrowthPositive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2));
+              final String mRevTrend = isGrowthFlatZero
+                  ? '0 TND'
+                  : (hasThisMonth && !hasLastMonth
+                      ? '+100%'
+                      : (!hasThisMonth && hasLastMonth
+                          ? '-100%'
+                          : '${kpis.revenueGrowth >= 0 ? '+' : ''}${kpis.revenueGrowth.toStringAsFixed(0)}%'));
+              final String mRevLabel = isGrowthFlatZero
+                  ? 'aucun encaissement ce mois'
+                  : (hasThisMonth && !hasLastMonth
+                      ? 'premier mois d\'activité'
+                      : 'vs mois dernier');
+              final bool? mRevTrendUp = isGrowthFlatZero ? null : isGrowthPositive;
+
+              // 3. Total Inscriptions (retention rate: green if >=90%, amber if 70-89%, red if <70%)
+              final totalSt = kpis.totalStudents;
+              final activeSt = kpis.activeStudents;
+              final inactiveSt = (totalSt - activeSt).clamp(0, totalSt);
+              final double activeRatio = totalSt > 0 ? (activeSt / totalSt * 100) : 0.0;
+              final bool isStPerfect = totalSt > 0 && inactiveSt == 0;
+              final bool isStHealthy = totalSt > 0 && activeRatio >= 90.0 && !isStPerfect;
+              final bool isStWarning = totalSt > 0 && activeRatio >= 70.0 && activeRatio < 90.0;
+              final bool isStCritical = totalSt > 0 && activeRatio < 70.0;
+
+              final stColor = totalSt == 0
+                  ? const Color(0xFF8B5CF6)
+                  : (isStCritical
+                      ? const Color(0xFFEF4444)
+                      : (isStWarning ? const Color(0xFFF59E0B) : const Color(0xFF10B981)));
+              final stBg = totalSt == 0
+                  ? const Color(0xFFF5F3FF)
+                  : (isStCritical
+                      ? const Color(0xFFFEF2F2)
+                      : (isStWarning ? const Color(0xFFFFFBEB) : const Color(0xFFECFDF5)));
+              final bool? stTrendUp = totalSt == 0 ? null : (isStPerfect || isStHealthy);
+
+              // 4. Enseignants & Staff (healthy staff ratio, alert if 0 teachers with enrolled students)
+              final totalTeach = kpis.totalTeachers;
+              final totalStaff = kpis.totalStaff;
+              final bool isNoTeachers = totalSt > 0 && totalTeach == 0;
+              final double ratioStudentsPerTeacher = totalTeach > 0 ? (totalSt / totalTeach) : 0.0;
+              final bool isRatioHigh = totalTeach > 0 && ratioStudentsPerTeacher > 30.0;
+              final teachColor = isNoTeachers
+                  ? const Color(0xFFEF4444)
+                  : (isRatioHigh
+                      ? const Color(0xFFF59E0B)
+                      : (totalTeach > 0 ? const Color(0xFF10B981) : const Color(0xFF0284C7)));
+              final teachBg = isNoTeachers
+                  ? const Color(0xFFFEF2F2)
+                  : (isRatioHigh
+                      ? const Color(0xFFFFFBEB)
+                      : (totalTeach > 0 ? const Color(0xFFECFDF5) : const Color(0xFFF0F9FF)));
+              final bool? teachTrendUp = (totalTeach == 0 && totalSt == 0) ? null : (!isNoTeachers && !isRatioHigh);
+
+              // 5. Taux de Recouvrement (green if >= 80% or fully paid, amber if 50-79%, red if < 50%)
+              final bool isFullyPaid = hasInvoices && kpis.unpaidAmount == 0;
+              final bool isRecoveryGood = hasInvoices && recRate >= 75.0 && !isFullyPaid;
+              final bool isRecoveryModerate = hasInvoices && recRate >= 50.0 && recRate < 75.0;
+              final bool isRecoveryDanger = hasInvoices && recRate < 50.0;
+              final recColor = !hasInvoices
+                  ? const Color(0xFF64748B)
+                  : (isFullyPaid || isRecoveryGood
+                      ? const Color(0xFF10B981)
+                      : (isRecoveryModerate ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)));
+              final recBg = !hasInvoices
+                  ? const Color(0xFFF1F5F9)
+                  : (isFullyPaid || isRecoveryGood
+                      ? const Color(0xFFECFDF5)
+                      : (isRecoveryModerate ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2)));
+              final bool? recTrendUp = !hasInvoices ? null : (isFullyPaid || isRecoveryGood);
+
               final cards = [
                 _buildGoldenMetricCard(
                   icon: Icons.receipt_long_outlined,
-                  iconColor: const Color(0xFF6D4CF6),
-                  iconBgColor: const Color(0xFFF5F3FF),
+                  iconColor: revIconColor,
+                  iconBgColor: revIconBg,
                   title: 'Total Revenus',
                   value: currencyFormat.format(kpis.totalPaymentsCollected),
-                  trend: '${kpis.recoveryRate.toStringAsFixed(0)}%',
-                  trendLabel: 'du total facturé',
-                  trendUp: kpis.recoveryRate >= 50 || kpis.totalPaymentsDue == 0,
-                  showArrow: false,
+                  trend: hasInvoices ? '${recRate.toStringAsFixed(0)}%' : '0 TND',
+                  trendLabel: hasInvoices ? 'du total facturé' : 'aucune facture émise',
+                  trendColor: revTrendColor,
+                  trendUp: revTrendUp,
+                  showArrow: hasInvoices && !isRecModerate,
                   onTap: () => context.go('/payments'),
                 ),
                 _buildGoldenMetricCard(
-                  icon: Icons.trending_up_rounded,
-                  iconColor: const Color(0xFF10B981),
-                  iconBgColor: const Color(0xFFECFDF5),
+                  icon: mRevIcon,
+                  iconColor: mRevColor,
+                  iconBgColor: mRevBg,
                   title: 'Revenus ce mois',
                   value: currencyFormat.format(kpis.thisMonthRevenue),
-                  trend: '${kpis.revenueGrowth >= 0 ? '+' : ''}${kpis.revenueGrowth.toStringAsFixed(0)}%',
-                  trendLabel: 'vs mois dernier',
-                  trendUp: kpis.revenueGrowthUp,
-                  showArrow: true,
+                  trend: mRevTrend,
+                  trendLabel: mRevLabel,
+                  trendColor: mRevColor,
+                  trendUp: mRevTrendUp,
+                  showArrow: !isGrowthFlatZero,
                   onTap: () => context.go('/payments'),
                 ),
                 _buildGoldenMetricCard(
                   icon: Icons.school_outlined,
-                  iconColor: const Color(0xFF8B5CF6),
-                  iconBgColor: const Color(0xFFF5F3FF),
+                  iconColor: stColor,
+                  iconBgColor: stBg,
                   title: 'Total Inscriptions',
-                  value: NumberFormat.decimalPattern().format(kpis.totalStudents),
-                  trend: '${kpis.activeStudents} actifs',
-                  trendLabel: kpis.totalStudents > 0 ? 'sur ${kpis.totalStudents} élèves' : 'aucun élève',
-                  trendUp: kpis.activeStudents > 0 && kpis.activeStudents == kpis.totalStudents,
+                  value: NumberFormat.decimalPattern().format(totalSt),
+                  trend: totalSt > 0 ? (isStPerfect ? '100% actifs' : '${activeSt} actifs') : '0 élève',
+                  trendLabel: totalSt > 0
+                      ? (isStPerfect
+                          ? 'tous les élèves inscrits'
+                          : '$inactiveSt inactif${inactiveSt > 1 ? 's' : ''}')
+                      : 'aucune inscription',
+                  trendColor: stColor,
+                  trendUp: stTrendUp,
                   showArrow: false,
                   onTap: () => context.go('/users'),
                 ),
                 _buildGoldenMetricCard(
                   icon: Icons.people_outline_rounded,
-                  iconColor: const Color(0xFF0284C7),
-                  iconBgColor: const Color(0xFFF0F9FF),
+                  iconColor: teachColor,
+                  iconBgColor: teachBg,
                   title: 'Enseignants & Staff',
-                  value: (kpis.totalTeachers + kpis.totalStaff).toString(),
-                  trend: '${kpis.totalTeachers} profs',
-                  trendLabel: kpis.totalTeachers > 0
-                      ? 'et ${kpis.totalStaff} staff (${(kpis.totalStudents / kpis.totalTeachers).toStringAsFixed(0)} él./prof)'
-                      : 'et ${kpis.totalStaff} staff',
-                  trendUp: true,
-                  showArrow: false,
+                  value: (totalTeach + totalStaff).toString(),
+                  trend: isNoTeachers
+                      ? '0 enseignant'
+                      : (totalTeach > 0 ? '$totalTeach profs' : '0 prof'),
+                  trendLabel: isNoTeachers
+                      ? 'aucun prof assigné !'
+                      : (totalTeach > 0
+                          ? 'et $totalStaff staff (${ratioStudentsPerTeacher.toStringAsFixed(0)} él./prof)'
+                          : 'et $totalStaff staff'),
+                  trendColor: teachColor,
+                  trendUp: teachTrendUp,
+                  showArrow: isNoTeachers,
                   onTap: () => context.go('/professors'),
                 ),
                 _buildGoldenMetricCard(
                   icon: Icons.pie_chart_outline_rounded,
-                  iconColor: const Color(0xFF6D4CF6),
-                  iconBgColor: const Color(0xFFF5F3FF),
+                  iconColor: recColor,
+                  iconBgColor: recBg,
                   title: 'Taux de Recouvrement',
-                  value: '${kpis.recoveryRate.toStringAsFixed(0)}%',
-                  trend: kpis.unpaidAmount > 0
-                      ? currencyFormat.format(kpis.unpaidAmount)
+                  value: '${recRate.toStringAsFixed(0)}%',
+                  trend: hasInvoices
+                      ? (kpis.unpaidAmount > 0 ? currencyFormat.format(kpis.unpaidAmount) : 'Soldé')
                       : 'Soldé',
-                  trendLabel: kpis.unpaidAmount > 0 ? 'reste à recouvrer' : 'aucun impayé',
-                  trendUp: kpis.unpaidAmount == 0,
-                  showArrow: false,
+                  trendLabel: hasInvoices
+                      ? (kpis.unpaidAmount > 0 ? 'reste à recouvrer' : '100% encaissé')
+                      : 'aucune dette',
+                  trendColor: recColor,
+                  trendUp: recTrendUp,
+                  showArrow: isRecoveryDanger,
                   onTap: () => context.go('/payments'),
                 ),
               ];
@@ -425,10 +552,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required String value,
     required String trend,
     required String trendLabel,
-    required bool trendUp,
+    bool? trendUp,
+    Color? trendColor,
     bool showArrow = true,
     required VoidCallback onTap,
   }) {
+    final effectiveTrendColor = trendColor ??
+        (trendUp == null
+            ? const Color(0xFF64748B)
+            : (trendUp ? const Color(0xFF10B981) : const Color(0xFFEF4444)));
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -502,11 +635,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             // Trend Indicator
             Row(
               children: [
-                if (showArrow) ...[
+                if (showArrow && trendUp != null) ...[
                   Icon(
                     trendUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
                     size: 12,
-                    color: trendUp ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                    color: effectiveTrendColor,
                   ),
                   const SizedBox(width: 3),
                 ],
@@ -515,7 +648,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: trendUp ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                    color: effectiveTrendColor,
                   ),
                 ),
                 const SizedBox(width: 4),

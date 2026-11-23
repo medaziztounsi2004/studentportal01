@@ -1446,63 +1446,161 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
   // ==================== STATS GRID (EXACT TABLEAU DE BORD GOLDEN METRIC STYLE) ====================
   Widget _buildStatsGrid(UserProfileData data) {
+    // 1. Absences ce mois
+    final thisMonthAbs = data.thisMonthAbsences;
+    final totalAbs = data.totalAbsences;
+    final bool isAbsPerfect = thisMonthAbs == 0;
+    final bool isAbsWarning = thisMonthAbs > 0 && thisMonthAbs <= 2;
+    final absIcon = isAbsPerfect ? Icons.event_available_outlined : Icons.event_busy_outlined;
+    final absColor = isAbsPerfect
+        ? const Color(0xFF10B981)
+        : (isAbsWarning ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+    final absBg = isAbsPerfect
+        ? const Color(0xFFECFDF5)
+        : (isAbsWarning ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2));
+
+    // 2. Assiduité / Justifiées
+    final int unjustified = (totalAbs - data.justifiedAbsences).clamp(0, totalAbs);
+    final double justifiedRate = totalAbs > 0 ? (data.justifiedAbsences / totalAbs * 100) : 100.0;
+    final bool isJustPerfect = totalAbs == 0 || unjustified == 0;
+    final bool isJustWarning = !isJustPerfect && justifiedRate >= 60.0;
+    final justIcon = isJustPerfect
+        ? Icons.verified_outlined
+        : (isJustWarning ? Icons.pending_actions_outlined : Icons.warning_amber_rounded);
+    final justColor = isJustPerfect
+        ? const Color(0xFF10B981)
+        : (isJustWarning ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+    final justBg = isJustPerfect
+        ? const Color(0xFFECFDF5)
+        : (isJustWarning ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2));
+
+    // 3. Paiements / Finances
+    final totalPaid = data.totalPaid;
+    final totalDue = data.totalDue;
+    final bool hasPaidClean = totalDue == 0 && totalPaid > 0;
+    final bool hasDebt = totalDue > 0;
+    final payIcon = hasPaidClean
+        ? Icons.check_circle_outline_rounded
+        : (hasDebt ? Icons.error_outline_rounded : Icons.receipt_long_outlined);
+    final payColor = hasPaidClean
+        ? const Color(0xFF10B981)
+        : (hasDebt ? const Color(0xFFEF4444) : const Color(0xFF64748B));
+    final payBg = hasPaidClean
+        ? const Color(0xFFECFDF5)
+        : (hasDebt ? const Color(0xFFFEF2F2) : const Color(0xFFF1F5F9));
+
+    // 4. Notes & Moyenne
+    final double? avg = data.averageGrade;
+    final bool hasAvg = avg != null;
+    final bool isPassing = hasAvg && avg >= 10.0;
+    final bool isCatchable = hasAvg && avg >= 8.0 && avg < 10.0;
+    final gradeIcon = !hasAvg
+        ? Icons.grade_outlined
+        : (isPassing ? Icons.grade_outlined : (isCatchable ? Icons.grade_outlined : Icons.warning_amber_rounded));
+    final gradeColor = !hasAvg
+        ? const Color(0xFF64748B)
+        : (isPassing ? const Color(0xFF10B981) : (isCatchable ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)));
+    final gradeBg = !hasAvg
+        ? const Color(0xFFF1F5F9)
+        : (isPassing ? const Color(0xFFECFDF5) : (isCatchable ? const Color(0xFFFFFBEB) : const Color(0xFFFEF2F2)));
+
+    // 5. Suggestions
+    final bool hasPendingSuggestions = data.suggestions.any((s) => s['status'] == 'pending');
+    final bool hasResolvedSuggestions = data.suggestions.isNotEmpty && !hasPendingSuggestions;
+    final suggIcon = hasPendingSuggestions
+        ? Icons.lightbulb_outline_rounded
+        : (hasResolvedSuggestions ? Icons.mark_email_read_outlined : Icons.lightbulb_outline_rounded);
+    final suggColor = hasPendingSuggestions
+        ? const Color(0xFFF59E0B)
+        : (hasResolvedSuggestions ? const Color(0xFF10B981) : const Color(0xFF64748B));
+    final suggBg = hasPendingSuggestions
+        ? const Color(0xFFFFFBEB)
+        : (hasResolvedSuggestions ? const Color(0xFFECFDF5) : const Color(0xFFF1F5F9));
+
     final cards = [
       _buildGoldenMetricCard(
-        icon: Icons.event_busy_outlined,
-        iconColor: const Color(0xFFEF4444),
-        iconBgColor: const Color(0xFFFEF2F2),
+        icon: absIcon,
+        iconColor: absColor,
+        iconBgColor: absBg,
         title: 'Absences ce mois',
-        value: '${data.thisMonthAbsences}',
-        trend: '${data.totalAbsences} au total',
-        trendLabel: 'sur l\'année',
-        trendUp: data.thisMonthAbsences == 0,
+        value: '$thisMonthAbs',
+        trend: totalAbs == 0 ? '0 absence' : '$totalAbs au total',
+        trendLabel: totalAbs == 0 ? 'assiduité parfaite' : 'sur l\'année',
+        trendColor: absColor,
+        trendUp: isAbsPerfect,
+        showArrow: !isAbsPerfect,
         onTap: () => context.push('/student-absences/${widget.userId}'),
       ),
       _buildGoldenMetricCard(
-        icon: Icons.verified_outlined,
-        iconColor: const Color(0xFF10B981),
-        iconBgColor: const Color(0xFFECFDF5),
+        icon: justIcon,
+        iconColor: justColor,
+        iconBgColor: justBg,
         title: 'Justifiées',
-        value: '${data.justifiedAbsences}',
-        trend: data.totalAbsences > 0
-            ? '${((data.justifiedAbsences / data.totalAbsences) * 100).toStringAsFixed(0)}%'
-            : '100%',
-        trendLabel: data.totalAbsences > 0 ? 'taux de justification' : 'assiduité parfaite',
-        trendUp: true,
+        value: totalAbs == 0 ? '100%' : '${data.justifiedAbsences}',
+        trend: totalAbs == 0
+            ? '0 heure'
+            : (unjustified == 0 ? '100% justifié' : '${justifiedRate.toStringAsFixed(0)}%'),
+        trendLabel: totalAbs == 0
+            ? 'assiduité parfaite'
+            : (unjustified == 0 ? 'toutes justifiées' : '$unjustified non justifiée${unjustified > 1 ? 's' : ''}'),
+        trendColor: justColor,
+        trendUp: isJustPerfect,
+        showArrow: !isJustPerfect,
         onTap: () => context.push('/student-absences/${widget.userId}'),
       ),
       _buildGoldenMetricCard(
-        icon: Icons.lightbulb_outline_rounded,
-        iconColor: const Color(0xFFF59E0B),
-        iconBgColor: const Color(0xFFFFFBEB),
+        icon: payIcon,
+        iconColor: payColor,
+        iconBgColor: payBg,
+        title: 'Paiements',
+        value: '${totalPaid.toStringAsFixed(0)} TND',
+        trend: hasDebt ? '${totalDue.toStringAsFixed(0)} TND' : (hasPaidClean ? 'Soldé' : '0 TND'),
+        trendLabel: hasDebt ? 'reste à payer' : (hasPaidClean ? 'à jour (0 impayé)' : 'aucun paiement dû'),
+        trendColor: payColor,
+        trendUp: hasPaidClean ? true : (hasDebt ? false : null),
+        showArrow: hasDebt,
+        onTap: () => _showStudentPaymentsSheet(data),
+      ),
+      _buildGoldenMetricCard(
+        icon: gradeIcon,
+        iconColor: gradeColor,
+        iconBgColor: gradeBg,
+        title: hasAvg ? 'Moyenne Générale' : 'Notes & Évaluations',
+        value: hasAvg ? '${avg.toStringAsFixed(2)}/20' : '${data.grades.length}',
+        trend: hasAvg
+            ? (avg >= 14.0 ? 'Très Bien' : (avg >= 12.0 ? 'Bien' : (avg >= 10.0 ? 'Admis' : (avg >= 8.0 ? 'Rachetable' : 'Insuffisant'))))
+            : (data.grades.isNotEmpty ? 'En cours' : 'Aucune note'),
+        trendLabel: hasAvg
+            ? 'sur ${data.grades.length} note${data.grades.length > 1 ? 's' : ''}'
+            : (data.grades.isNotEmpty ? 'évaluations enregistrées' : 'aucune évaluation'),
+        trendColor: gradeColor,
+        trendUp: hasAvg ? isPassing : null,
+        showArrow: hasAvg,
+        onTap: () => context.go('/grades'),
+      ),
+      _buildGoldenMetricCard(
+        icon: suggIcon,
+        iconColor: suggColor,
+        iconBgColor: suggBg,
         title: 'Suggestions',
         value: '${data.suggestions.length}',
-        trend: data.suggestions.any((s) => s['status'] == 'pending')
+        trend: hasPendingSuggestions
             ? 'En attente'
-            : (data.suggestions.isNotEmpty ? 'Traité' : 'Aucune'),
-        trendLabel: data.suggestions.isNotEmpty ? 'statut récent' : 'enregistrée',
-        trendUp: !data.suggestions.any((s) => s['status'] == 'pending'),
+            : (hasResolvedSuggestions ? 'Traité' : 'Aucune'),
+        trendLabel: hasPendingSuggestions
+            ? 'action requise'
+            : (hasResolvedSuggestions ? 'toutes résolues' : 'aucun signalement'),
+        trendColor: suggColor,
+        trendUp: hasPendingSuggestions ? false : (hasResolvedSuggestions ? true : null),
+        showArrow: hasPendingSuggestions,
         onTap: () => context.go('/suggestions'),
-      ),
-      _buildGoldenMetricCard(
-        icon: Icons.grade_outlined,
-        iconColor: const Color(0xFF6D4CF6),
-        iconBgColor: const Color(0xFFF5F3FF),
-        title: 'Notes & Évaluations',
-        value: '${data.grades.length}',
-        trend: data.averageGrade != null
-            ? '${data.averageGrade!.toStringAsFixed(2)}/20'
-            : (data.grades.isNotEmpty ? 'Enregistrées' : 'Aucune'),
-        trendLabel: data.averageGrade != null ? 'moyenne générale' : 'évaluations',
-        trendUp: data.averageGrade == null || data.averageGrade! >= 10.0,
-        onTap: () => context.go('/grades'),
       ),
     ];
 
     return Row(
       children: [
         for (int i = 0; i < cards.length; i++) ...[
-          if (i > 0) const SizedBox(width: 16),
+          if (i > 0) const SizedBox(width: 14),
           Expanded(child: cards[i]),
         ],
       ],
@@ -1517,9 +1615,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     required String value,
     required String trend,
     required String trendLabel,
-    required bool trendUp,
+    bool? trendUp,
+    Color? trendColor,
+    bool showArrow = true,
     required VoidCallback onTap,
   }) {
+    final effectiveTrendColor = trendColor ??
+        (trendUp == null
+            ? const Color(0xFF64748B)
+            : (trendUp ? const Color(0xFF10B981) : const Color(0xFFEF4444)));
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -1585,12 +1690,20 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
+                if (showArrow && trendUp != null) ...[
+                  Icon(
+                    trendUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                    size: 12,
+                    color: effectiveTrendColor,
+                  ),
+                  const SizedBox(width: 3),
+                ],
                 Text(
                   trend,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: trendUp ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                    color: effectiveTrendColor,
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -1786,7 +1899,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => context.push('/payments', extra: {'studentId': widget.userId}),
+        onTap: () => _showStudentPaymentsSheet(data),
         behavior: HitTestBehavior.opaque,
         child: Container(
           decoration: _cardDecoration(),
@@ -1802,7 +1915,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
-                      onTap: () => context.push('/payments', extra: {'studentId': widget.userId}),
+                      onTap: () => _showStudentPaymentsSheet(data),
                       child: Text('Voir tout', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                   ),
@@ -1829,11 +1942,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              _paymentItem('Total dû', '${totalDue.toStringAsFixed(0)} TND'),
+              _paymentItem('Total facturé', '${totalAmount.toStringAsFixed(0)} TND'),
               const SizedBox(height: 8),
               _paymentItem('Total payé', '${totalPaid.toStringAsFixed(0)} TND'),
               const SizedBox(height: 8),
-              _paymentItem('Reste', '${(totalDue - totalPaid).clamp(0.0, double.infinity).toStringAsFixed(0)} TND'),
+              _paymentItem('Reste à payer', '${totalDue.toStringAsFixed(0)} TND'),
               const SizedBox(height: 8),
               _paymentItem('À temps', '${data.onTimePayments}'),
               const SizedBox(height: 8),
