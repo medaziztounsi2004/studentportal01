@@ -2547,7 +2547,7 @@ class _ChangePasswordModalState extends ConsumerState<_ChangePasswordModal> {
         try {
           await supabase.from('users').update({
             'force_password_change': false,
-            'initial_password': null,
+            'initial_password': newP,
             'updated_at': DateTime.now().toIso8601String(),
           }).eq('id', widget.userId!);
         } catch (_) {}

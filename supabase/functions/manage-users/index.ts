@@ -617,7 +617,7 @@ serve(async (req) => {
       await adminClient
         .from("users")
         .update({
-          initial_password: null,
+          initial_password: newPassword,
           updated_at: new Date().toISOString(),
         })
         .eq("id", resolvedUserId);

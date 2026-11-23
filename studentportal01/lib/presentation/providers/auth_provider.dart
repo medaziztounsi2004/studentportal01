@@ -822,14 +822,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     // 3. Clear temporary initial_password in public.users (never store plaintext user passwords permanently)
     try {
       await _supabase.from('users').update({
-        'initial_password': null,
+        'initial_password': newPassword,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', userId);
 
       // Update in-memory user state
       if (state.user != null) {
         state = state.copyWith(
-          user: state.user!.copyWith(initialPassword: null),
+          user: state.user!.copyWith(initialPassword: newPassword),
         );
       }
     } catch (e) {

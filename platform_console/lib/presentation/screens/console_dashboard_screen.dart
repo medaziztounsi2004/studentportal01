@@ -10,6 +10,7 @@ import '../../core/theme/console_theme.dart';
 import '../providers/console_auth_provider.dart';
 import '../providers/platform_provider.dart';
 import '../widgets/console_invoice_modal.dart';
+import '../widgets/console_school_credentials_modal.dart';
 import '../widgets/console_settings_view.dart';
 import '../widgets/console_sidebar.dart';
 import '../widgets/console_skeleton_loader.dart';
@@ -1049,6 +1050,13 @@ class _ConsoleDashboardScreenState
                               case 'plan':
                                 _showChangePlanModal(context, s, state.plans);
                                 break;
+                              case 'credentials':
+                                showConsoleSchoolCredentialsModal(
+                                  context: context,
+                                  school: s,
+                                  onPasswordChanged: () => ref.read(platformProvider.notifier).loadAll(),
+                                );
+                                break;
                               case 'toggle_status':
                                 final messenger = ScaffoldMessenger.of(context);
                                 final ok = await ref
@@ -1076,6 +1084,7 @@ class _ConsoleDashboardScreenState
                             _buildPopupItem('invoice', Icons.picture_as_pdf_rounded, 'Générer Facture PDF', const Color(0xFF059669)),
                             _buildPopupItem('logo', Icons.image_outlined, 'Changer le Logo', const Color(0xFF2563EB)),
                             _buildPopupItem('plan', Icons.card_membership_rounded, 'Changer de Forfait', const Color(0xFF7C3AED)),
+                            _buildPopupItem('credentials', Icons.key_rounded, 'Mot de passe & Identifiants', const Color(0xFFD97706)),
                             const PopupMenuItem<String>(
                               enabled: false,
                               height: 9,

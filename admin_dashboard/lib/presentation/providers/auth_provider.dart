@@ -330,14 +330,14 @@ class AuthNotifier extends Notifier<AdminAuthState> {
       await _supabase.auth.updateUser(UserAttributes(password: newPassword));
       await _supabase.from('users').update({
         'force_password_change': false,
-        'initial_password': null,
+        'initial_password': newPassword,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', userId);
       if (state.user != null) {
         state = state.copyWith(
           user: state.user!.copyWith(
             forcePasswordChange: false,
-            initialPassword: null,
+            initialPassword: newPassword,
           ),
         );
       }

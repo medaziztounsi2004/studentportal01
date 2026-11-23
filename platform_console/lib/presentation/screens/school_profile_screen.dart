@@ -11,6 +11,7 @@ import '../../core/services/invoice_pdf_generator.dart';
 import '../../core/theme/console_theme.dart';
 import '../providers/platform_provider.dart';
 import '../widgets/console_invoice_modal.dart';
+import '../widgets/console_school_credentials_modal.dart';
 import '../widgets/console_sidebar.dart';
 import '../widgets/console_skeleton_loader.dart';
 
@@ -163,7 +164,7 @@ final schoolProfileDataProvider =
     try {
       final usersResp = await supabase
           .from('users')
-          .select('id, full_name, email, role, phone, is_active, created_at')
+          .select('id, full_name, email, role, phone, is_active, initial_password, created_at')
           .eq('school_id', schoolId)
           .order('created_at', ascending: false)
           .limit(100);
@@ -300,6 +301,8 @@ class SchoolProfileScreen extends ConsumerStatefulWidget {
 class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
   int _activeTabIndex = 0; // 0: Facturation, 1: Consommation IA, 2: Utilisateurs, 3: Journal
   bool _isUploadingLogo = false;
+  bool _showDirectorPassword = false;
+  final Set<String> _unhiddenUserIds = {};
 
   // Pagination states for all 4 section tables (limited view per page like Users table)
   int _invoicesPage = 0;
@@ -600,7 +603,15 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
                 label: 'Changer Forfait',
                 onTap: () => _openPlanDialog(data),
               ),
-              // 4. Suspendre / Réactiver Button
+              // 4. Mot de passe & Identifiants Button
+              _buildHeaderActionButton(
+                icon: Icons.key_rounded,
+                label: 'Mot de passe',
+                onTap: () => _openCredentialsModal(data),
+                backgroundColor: const Color(0xFFD97706),
+                foregroundColor: Colors.white,
+              ),
+              // 5. Suspendre / Réactiver Button
               _buildStatusToggleButton(data),
             ],
           ),
@@ -726,6 +737,10 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
             email,
             copyable: email != '—',
           ),
+          const SizedBox(height: 14),
+
+          // Mot de passe Administrateur
+          _buildPasswordInfoRow(data),
           const SizedBox(height: 14),
 
           // Téléphone
@@ -1773,13 +1788,14 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
         LayoutBuilder(
           builder: (context, constraints) {
             final availableWidth = constraints.maxWidth;
-            final tableWidth = max(availableWidth, 750.0);
+            final tableWidth = max(availableWidth, 860.0);
 
-            final userW = tableWidth * 0.28;
-            final roleW = tableWidth * 0.16;
-            final emailW = tableWidth * 0.24;
-            final phoneW = tableWidth * 0.18;
-            final statusW = tableWidth - (userW + roleW + emailW + phoneW);
+            final userW = tableWidth * 0.22;
+            final roleW = tableWidth * 0.13;
+            final emailW = tableWidth * 0.21;
+            final phoneW = tableWidth * 0.14;
+            final statusW = tableWidth * 0.11;
+            final passW = tableWidth - (userW + roleW + emailW + phoneW + statusW);
 
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1839,9 +1855,18 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
                     DataColumn(
                       label: SizedBox(
                         width: statusW,
+                        child: const Center(child: Text('STATUT')),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: passW,
                         child: const Padding(
-                          padding: EdgeInsets.only(right: 24),
-                          child: Center(child: Text('STATUT')),
+                          padding: EdgeInsets.only(right: 20),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('MOT DE PASSE'),
+                          ),
                         ),
                       ),
                     ),
@@ -1852,6 +1877,9 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
                     final phone = u['phone'] ?? '—';
                     final role = (u['role'] as String? ?? 'student').toLowerCase();
                     final isActive = u['is_active'] == true;
+                    final uId = u['id']?.toString() ?? '';
+                    final rawPass = (u['initial_password'] as String?)?.trim() ?? '';
+                    final isUnhidden = _unhiddenUserIds.contains(uId);
 
                     String roleLabel = 'Élève';
                     Color roleColor = const Color(0xFF2563EB);
@@ -1939,24 +1967,113 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
                         DataCell(
                           SizedBox(
                             width: statusW,
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 24),
-                              child: Center(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    isActive ? 'Actif' : 'Bloqué',
-                                    style: TextStyle(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
-                                    ),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  isActive ? 'Actif' : 'Bloqué',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isActive ? const Color(0xFF059669) : const Color(0xFFDC2626),
                                   ),
                                 ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: passW,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 16),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      rawPass.isNotEmpty
+                                          ? (isUnhidden ? rawPass : '••••••••')
+                                          : 'Non défini',
+                                      style: TextStyle(
+                                        fontSize: isUnhidden && rawPass.isNotEmpty ? 11.5 : 12,
+                                        fontFamily: isUnhidden && rawPass.isNotEmpty ? 'monospace' : null,
+                                        fontWeight: FontWeight.w600,
+                                        color: rawPass.isNotEmpty
+                                            ? (isUnhidden ? const Color(0xFF0F172A) : const Color(0xFF64748B))
+                                            : const Color(0xFF94A3B8),
+                                        letterSpacing: isUnhidden || rawPass.isEmpty ? 0.2 : 2.0,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (rawPass.isNotEmpty) ...[
+                                    InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          if (isUnhidden) {
+                                            _unhiddenUserIds.remove(uId);
+                                          } else {
+                                            _unhiddenUserIds.add(uId);
+                                          }
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(
+                                          isUnhidden
+                                              ? Icons.visibility_off_rounded
+                                              : Icons.visibility_rounded,
+                                          size: 15,
+                                          color: const Color(0xFF6D4CF6),
+                                        ),
+                                      ),
+                                    ),
+                                    InkWell(
+                                      onTap: () {
+                                        Clipboard.setData(ClipboardData(text: rawPass));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Mot de passe copié !'),
+                                            duration: Duration(seconds: 1),
+                                            backgroundColor: Color(0xFF059669),
+                                          ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(4),
+                                        child: Icon(Icons.copy_rounded, size: 13, color: Color(0xFF94A3B8)),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(width: 2),
+                                  InkWell(
+                                    onTap: () => _openCredentialsModal(data, preselectedUser: u),
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF5F3FF),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFFDDD6FE)),
+                                      ),
+                                      child: const Text(
+                                        'Modifier',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF7C3AED),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -2269,6 +2386,122 @@ class _SchoolProfileScreenState extends ConsumerState<SchoolProfileScreen> {
             constraints: const BoxConstraints(),
           ),
       ],
+    );
+  }
+
+  Widget _buildPasswordInfoRow(SchoolProfileData data) {
+    final directorUser = data.users.firstWhere(
+      (u) {
+        final r = (u['role'] as String? ?? '').toLowerCase();
+        return r == 'owner' || r == 'admin' || r == 'director';
+      },
+      orElse: () => data.users.isNotEmpty ? data.users.first : <String, dynamic>{},
+    );
+
+    final rawPassword = (directorUser['initial_password'] as String?)?.trim() ?? '';
+    final hasPassword = rawPassword.isNotEmpty;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.lock_outline_rounded, size: 16, color: Color(0xFF94A3B8)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Mot de passe Admin', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      hasPassword
+                          ? (_showDirectorPassword ? rawPassword : '••••••••••••')
+                          : 'Non archivé',
+                      style: TextStyle(
+                        fontSize: _showDirectorPassword && hasPassword ? 12.5 : 13,
+                        fontFamily: _showDirectorPassword && hasPassword ? 'monospace' : null,
+                        fontWeight: FontWeight.w600,
+                        color: hasPassword
+                            ? (_showDirectorPassword ? const Color(0xFF0F172A) : const Color(0xFF64748B))
+                            : const Color(0xFF94A3B8),
+                        letterSpacing: _showDirectorPassword || !hasPassword ? 0.2 : 2.0,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (hasPassword) ...[
+                    InkWell(
+                      onTap: () => setState(() => _showDirectorPassword = !_showDirectorPassword),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Icon(
+                          _showDirectorPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                          size: 16,
+                          color: const Color(0xFF6D4CF6),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: rawPassword));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Mot de passe copié !'),
+                            duration: Duration(seconds: 1),
+                            backgroundColor: Color(0xFF059669),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Icon(Icons.copy_rounded, size: 14, color: Color(0xFF94A3B8)),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  InkWell(
+                    onTap: () => _openCredentialsModal(data, preselectedUser: directorUser.isNotEmpty ? directorUser : null),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F3FF),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFDDD6FE)),
+                      ),
+                      child: const Text(
+                        'Modifier',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF7C3AED),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openCredentialsModal(SchoolProfileData data, {Map<String, dynamic>? preselectedUser}) {
+    showConsoleSchoolCredentialsModal(
+      context: context,
+      school: data.school,
+      preselectedUser: preselectedUser,
+      onPasswordChanged: () {
+        ref.invalidate(schoolProfileDataProvider(widget.schoolId));
+        ref.read(platformProvider.notifier).loadAll();
+      },
     );
   }
 
