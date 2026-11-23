@@ -12,6 +12,9 @@ WHERE prr.user_id = u.id AND prr.school_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_password_reset_requests_school_id 
 ON public.password_reset_requests(school_id);
 
+-- Drop previous function if return type was UUID
+DROP FUNCTION IF EXISTS public.create_password_reset_request(TEXT);
+
 -- Update create_password_reset_request function to store school_id
 CREATE OR REPLACE FUNCTION public.create_password_reset_request(p_email TEXT)
 RETURNS JSONB
@@ -69,3 +72,5 @@ BEGIN
   );
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.create_password_reset_request(TEXT) TO anon, authenticated;
