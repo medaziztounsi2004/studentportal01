@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../../core/config/supabase_config.dart';
@@ -522,118 +523,182 @@ class AbsencesNotifier extends AsyncNotifier<AbsencesState> {
   Future<AbsencesState> build() async => _load();
 
   Future<AbsencesState> _load() async {
-    final supabase = SupabaseConfig.client;
-    final user = supabase.auth.currentUser;
-    if (user == null) throw Exception('Non connecté');
+    try {
+      final supabase = SupabaseConfig.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        return AbsencesState(
+          absences: [],
+          classes: [],
+          subjectOfferings: [],
+          students: [],
+          timetableSlots: [],
+        );
+      }
 
-    final profile = await supabase
-        .from('users')
-        .select('school_id')
-        .eq('id', user.id)
-        .single();
-    final schoolId = profile['school_id'] as String?;
-    if (schoolId == null) throw Exception('École non trouvée');
+      final profile = await supabase
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .maybeSingle();
+      final schoolId = profile?['school_id'] as String?;
+      if (schoolId == null) {
+        return AbsencesState(
+          absences: [],
+          classes: [],
+          subjectOfferings: [],
+          students: [],
+          timetableSlots: [],
+        );
+      }
 
-    // Fetch absence records with joins - include all user fields for search
-    final absData = await supabase
-        .from('absence_records')
-        .select('''
-          *,
-          enrollments(
-            id,
-            users(id, full_name, email, phone, student_code, photo_url),
-            classes(id, name, school_id, niveaux(id, name))
-          ),
-          subject_offerings(
-            id,
-            subjects(id, name, code),
-            users(id, full_name, photo_url)
-          )
-        ''')
-        .order('date', ascending: false)
-        .order('created_at', ascending: false)
-        .order('id', ascending: false)
-        .limit(500);
+      // Fetch classes for this school with niveau and section info
+      final classData = await supabase
+          .from('classes')
+          .select('*, niveaux(id, name), sections(id, name)')
+          .eq('school_id', schoolId)
+          .order('name');
+      final classList = (classData as List);
+      final schoolClassIds = classList
+          .map((c) => c['id'] as String?)
+          .whereType<String>()
+          .toList();
 
-    // Fetch classes for this school with niveau and section info
-    final classData = await supabase
-        .from('classes')
-        .select('*, niveaux(id, name), sections(id, name)')
-        .eq('school_id', schoolId)
-        .order('name');
+      // If fresh school with 0 classes, return clean empty state immediately
+      if (schoolClassIds.isEmpty) {
+        return AbsencesState(
+          absences: [],
+          classes: [],
+          subjectOfferings: [],
+          students: [],
+          timetableSlots: [],
+        );
+      }
 
-    // Fetch subject offerings for this school - include subject id and code for grouping
-    final offeringsData = await supabase
-        .from('subject_offerings')
-        .select(
-          'id, class_id, subjects(id, name, code), classes(id, name, school_id)',
-        )
-        .order('subjects(name)');
+      // Fetch absence records with joins - include all user fields for search
+      dynamic absData = [];
+      try {
+        absData = await supabase
+            .from('absence_records')
+            .select('''
+              *,
+              enrollments!inner(
+                id,
+                class_id,
+                users(id, full_name, email, phone, student_code, photo_url),
+                classes(id, name, school_id, niveaux(id, name))
+              ),
+              subject_offerings(
+                id,
+                subjects(id, name, code),
+                users(id, full_name, photo_url)
+              )
+            ''')
+            .inFilter('enrollments.class_id', schoolClassIds)
+            .order('date', ascending: false)
+            .order('created_at', ascending: false)
+            .order('id', ascending: false)
+            .limit(500);
+      } catch (e) {
+        debugPrint('Error loading absence_records: $e');
+      }
 
-    // Fetch students with enrollments for this school
-    final studentsData = await supabase
-        .from('users')
-        .select(
-          'id, full_name, student_code, phone, email, photo_url, enrollments(id, classes(id, name, school_id))',
-        )
-        .eq('role', 'student')
-        .eq('school_id', schoolId)
-        .order('full_name');
+      // Fetch subject offerings for this school
+      dynamic offeringsData = [];
+      try {
+        offeringsData = await supabase
+            .from('subject_offerings')
+            .select(
+              'id, class_id, subjects(id, name, code), classes(id, name, school_id)',
+            )
+            .inFilter('class_id', schoolClassIds)
+            .order('subjects(name)');
+      } catch (e) {
+        debugPrint('Error loading offeringsData: $e');
+      }
 
-    // Fetch timetable slots for this school's classes
-    final timetableData = await supabase
-        .from('timetable_slots')
-        .select('''
-          id,
-          subject_offering_id,
-          day_of_week,
-          start_time,
-          end_time,
-          room,
-          teacher_name,
-          session_type,
-          subject_offerings!inner(
-            id,
-            class_id,
-            subjects(id, name),
-            classes!inner(id, name, school_id),
-            users(id, full_name, photo_url)
-          )
-        ''')
-        .eq('subject_offerings.classes.school_id', schoolId)
-        .order('day_of_week')
-        .order('start_time');
+      // Fetch students with enrollments for this school
+      dynamic studentsData = [];
+      try {
+        studentsData = await supabase
+            .from('users')
+            .select(
+              'id, full_name, student_code, phone, email, photo_url, enrollments(id, classes(id, name, school_id))',
+            )
+            .eq('role', 'student')
+            .eq('school_id', schoolId)
+            .order('full_name');
+      } catch (e) {
+        debugPrint('Error loading studentsData: $e');
+      }
 
-    // Filter absences to only those from this school
-    final absences = (absData as List)
-        .map((e) => AbsenceModel.fromJson(e as Map<String, dynamic>))
-        .where(
-          (a) => a.className != null,
-        ) // Only absences with valid class data
-        .toList();
+      // Fetch timetable slots for this school's classes
+      dynamic timetableData = [];
+      try {
+        timetableData = await supabase
+            .from('timetable_slots')
+            .select('''
+              id,
+              subject_offering_id,
+              day_of_week,
+              start_time,
+              end_time,
+              room,
+              teacher_name,
+              session_type,
+              subject_offerings!inner(
+                id,
+                class_id,
+                subjects(id, name),
+                classes(id, name, school_id),
+                users(id, full_name, photo_url)
+              )
+            ''')
+            .inFilter('subject_offerings.class_id', schoolClassIds)
+            .order('day_of_week')
+            .order('start_time');
+      } catch (e) {
+        debugPrint('Error loading timetableData: $e');
+      }
 
-    // Filter offerings to this school's classes
-    final offerings = (offeringsData as List)
-        .map((e) => SubjectOfferingInfo.fromJson(e as Map<String, dynamic>))
-        .where((o) => o.className != null)
-        .toList();
+      // Filter absences to only those from this school
+      final absences = (absData as List)
+          .map((e) => AbsenceModel.fromJson(e as Map<String, dynamic>))
+          .where((a) => a.className != null)
+          .toList();
 
-    // Parse timetable slots
-    final timetableSlots = (timetableData as List)
-        .map((e) => TimetableSlotInfo.fromJson(e as Map<String, dynamic>))
-        .toList();
+      // Filter offerings to this school's classes
+      final offerings = (offeringsData as List)
+          .map((e) => SubjectOfferingInfo.fromJson(e as Map<String, dynamic>))
+          .where((o) => o.className != null)
+          .toList();
 
-    return AbsencesState(
-      absences: absences,
-      classes: (classData as List)
-          .map((e) => ClassModel.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      subjectOfferings: offerings,
-      students: (studentsData as List)
-          .map((e) => StudentInfo.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      timetableSlots: timetableSlots,
-    );
+      // Parse timetable slots
+      final timetableSlots = (timetableData as List)
+          .map((e) => TimetableSlotInfo.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      return AbsencesState(
+        absences: absences,
+        classes: classList
+            .map((e) => ClassModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        subjectOfferings: offerings,
+        students: (studentsData as List)
+            .map((e) => StudentInfo.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        timetableSlots: timetableSlots,
+      );
+    } catch (e) {
+      debugPrint('Error in AbsencesNotifier._load: $e');
+      return AbsencesState(
+        absences: [],
+        classes: [],
+        subjectOfferings: [],
+        students: [],
+        timetableSlots: [],
+      );
+    }
   }
 
   /// Refresh data from server

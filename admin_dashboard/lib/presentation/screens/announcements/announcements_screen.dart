@@ -1819,59 +1819,6 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
         _filterSectionId != null ||
         _filterClassId != null;
 
-    if (list.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.slate100,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(Icons.campaign_outlined,
-                  size: 40, color: AppColors.slate300),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              hasFilters
-                  ? 'Aucun résultat avec ces filtres'
-                  : 'Aucune annonce',
-              style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500),
-            ),
-            if (hasFilters) ...[
-              const SizedBox(height: 8),
-              Text('Essayez de modifier vos critères de recherche',
-                  style: TextStyle(
-                      color: AppColors.slate400, fontSize: 13)),
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: () => setState(() {
-                  _searchController.clear();
-                  _searchQuery = '';
-                  _filterNiveauId = null;
-                  _filterSectionId = null;
-                  _filterClassId = null;
-                  _filterType = null;
-                  _filterDateFrom = null;
-                  _filterDateTo = null;
-                  _filterStatus = 'all';
-                  _currentPage = 0;
-                }),
-                icon: const Icon(Icons.clear_all, size: 18),
-                label: const Text('Effacer les filtres'),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
     // Sort
     list.sort((a, b) {
       int cmp;
@@ -1908,7 +1855,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
     final safePage = _currentPage.clamp(0, totalPages - 1);
     final startIdx = safePage * _pageSize;
     final endIdx = (startIdx + _pageSize).clamp(0, list.length);
-    final pageItems = list.sublist(startIdx, endIdx);
+    final pageItems = list.sublist(startIdx.clamp(0, list.length), endIdx.clamp(0, list.length));
 
     return Container(
       color: const Color(0xFFF8FAFC),
@@ -1932,12 +1879,14 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
             children: [
               _buildSelectAllBar(list),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: pageItems.length,
-                  itemBuilder: (ctx, i) =>
-                      _buildAnnouncementCard(pageItems[i]),
-                ),
+                child: list.isEmpty
+                    ? _buildEmptyState(hasFilters)
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: pageItems.length,
+                        itemBuilder: (ctx, i) =>
+                            _buildAnnouncementCard(pageItems[i]),
+                      ),
               ),
               _buildPaginationBar(list.length, totalPages),
             ],
@@ -2026,6 +1975,74 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool hasFilters) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.campaign_outlined,
+                size: 32,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              hasFilters ? 'Aucun résultat avec ces filtres' : 'Aucune annonce trouvée',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              hasFilters
+                  ? 'Essayez de modifier vos critères de recherche.'
+                  : 'Aucune annonce publiée pour cet établissement.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+            ),
+            if (hasFilters) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () => setState(() {
+                  _searchController.clear();
+                  _searchQuery = '';
+                  _filterNiveauId = null;
+                  _filterSectionId = null;
+                  _filterClassId = null;
+                  _filterType = null;
+                  _filterDateFrom = null;
+                  _filterDateTo = null;
+                  _filterStatus = 'all';
+                  _currentPage = 0;
+                }),
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Effacer les filtres'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF6D4CF6),
+                  side: const BorderSide(color: Color(0xFF6D4CF6)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

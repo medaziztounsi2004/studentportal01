@@ -1776,31 +1776,49 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
 
   // ── Table ─────────────────────────────────────────────────────────────────
 
-  Widget _buildTable(BuildContext context, List<Map<String, dynamic>> professors) {
-    if (professors.isEmpty) {
-      return Center(
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72, height: 72,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEEF2FF),
-                borderRadius: BorderRadius.circular(20),
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.school_outlined, size: 36, color: Color(0xFF6366F1)),
+              child: const Icon(
+                Icons.school_outlined,
+                size: 32,
+                color: Color(0xFF94A3B8),
+              ),
             ),
             const SizedBox(height: 16),
-            const Text('Aucun professeur trouvé', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+            const Text(
+              'Aucun enseignant trouvé',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
+            ),
             const SizedBox(height: 6),
-            const Text('Essayez de modifier la recherche ou les filtres', style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'Essayez de modifier votre recherche ou vos filtres.'
+                  : 'Aucun enseignant enregistré pour cet établissement.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+            ),
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    final allPageSelected = professors.isNotEmpty && professors.every((p) => _selectedProfIds.contains(p['id']));
-
+  Widget _buildTable(BuildContext context, List<Map<String, dynamic>> professors) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth;
@@ -1812,6 +1830,56 @@ class _ProfessorsScreenState extends ConsumerState<ProfessorsScreen> {
         const classesW = 110.0;
         const dateJoinedW = 90.0;
         final nameW = (availableWidth - checkboxW - phoneW - specialityW - niveauxW - classesW - dateJoinedW - actionsW).clamp(220.0, 360.0);
+
+        if (professors.isEmpty) {
+          return Column(
+            children: [
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: availableWidth),
+                  child: Container(
+                    height: 44,
+                    color: const Color(0xFFF9FAFB),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: checkboxW,
+                          child: Center(
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: Checkbox(
+                                value: false,
+                                onChanged: null,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                side: BorderSide(color: AppColors.slate300, width: 1.5),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL')),
+                        SizedBox(width: specialityW, child: _headerLabel('SPÉCIALITÉ', alignment: Alignment.center, textAlign: TextAlign.center)),
+                        SizedBox(width: niveauxW, child: _headerLabel('NIVEAUX', alignment: Alignment.center, textAlign: TextAlign.center)),
+                        SizedBox(width: classesW, child: _headerLabel('CLASSES', alignment: Alignment.center, textAlign: TextAlign.center)),
+                        SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE', alignment: Alignment.center, textAlign: TextAlign.center)),
+                        SizedBox(width: dateJoinedW, child: _headerLabel('CRÉÉ LE', alignment: Alignment.center, textAlign: TextAlign.center)),
+                        SizedBox(width: actionsW),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+              Expanded(
+                child: _buildEmptyState(),
+              ),
+            ],
+          );
+        }
+
+        final allPageSelected = professors.isNotEmpty && professors.every((p) => _selectedProfIds.contains(p['id']));
 
         return SingleChildScrollView(
           child: ConstrainedBox(

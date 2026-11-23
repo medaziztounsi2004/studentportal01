@@ -83,14 +83,17 @@ class ResultsRepository {
   }
 
   /// Get all classes
-  Future<List<Map<String, dynamic>>> getClasses() async {
-    final response = await _client
+  Future<List<Map<String, dynamic>>> getClasses({String? schoolId}) async {
+    var query = _client
         .from('classes')
         .select(
           'id, name, niveau_id, section_id, school_id, is_active, niveaux(id, name, code), sections(id, name, code)',
         )
-        .eq('is_active', true)
-        .order('name');
+        .eq('is_active', true);
+    if (schoolId != null) {
+      query = query.eq('school_id', schoolId);
+    }
+    final response = await query.order('name');
     return List<Map<String, dynamic>>.from(response);
   }
 

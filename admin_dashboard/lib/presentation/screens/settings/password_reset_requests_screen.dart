@@ -20,6 +20,23 @@ import '../../widgets/skeleton_loader.dart';
 import '../../widgets/user_avatar.dart';
 import '../users/user_profile_screen.dart';
 
+/// Helper to get current admin's school_id
+Future<String?> _getAdminSchoolId(SupabaseClient supabase) async {
+  try {
+    final user = supabase.auth.currentUser;
+    if (user == null) return null;
+    final profile = await supabase
+        .from('users')
+        .select('school_id')
+        .eq('id', user.id)
+        .maybeSingle();
+    return profile?['school_id'] as String?;
+  } catch (e) {
+    debugPrint('Error getting admin school_id: $e');
+    return null;
+  }
+}
+
 /// Provider for pending password reset count (for notification badges)
 final pendingPasswordResetCountProvider = FutureProvider.autoDispose<int>((
   ref,
@@ -27,32 +44,83 @@ final pendingPasswordResetCountProvider = FutureProvider.autoDispose<int>((
   final supabase = Supabase.instance.client;
 
   try {
-    final response = await supabase
-        .from('password_reset_requests')
-        .select('id')
-        .eq('status', 'pending');
-    debugPrint('Pending password reset count: ${(response as List).length}');
-    return (response as List).length;
+    final schoolId = await _getAdminSchoolId(supabase);
+    if (schoolId == null) return 0;
+
+    // First try querying directly by school_id column
+    try {
+      final response = await supabase
+          .from('password_reset_requests')
+          .select('id')
+          .eq('status', 'pending')
+          .eq('school_id', schoolId);
+      final list = response as List;
+      debugPrint('Pending password reset count (by school_id): ${list.length}');
+      return list.length;
+    } catch (_) {
+      // Fallback: match via user_id -> users.school_id
+      final schoolUsers = await supabase
+          .from('users')
+          .select('id')
+          .eq('school_id', schoolId);
+      final userIds = (schoolUsers as List)
+          .map((u) => u['id'] as String?)
+          .whereType<String>()
+          .toList();
+      if (userIds.isEmpty) return 0;
+
+      final response = await supabase
+          .from('password_reset_requests')
+          .select('id')
+          .eq('status', 'pending')
+          .inFilter('user_id', userIds);
+      debugPrint('Pending password reset count (by user_id): ${(response as List).length}');
+      return (response as List).length;
+    }
   } catch (e) {
     debugPrint('Error fetching pending count: $e');
     return 0;
   }
 });
 
-/// Provider for password reset requests - uses data directly from the table
+/// Provider for password reset requests - strictly tenant-isolated
 final passwordResetRequestsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
       final supabase = Supabase.instance.client;
 
       try {
-        debugPrint('Fetching password reset requests...');
-        final response = await supabase
-            .from('password_reset_requests')
-            .select('*')
-            .order('requested_at', ascending: false);
+        final schoolId = await _getAdminSchoolId(supabase);
+        if (schoolId == null) return [];
 
-        debugPrint('Got ${(response as List).length} password reset requests');
-        return (response as List).cast<Map<String, dynamic>>();
+        debugPrint('Fetching password reset requests for school $schoolId...');
+
+        // First try querying directly by school_id column
+        try {
+          final response = await supabase
+              .from('password_reset_requests')
+              .select('*')
+              .eq('school_id', schoolId)
+              .order('requested_at', ascending: false);
+          return (response as List).cast<Map<String, dynamic>>();
+        } catch (_) {
+          // Fallback: match via user_id -> users.school_id
+          final schoolUsers = await supabase
+              .from('users')
+              .select('id')
+              .eq('school_id', schoolId);
+          final userIds = (schoolUsers as List)
+              .map((u) => u['id'] as String?)
+              .whereType<String>()
+              .toList();
+          if (userIds.isEmpty) return [];
+
+          final response = await supabase
+              .from('password_reset_requests')
+              .select('*')
+              .inFilter('user_id', userIds)
+              .order('requested_at', ascending: false);
+          return (response as List).cast<Map<String, dynamic>>();
+        }
       } catch (e) {
         debugPrint('Error fetching password reset requests: $e');
         return [];

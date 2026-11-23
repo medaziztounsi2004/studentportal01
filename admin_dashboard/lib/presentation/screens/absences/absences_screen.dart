@@ -887,20 +887,7 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
               child: Column(
                 children: [
                   Expanded(
-                    child: list.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.event_available, size: 64, color: AppColors.slate300),
-                                const SizedBox(height: 16),
-                                const Text('Aucune absence trouvée', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 8),
-                                const Text('Modifiez vos filtres ou ajoutez une nouvelle absence', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                              ],
-                            ),
-                          )
-                        : _buildAbsenceDataTable(context, state),
+                    child: _buildAbsenceDataTable(context, state),
                   ),
                   _buildPagination(list.length),
                 ],
@@ -1032,6 +1019,48 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
     );
   }
 
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.event_available,
+                size: 32,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Aucune absence trouvée',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _searchController.text.isNotEmpty
+                  ? 'Essayez de modifier votre recherche ou vos filtres.'
+                  : 'Aucune absence enregistrée pour cet établissement.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAbsenceDataTable(BuildContext context, AbsencesState state) {
     final rawAbsences = state.filtered;
     final absences = List<AbsenceModel>.from(rawAbsences);
@@ -1134,6 +1163,54 @@ class _AbsencesScreenState extends ConsumerState<AbsencesScreen> {
 
         final fixedW = checkboxW + classeW + subjectW + dateW + hoursW + justifW + actionsW;
         final nameW = (availableWidth - fixedW).clamp(180.0, 320.0);
+
+        if (absences.isEmpty) {
+          return Column(
+            children: [
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: availableWidth),
+                  child: Container(
+                    height: 44,
+                    color: const Color(0xFFF9FAFB),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: checkboxW,
+                          child: Center(
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: Checkbox(
+                                value: false,
+                                onChanged: null,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                side: BorderSide(color: AppColors.slate300, width: 1.5),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / ÉTUDIANT')),
+                        SizedBox(width: classeW, child: _headerLabel('CLASSE')),
+                        SizedBox(width: subjectW, child: _headerLabel('MATIÈRE')),
+                        SizedBox(width: dateW, child: _headerLabel('DATE')),
+                        SizedBox(width: hoursW, child: _headerLabel('HEURES')),
+                        SizedBox(width: justifW, child: _headerLabel('JUSTIFIÉ')),
+                        SizedBox(width: actionsW),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+              Expanded(
+                child: _buildEmptyState(),
+              ),
+            ],
+          );
+        }
 
         return SingleChildScrollView(
           child: ConstrainedBox(

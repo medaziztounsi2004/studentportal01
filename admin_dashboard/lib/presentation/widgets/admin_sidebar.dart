@@ -633,28 +633,22 @@ class _NavItemWithBadgeState extends State<_NavItemWithBadge> {
               if (widget.badgeCount > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
+                    horizontal: 6,
+                    vertical: 2,
                   ),
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFF97316), Color(0xFFFB923C)],
-                    ),
+                    color: const Color(0xFFEF4444),
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFF97316).withOpacity(0.45),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: Text(
-                    widget.badgeCount.toString(),
+                    widget.badgeCount > 99 ? '99+' : widget.badgeCount.toString(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
                     ),
                   ),
                 ),

@@ -1277,38 +1277,11 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
       return a.id.compareTo(b.id);
     });
     
-    if (list.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.inbox_outlined, size: 64, color: AppColors.slate200),
-            const SizedBox(height: 16),
-            const Text(
-              'Aucune suggestion',
-              style: TextStyle(color: AppColors.textTertiary),
-            ),
-            if (state.suggestions.isNotEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  'Essayez de modifier les filtres',
-                  style: TextStyle(
-                    color: AppColors.textTertiary,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-
-    final totalPages = _itemsPerPage == -1 ? 1 : (list.length / _itemsPerPage).ceil();
+    final totalPages = _itemsPerPage == -1 ? 1 : (list.length / _itemsPerPage).ceil().clamp(1, 999999);
     if (_currentPage > totalPages && totalPages > 0) _currentPage = totalPages;
     final startIndex = _itemsPerPage == -1 ? 0 : (_currentPage - 1) * _itemsPerPage;
     final endIndex = _itemsPerPage == -1 ? list.length : (startIndex + _itemsPerPage).clamp(0, list.length);
-    final pageSuggestions = list.sublist(startIndex, endIndex);
+    final pageSuggestions = list.sublist(startIndex.clamp(0, list.length), endIndex.clamp(0, list.length));
 
     return Container(
       color: const Color(0xFFF8FAFC),
@@ -1332,25 +1305,69 @@ class _SuggestionsScreenState extends ConsumerState<SuggestionsScreen> {
             children: [
               _buildSelectAllBar(list),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: pageSuggestions.length,
-                  itemBuilder: (context, index) {
-                    final s = pageSuggestions[index];
-                    return _SuggestionCard(
-                      suggestion: s,
-                      searchQuery: searchQuery,
-                      isSelected: _selectedIds.contains(s.id),
-                      selectionMode: _selectionMode,
-                      onSelect: () => _toggleSelection(s.id),
-                      onAction: (action) => _handleAction(action, s),
-                    );
-                  },
-                ),
+                child: list.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: pageSuggestions.length,
+                        itemBuilder: (context, index) {
+                          final s = pageSuggestions[index];
+                          return _SuggestionCard(
+                            suggestion: s,
+                            searchQuery: searchQuery,
+                            isSelected: _selectedIds.contains(s.id),
+                            selectionMode: _selectionMode,
+                            onSelect: () => _toggleSelection(s.id),
+                            onAction: (action) => _handleAction(action, s),
+                          );
+                        },
+                      ),
               ),
               _buildPagination(list.length),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.inbox_outlined,
+                size: 32,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Aucune suggestion trouvée',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _searchController.text.isNotEmpty
+                  ? 'Essayez de modifier votre recherche ou vos filtres.'
+                  : 'Aucune suggestion reçue pour cet établissement.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+            ),
+          ],
         ),
       ),
     );

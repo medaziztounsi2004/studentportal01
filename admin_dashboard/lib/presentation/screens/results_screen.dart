@@ -702,9 +702,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           child: Column(
             children: [
               Expanded(
-                child: students.isEmpty
-                    ? _buildEmptyState('Aucun élève trouvé', Icons.search_off)
-                    : _buildStudentDataTable(context, provider, students),
+                child: _buildStudentDataTable(context, provider, students),
               ),
               _buildPagination(students.length),
             ],
@@ -778,10 +776,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget _buildStudentSelectionForGrades(BuildContext context, ResultsProvider provider) {
     final students = provider.enrolledStudents;
 
-    if (students.isEmpty) {
-      return _buildEmptyState('Aucun élève trouvé', Icons.people_outline, subtitle: 'Sélectionnez une classe pour voir les élèves');
-    }
-
     return Container(
       color: const Color(0xFFF8FAFC),
       padding: const EdgeInsets.all(24),
@@ -816,10 +810,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
   /// Overview view — click student row to go directly to grade entry
   Widget _buildOverviewView(BuildContext context, ResultsProvider provider) {
     final students = provider.enrolledStudents;
-
-    if (students.isEmpty) {
-      return _buildEmptyState('Aucun élève inscrit', Icons.people_outline, subtitle: 'Cette classe n\'a pas encore d\'élèves inscrits');
-    }
 
     return Container(
       color: const Color(0xFFF8FAFC),
@@ -896,6 +886,57 @@ class _ResultsScreenState extends State<ResultsScreen> {
             final totalFixed = checkboxW + niveauW + classeW + moyenneW + createdW + actionsW;
             final nameW = (availableWidth - totalFixed).clamp(240.0, 500.0);
             final minTotalW = totalFixed + nameW;
+
+            if (students.isEmpty) {
+              return Column(
+                children: [
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: availableWidth > minTotalW ? availableWidth : minTotalW),
+                      child: Container(
+                        height: 44,
+                        color: const Color(0xFFF9FAFB),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: checkboxW,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: Checkbox(
+                                    value: false,
+                                    onChanged: null,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                    side: BorderSide(color: AppColors.slate300, width: 1.5),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL')),
+                            SizedBox(width: niveauW, child: _headerLabel('NIVEAU')),
+                            SizedBox(width: classeW, child: _headerLabel('CLASSE')),
+                            SizedBox(width: moyenneW, child: _headerLabel('MOYENNE SEMESTRE')),
+                            SizedBox(width: createdW, child: _headerLabel('CRÉÉ LE')),
+                            SizedBox(width: actionsW),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+                  Expanded(
+                    child: _buildEmptyState(
+                      'Aucun élève trouvé',
+                      Icons.people_outline,
+                      subtitle: 'Aucun élève enregistré pour cette sélection',
+                    ),
+                  ),
+                ],
+              );
+            }
 
             return SingleChildScrollView(
               scrollDirection: Axis.vertical,
@@ -1387,28 +1428,43 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   Widget _buildEmptyState(String title, IconData icon, {String? subtitle}) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: Color(0xFFEFF6FF),
-              shape: BoxShape.circle,
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 32,
+                color: const Color(0xFF94A3B8),
+              ),
             ),
-            child: Icon(
-              icon,
-              size: 40,
-              color: const Color(0xFF3B82F6),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          if (subtitle != null) ...[
-            const SizedBox(height: 8),
-            Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

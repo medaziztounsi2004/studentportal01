@@ -732,9 +732,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           child: Column(
             children: [
               Expanded(
-                child: users.isEmpty
-                    ? _buildEmptyState('Aucun étudiant trouvé')
-                    : _buildDataTable(users, isStudent: true),
+                child: _buildDataTable(users, isStudent: true),
               ),
               _buildPagination(users.length),
             ],
@@ -763,9 +761,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
           child: Column(
             children: [
               Expanded(
-                child: users.isEmpty
-                    ? _buildEmptyState('Aucun staff trouvé')
-                    : _buildDataTable(users, isStudent: false),
+                child: _buildDataTable(users, isStudent: false),
               ),
               _buildPagination(users.length),
             ],
@@ -811,6 +807,60 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
         final nameW = isStudent
             ? (availableWidth - fixedStudentW).clamp(160.0, 300.0)
             : (availableWidth - fixedStaffW).clamp(200.0, 400.0);
+
+        if (users.isEmpty) {
+          return Column(
+            children: [
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: availableWidth),
+                  child: Container(
+                    height: 44,
+                    color: const Color(0xFFF9FAFB),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: checkboxW,
+                          child: Center(
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: Checkbox(
+                                value: false,
+                                onChanged: null,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                side: BorderSide(color: AppColors.slate300, width: 1.5),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: nameW, child: _headerLabel('NOM COMPLET / EMAIL')),
+                        if (isStudent) SizedBox(width: genreW, child: _headerLabel('GENRE')),
+                        if (isStudent) SizedBox(width: dobW, child: _headerLabel('DATE NAISS.')),
+                        if (isStudent) SizedBox(width: natW, child: _headerLabel('NATIONALITÉ')),
+                        if (isStudent) SizedBox(width: niveauW, child: _headerLabel('NIVEAU')),
+                        if (isStudent) SizedBox(width: classeW, child: _headerLabel('CLASSE')),
+                        if (isStudent) SizedBox(width: codeW, child: _headerLabel('CODE ÉTUD.')),
+                        if (!isStudent) SizedBox(width: roleW, child: _headerLabel('RÔLE')),
+                        SizedBox(width: phoneW, child: _headerLabel('TÉLÉPHONE')),
+                        SizedBox(width: createdW, child: _headerLabel('CRÉÉ LE')),
+                        SizedBox(width: actionsW),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+              Expanded(
+                child: _buildEmptyState(
+                  isStudent ? 'Aucun étudiant trouvé' : 'Aucun personnel trouvé',
+                ),
+              ),
+            ],
+          );
+        }
 
         return SingleChildScrollView(
         child: ConstrainedBox(
@@ -1731,22 +1781,42 @@ class _UsersScreenState extends ConsumerState<UsersScreen>
   // ═══════════════════════════════════════════════════
   Widget _buildEmptyState(String message) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 72, height: 72,
-            decoration: BoxDecoration(color: AppColors.slate100, shape: BoxShape.circle),
-            child: Icon(Icons.people_outline, size: 36, color: AppColors.textTertiary),
-          ),
-          const SizedBox(height: 16),
-          Text(message, style: TextStyle(color: AppColors.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
-          if (_searchQuery.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('Essayez une autre recherche', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.people_outline,
+                size: 32,
+                color: Color(0xFF94A3B8),
+              ),
             ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              message,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'Essayez de modifier votre recherche ou vos filtres.'
+                  : 'Aucun enregistrement disponible pour cet établissement.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+            ),
+          ],
+        ),
       ),
     );
   }

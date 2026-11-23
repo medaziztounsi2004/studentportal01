@@ -116,6 +116,16 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   Future<void> _loadHierarchyData() async {
     try {
       final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      String? schoolId;
+      if (user != null) {
+        try {
+          final uRow = await supabase.from('users').select('school_id').eq('id', user.id).maybeSingle();
+          schoolId = uRow?['school_id'] as String?;
+        } catch (e) {
+          debugPrint('Error getting schoolId: $e');
+        }
+      }
 
       // Load niveaux
       final niveauxResp = await supabase
@@ -135,20 +145,26 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
           .select('niveau_id, section_id')
           .eq('is_active', true);
 
-      // Load all classes with niveau and section info
-      final classesResp = await supabase
+      // Load classes strictly for this school
+      var classesQuery = supabase
           .from('classes')
           .select('id, name, niveau_id, section_id')
-          .eq('is_active', true)
-          .order('name');
+          .eq('is_active', true);
+      if (schoolId != null) {
+        classesQuery = classesQuery.eq('school_id', schoolId);
+      }
+      final classesResp = await classesQuery.order('name');
 
-      // Load all students with their enrollments
-      final studentsResp = await supabase
+      // Load students strictly for this school
+      var studentsQuery = supabase
           .from('users')
           .select('id, full_name, email, phone, photo_url')
           .eq('role', 'student')
-          .eq('is_active', true)
-          .order('full_name');
+          .eq('is_active', true);
+      if (schoolId != null) {
+        studentsQuery = studentsQuery.eq('school_id', schoolId);
+      }
+      final studentsResp = await studentsQuery.order('full_name');
 
       // Load enrollments separately
       final enrollmentsResp = await supabase
@@ -2391,8 +2407,10 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
           child: classes.isEmpty
               ? _buildEmptyState(
                   icon: Icons.meeting_room_outlined,
-                  title: 'Aucune classe',
-                  subtitle: 'Aucune classe ne correspond à ce niveau',
+                  title: 'Aucune classe trouvée',
+                  subtitle: _layoutSelectedNiveauId == null
+                      ? 'Aucune classe n\'a été créée pour cet établissement'
+                      : 'Aucune classe ne correspond à ce niveau',
                 )
               : GridView.builder(
                   padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
@@ -4103,20 +4121,36 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 64, color: AppColors.slate200),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              size: 32,
+              color: const Color(0xFF94A3B8),
+            ),
+          ),
           const SizedBox(height: 16),
           Text(
             title,
-            style: TextStyle(
-              fontSize: 18,
+            style: const TextStyle(
+              fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: AppColors.textTertiary,
+              color: Color(0xFF1E293B),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             subtitle,
-            style: TextStyle(fontSize: 14, color: AppColors.textTertiary),
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF94A3B8),
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

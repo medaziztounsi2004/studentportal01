@@ -260,22 +260,40 @@ class ResultsProvider extends ChangeNotifier {
     }
   }
 
+  /// Helper to get current user's school_id
+  Future<String?> _getSchoolId() async {
+    final user = SupabaseConfig.client.auth.currentUser;
+    if (user == null) return null;
+    try {
+      final profile = await SupabaseConfig.client
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .maybeSingle();
+      final id = profile?['school_id']?.toString();
+      if (id != null && id.isNotEmpty) return id;
+    } catch (_) {}
+    try {
+      final profile = await SupabaseConfig.adminClient
+          .from('users')
+          .select('school_id')
+          .eq('id', user.id)
+          .maybeSingle();
+      return profile?['school_id']?.toString();
+    } catch (_) {}
+    return null;
+  }
+
   /// Load academic years
   Future<void> loadAcademicYears() async {
     try {
-      final user = SupabaseConfig.client.auth.currentUser;
-      String? schoolId;
-      if (user != null) {
-        try {
-          final profile = await SupabaseConfig.adminClient
-              .from('users')
-              .select('school_id')
-              .eq('id', user.id)
-              .maybeSingle();
-          schoolId = profile?['school_id']?.toString();
-        } catch (_) {}
+      final schoolId = await _getSchoolId();
+      if (schoolId == null) {
+        _academicYears = [];
+        _selectedAcademicYearId = null;
+        notifyListeners();
+        return;
       }
-      schoolId ??= '11111111-1111-1111-1111-111111111111';
 
       // Load academic years for this school
       _academicYears = await _repository.getAcademicYears(schoolId: schoolId);
@@ -304,19 +322,13 @@ class ResultsProvider extends ChangeNotifier {
   /// then auto-selects is_current = true
   Future<void> loadSemesters() async {
     try {
-      final user = SupabaseConfig.client.auth.currentUser;
-      String? schoolId;
-      if (user != null) {
-        try {
-          final profile = await SupabaseConfig.adminClient
-              .from('users')
-              .select('school_id')
-              .eq('id', user.id)
-              .maybeSingle();
-          schoolId = profile?['school_id']?.toString();
-        } catch (_) {}
+      final schoolId = await _getSchoolId();
+      if (schoolId == null) {
+        _semesters = [];
+        _selectedSemesterId = null;
+        notifyListeners();
+        return;
       }
-      schoolId ??= '11111111-1111-1111-1111-111111111111';
 
       _semesters = await _repository.getSemesters(
         _selectedAcademicYearId,
@@ -370,7 +382,8 @@ class ResultsProvider extends ChangeNotifier {
   /// Load classes
   Future<void> loadClasses() async {
     try {
-      final fetched = await _repository.getClasses();
+      final schoolId = await _getSchoolId();
+      final fetched = await _repository.getClasses(schoolId: schoolId);
       fetched.sort((a, b) => (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? ''));
       _classes = fetched;
       notifyListeners();
