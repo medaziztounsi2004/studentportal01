@@ -585,12 +585,11 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
     final scolaritePlans = dedupedPlans
         .where((p) => _mapCategory(p.category, p.description ?? p.planType) == PaymentCategory.scolarite)
         .toList();
-    final scolaritePricing = pricing['scolarite'] ?? 0.0;
     final scheduleTotal = scolaritePlans.fold<double>(
       0,
       (sum, p) => sum + p.amountTotal,
     );
-    final scheduleAmount = scheduleTotal > 0 ? scheduleTotal : scolaritePricing;
+    final scheduleAmount = scheduleTotal;
 
     // Get plan type from admin (monthly, semester, annual)
     final planType = scolaritePlans.isNotEmpty
@@ -609,16 +608,17 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
         return aDate.compareTo(bDate);
       });
 
-    // Always build the full month schedule from the current semester,
-    // then overlay real payment data where it exists
-    final displayPayments = _buildFullSchedule(
-      planType,
-      semesters,
-      currentSemester,
-      yearDates,
-      scheduleAmount,
-      allPayments,
-    );
+    // Schedule only displays if the student has a scolarite plan or real payments
+    final displayPayments = (scolaritePlans.isEmpty && allPayments.isEmpty)
+        ? <PaymentInfo>[]
+        : _buildFullSchedule(
+            planType,
+            semesters,
+            currentSemester,
+            yearDates,
+            scheduleAmount,
+            allPayments,
+          );
 
     // Categories excluding scolarite that have a configured price or active payments
     final nonScolariteCategories = categories
@@ -627,8 +627,13 @@ class _MonSoldeScreenState extends ConsumerState<MonSoldeScreen> {
             (c.amount > 0 || c.paid > 0))
         .toList();
 
-    // If no tuition or categories configured and no real payments exist, show unified EmptyStateGlassCard
-    if (totalAmount <= 0 && allPayments.isEmpty && dedupedPlans.isEmpty && nonScolariteCategories.isEmpty) {
+    // If no real plans or payments exist for this student, show unified EmptyStateGlassCard
+    final hasRealPlansOrPayments = dedupedPlans.isNotEmpty ||
+        allPayments.isNotEmpty ||
+        categoryTotal > 0 ||
+        categoryPaid > 0 ||
+        nonScolariteCategories.isNotEmpty;
+    if (!hasRealPlansOrPayments) {
       return SliverFillRemaining(
         hasScrollBody: false,
         child: EmptyStateGlassCard(

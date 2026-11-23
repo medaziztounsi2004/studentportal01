@@ -81,7 +81,7 @@ class AuthNotifier extends Notifier<AdminAuthState> {
     _schoolChannel = _supabase
         .channel('admin_school_changes_$schoolId')
         .onPostgresChanges(
-          event: PostgresChangeEvent.update,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'schools',
           filter: PostgresChangeFilter(
@@ -94,7 +94,10 @@ class AuthNotifier extends Notifier<AdminAuthState> {
             final bool isActive = (newSchool['is_active'] as bool?) ?? true;
             final String? status = newSchool['status']?.toString();
             final bool isSuspended = !isActive || status == 'suspended' || status == 'inactive';
-            state = state.copyWith(schoolIsActive: !isSuspended);
+            state = state.copyWith(
+              schoolIsActive: !isSuspended,
+              schoolSubscriptionStatus: isSuspended ? 'suspended' : state.schoolSubscriptionStatus,
+            );
           },
         )
         .subscribe();
@@ -113,7 +116,11 @@ class AuthNotifier extends Notifier<AdminAuthState> {
           callback: (payload) {
             final newSub = payload.newRecord;
             final status = newSub['status']?.toString() ?? 'active';
-            state = state.copyWith(schoolSubscriptionStatus: status);
+            final bool isSuspended = status == 'suspended';
+            state = state.copyWith(
+              schoolSubscriptionStatus: status,
+              schoolIsActive: isSuspended ? false : state.schoolIsActive,
+            );
           },
         )
         .subscribe();
@@ -138,17 +145,71 @@ class AuthNotifier extends Notifier<AdminAuthState> {
       bool schoolIsActive = true;
       if (user.schoolId != null) {
         _subscribeToSchoolChanges(user.schoolId!);
+
+        // Tier 1: Authoritative check_user_access_status RPC
+        try {
+          final accessCheck = await _supabase.rpc('check_user_access_status');
+          if (accessCheck != null && accessCheck is Map) {
+            final isLocked = accessCheck['is_locked'] == true;
+            final reason = accessCheck['reason']?.toString();
+            if (isLocked && (reason == 'school_suspended' || reason == 'user_suspended')) {
+              schoolIsActive = false;
+              subStatus = 'suspended';
+            }
+          }
+        } catch (_) {}
+
+        // Tier 2: Authoritative check_school_active_status RPC
+        try {
+          final schoolCheck = await _supabase.rpc(
+            'check_school_active_status',
+            params: {'p_school_id': user.schoolId},
+          );
+          if (schoolCheck != null && schoolCheck is Map) {
+            final isSuspended = schoolCheck['is_suspended'] == true;
+            if (isSuspended) {
+              schoolIsActive = false;
+              subStatus = 'suspended';
+            }
+          }
+        } catch (_) {}
+
+        // Tier 3: Direct schools query (isolated from join errors)
         try {
           final schoolRow = await _supabase
               .from('schools')
-              .select('is_active, school_subscriptions(status)')
+              .select('id, is_active, status')
               .eq('id', user.schoolId!)
               .maybeSingle();
           if (schoolRow != null) {
-            schoolIsActive = schoolRow['is_active'] as bool? ?? true;
-            final subs = schoolRow['school_subscriptions'] as List?;
-            if (subs != null && subs.isNotEmpty) {
-              subStatus = (subs.first as Map)['status']?.toString();
+            final bool act = (schoolRow['is_active'] as bool?) ?? true;
+            final String? st = schoolRow['status']?.toString();
+            if (!act || st == 'suspended' || st == 'inactive') {
+              schoolIsActive = false;
+              subStatus = 'suspended';
+            }
+          } else {
+            schoolIsActive = false;
+            subStatus = 'suspended';
+          }
+        } catch (_) {}
+
+        // Tier 4: Direct subscription check
+        try {
+          final subRow = await _supabase
+              .from('school_subscriptions')
+              .select('status')
+              .eq('school_id', user.schoolId!)
+              .order('created_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+          if (subRow != null) {
+            final st = subRow['status']?.toString();
+            if (st != null) {
+              subStatus = st;
+              if (st == 'suspended') {
+                schoolIsActive = false;
+              }
             }
           }
         } catch (_) {}
@@ -179,31 +240,84 @@ class AuthNotifier extends Notifier<AdminAuthState> {
     if (schoolId == null) return true;
 
     try {
-      final schoolRow = await _supabase
-          .from('schools')
-          .select('is_active, school_subscriptions(status)')
-          .eq('id', schoolId)
-          .maybeSingle();
+      bool schoolIsActive = true;
+      String? subStatus = 'active';
 
-      if (schoolRow != null) {
-        final isActive = schoolRow['is_active'] as bool? ?? true;
-        final rawSchoolStatus = schoolRow['status']?.toString();
-        String? subStatus = 'active';
-        final subs = schoolRow['school_subscriptions'] as List?;
-        if (subs != null && subs.isNotEmpty) {
-          subStatus = (subs.first as Map)['status']?.toString();
+      // 1. Authoritative check_user_access_status RPC
+      try {
+        final accessCheck = await _supabase.rpc('check_user_access_status');
+        if (accessCheck != null && accessCheck is Map) {
+          final isLocked = accessCheck['is_locked'] == true;
+          final reason = accessCheck['reason']?.toString();
+          if (isLocked && (reason == 'school_suspended' || reason == 'user_suspended')) {
+            schoolIsActive = false;
+            subStatus = 'suspended';
+          }
         }
-        final isSuspended = !isActive ||
-            rawSchoolStatus == 'suspended' ||
-            rawSchoolStatus == 'inactive' ||
-            subStatus == 'suspended';
-        state = state.copyWith(
-          schoolIsActive: !isSuspended,
-          schoolSubscriptionStatus: subStatus,
+      } catch (_) {}
+
+      // 2. Authoritative check_school_active_status RPC
+      try {
+        final schoolCheck = await _supabase.rpc(
+          'check_school_active_status',
+          params: {'p_school_id': schoolId},
         );
-        return !isSuspended;
-      }
-      return true;
+        if (schoolCheck != null && schoolCheck is Map) {
+          final isSuspended = schoolCheck['is_suspended'] == true;
+          if (isSuspended) {
+            schoolIsActive = false;
+            subStatus = 'suspended';
+          }
+        }
+      } catch (_) {}
+
+      // 3. Direct schools query
+      try {
+        final schoolRow = await _supabase
+            .from('schools')
+            .select('id, is_active, status')
+            .eq('id', schoolId)
+            .maybeSingle();
+
+        if (schoolRow != null) {
+          final bool act = (schoolRow['is_active'] as bool?) ?? true;
+          final String? st = schoolRow['status']?.toString();
+          if (!act || st == 'suspended' || st == 'inactive') {
+            schoolIsActive = false;
+            subStatus = 'suspended';
+          }
+        } else {
+          schoolIsActive = false;
+          subStatus = 'suspended';
+        }
+      } catch (_) {}
+
+      // 4. Direct subscription query
+      try {
+        final subRow = await _supabase
+            .from('school_subscriptions')
+            .select('status')
+            .eq('school_id', schoolId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (subRow != null) {
+          final st = subRow['status']?.toString();
+          if (st != null) {
+            subStatus = st;
+            if (st == 'suspended') {
+              schoolIsActive = false;
+            }
+          }
+        }
+      } catch (_) {}
+
+      final isSuspended = !schoolIsActive || subStatus == 'suspended';
+      state = state.copyWith(
+        schoolIsActive: !isSuspended,
+        schoolSubscriptionStatus: subStatus,
+      );
+      return !isSuspended;
     } catch (_) {
       return !state.isSchoolSuspended;
     }
