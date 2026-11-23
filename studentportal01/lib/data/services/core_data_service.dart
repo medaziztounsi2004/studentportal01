@@ -606,7 +606,13 @@ class PaymentInfo {
       id: json['id']?.toString() ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
       dueDate: json['due_date'] != null ? DateTime.tryParse(json['due_date'].toString()) : null,
-      paidAt: json['paid_at'] != null ? DateTime.tryParse(json['paid_at'].toString()) : null,
+      paidAt: json['paid_at'] != null
+          ? DateTime.tryParse(json['paid_at'].toString())
+          : (json['payment_date'] != null
+              ? DateTime.tryParse(json['payment_date'].toString())
+              : (json['paid_date'] != null
+                  ? DateTime.tryParse(json['paid_date'].toString())
+                  : null)),
       method: json['method']?.toString(),
       status: json['status']?.toString() ?? 'pending',
       reference: json['reference']?.toString(),

@@ -64,11 +64,15 @@ class PaymentCategoryData {
   final PaymentCategory category;
   final double amount;
   final double paid;
+  final DateTime? paidAt;
+  final List<PaymentInfo> payments;
 
   PaymentCategoryData({
     required this.category,
     required this.amount,
     required this.paid,
+    this.paidAt,
+    this.payments = const [],
   });
 
   double get remaining => amount - paid;
@@ -82,6 +86,8 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
 
   final Map<PaymentCategory, double> amounts = {};
   final Map<PaymentCategory, double> paid = {};
+  final Map<PaymentCategory, DateTime?> latestPaidAt = {};
+  final Map<PaymentCategory, List<PaymentInfo>> categoryPayments = {};
 
   for (final plan in plans) {
     final planCat = _mapCategory(
@@ -96,10 +102,20 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
           payment.notes ?? payment.description ?? plan.description,
         );
         amounts[pCat] = (amounts[pCat] ?? 0) + payment.amount;
-        if (payment.isPaid ||
+        categoryPayments.putIfAbsent(pCat, () => []).add(payment);
+
+        final isPaymentPaid = payment.isPaid ||
             payment.status.toLowerCase() == 'paid' ||
-            payment.paidAt != null) {
+            payment.paidAt != null;
+        if (isPaymentPaid) {
           paid[pCat] = (paid[pCat] ?? 0) + payment.amount;
+          final payDate = payment.paidAt ?? payment.dueDate;
+          if (payDate != null) {
+            final cur = latestPaidAt[pCat];
+            if (cur == null || payDate.isAfter(cur)) {
+              latestPaidAt[pCat] = payDate;
+            }
+          }
         }
       }
       // Ensure plan category amount is at least as large as plan.amountTotal
@@ -125,6 +141,8 @@ final paymentCategoriesProvider = Provider<List<PaymentCategoryData>>((ref) {
       category: cat,
       amount: configuredAmount > totalPaid ? configuredAmount : totalPaid,
       paid: totalPaid,
+      paidAt: latestPaidAt[cat],
+      payments: categoryPayments[cat] ?? const [],
     );
   }).toList();
 });
@@ -1909,6 +1927,7 @@ class _GlassyCategoryCard extends StatelessWidget {
   void _showCategoryDetailsDialog(BuildContext context, PaymentCategoryData catData, String currency, Color effectiveColor) {
     final l10n = AppLocalizations.of(context);
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final dateFormat = DateFormat('dd/MM/yyyy');
     final cat = catData.category;
     final isPaid = catData.amount > 0 && catData.remaining <= 0;
     final statusColor = isPaid ? const Color(0xFF10B981) : effectiveColor;
@@ -1917,6 +1936,9 @@ class _GlassyCategoryCard extends StatelessWidget {
         : (catData.paid > 0
             ? l10n.translate('incomplete')
             : l10n.statusPending);
+
+    // Paid date if category has any paid payments or recorded paidAt
+    final paidDate = catData.paidAt ?? (catData.paid > 0 ? DateTime.now() : null);
 
     showGeneralDialog(
       context: context,
@@ -1937,94 +1959,103 @@ class _GlassyCategoryCard extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(32),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: effectiveColor.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: effectiveColor.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(cat.icon, color: effectiveColor, size: 36),
                     ),
-                    child: Icon(cat.icon, color: effectiveColor, size: 36),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    cat.getLocalizedLabel(l10n),
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Text(
-                      statusText,
+                    const SizedBox(height: 16),
+                    Text(
+                      cat.getLocalizedLabel(l10n),
                       style: TextStyle(
-                        fontSize: 14,
-                        color: statusColor,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade800,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildDetailRow(
-                    l10n.translate('total_amount'),
-                    '${_formatCurrency(catData.amount)} $currency',
-                    Icons.account_balance_wallet_rounded,
-                    effectiveColor,
-                  ),
-                  _buildDetailRow(
-                    l10n.translate('paid_amount'),
-                    '${_formatCurrency(catData.paid)} $currency',
-                    Icons.check_circle_rounded,
-                    effectiveColor,
-                  ),
-                  _buildDetailRow(
-                    l10n.translate('remaining_amount'),
-                    '${_formatCurrency(catData.remaining)} $currency',
-                    Icons.pending_actions_rounded,
-                    effectiveColor,
-                  ),
-                  _buildDetailRow(
-                    l10n.translate('progress'),
-                    '${catData.progressPercent.toStringAsFixed(0)}%',
-                    Icons.pie_chart_rounded,
-                    effectiveColor,
-                  ),
-                  const SizedBox(height: 28),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: effectiveColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        elevation: 0,
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(24),
                       ),
                       child: Text(
-                        l10n.closeLabel,
-                        style: isArabic
-                            ? GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16)
-                            : const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    _buildDetailRow(
+                      l10n.translate('total_amount'),
+                      '${_formatCurrency(catData.amount)} $currency',
+                      Icons.account_balance_wallet_rounded,
+                      effectiveColor,
+                    ),
+                    _buildDetailRow(
+                      l10n.translate('paid_amount'),
+                      '${_formatCurrency(catData.paid)} $currency',
+                      Icons.check_circle_rounded,
+                      effectiveColor,
+                    ),
+                    _buildDetailRow(
+                      l10n.translate('remaining_amount'),
+                      '${_formatCurrency(catData.remaining)} $currency',
+                      Icons.pending_actions_rounded,
+                      effectiveColor,
+                    ),
+                    if (paidDate != null)
+                      _buildDetailRow(
+                        l10n.paymentDateLabel,
+                        dateFormat.format(paidDate),
+                        Icons.event_available_rounded,
+                        statusColor,
+                      ),
+                    _buildDetailRow(
+                      l10n.translate('progress'),
+                      '${catData.progressPercent.toStringAsFixed(0)}%',
+                      Icons.pie_chart_rounded,
+                      effectiveColor,
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: effectiveColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          l10n.closeLabel,
+                          style: isArabic
+                              ? GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16)
+                              : const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -2093,11 +2124,13 @@ void _showPaymentDetailsDialog(
   DateFormat dateFormat,
 ) {
   final l10n = AppLocalizations.of(context);
-  final isPaid = payment.status == 'paid';
+  final isPaid = payment.isPaid ||
+      payment.status.toLowerCase() == 'paid' ||
+      payment.paidAt != null;
   final isOverdue =
       !isPaid &&
-      payment.dueDate != null &&
-      payment.dueDate!.isBefore(DateTime.now());
+      (payment.status.toLowerCase() == 'overdue' ||
+          (payment.dueDate != null && payment.dueDate!.isBefore(DateTime.now())));
 
   Color statusColor;
   IconData statusIcon;
@@ -2157,126 +2190,127 @@ void _showPaymentDetailsDialog(
               color: Colors.white,
               borderRadius: BorderRadius.circular(32),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header with status icon
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header with status icon
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(statusIcon, color: statusColor, size: 36),
                   ),
-                  child: Icon(statusIcon, color: statusColor, size: 36),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.locale.languageCode == 'ar'
-                      ? 'تفاصيل الدفع'
-                      : (l10n.locale.languageCode == 'en' ? 'Payment Details' : 'Détails du paiement'),
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Text(
-                    statusText,
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.locale.languageCode == 'ar'
+                        ? 'تفاصيل الدفع'
+                        : (l10n.locale.languageCode == 'en' ? 'Payment Details' : 'Détails du paiement'),
                     style: TextStyle(
-                      fontSize: 14,
-                      color: statusColor,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
                     ),
                   ),
-                ),
-                // Show delay duration for overdue as info row
-                if (delayText != null) ...[
-                  const SizedBox(height: 24),
-                  _buildPaymentDetailRow(
-                    l10n.delayLabel,
-                    delayText,
-                    Icons.timer_off_rounded,
-                    statusColor,
-                  ),
-                ],
-                if (delayText == null) const SizedBox(height: 24),
-                // Amount
-                _buildPaymentDetailRow(
-                  l10n.amountLabel,
-                  '${NumberFormat('#,###', 'fr_FR').format(payment.amount)} $currency',
-                  Icons.attach_money_rounded,
-                  statusColor,
-                ),
-                // Due date
-                if (payment.dueDate != null)
-                  _buildPaymentDetailRow(
-                    l10n.dueDateLabel,
-                    dateFormat.format(payment.dueDate!),
-                    Icons.calendar_today_rounded,
-                    statusColor,
-                  ),
-                // Paid date
-                if (payment.paidAt != null)
-                  _buildPaymentDetailRow(
-                    l10n.paymentDateLabel,
-                    dateFormat.format(payment.paidAt!),
-                    Icons.event_available_rounded,
-                    statusColor,
-                  ),
-                // Payment method
-                if (payment.method != null)
-                  _buildPaymentDetailRow(
-                    l10n.methodLabel,
-                    payment.displayMethod,
-                    Icons.payment_rounded,
-                    statusColor,
-                  ),
-                // Reference
-                _buildPaymentDetailRow(
-                  l10n.locale.languageCode == 'ar'
-                      ? 'المرجع'
-                      : (l10n.locale.languageCode == 'en' ? 'Reference' : 'Référence'),
-                  reference,
-                  Icons.receipt_rounded,
-                  statusColor,
-                ),
-                // Notes
-                if (payment.notes != null && payment.notes!.isNotEmpty)
-                  _buildPaymentDetailRow(
-                    l10n.locale.languageCode == 'ar'
-                        ? 'ملاحظات'
-                        : (l10n.locale.languageCode == 'en' ? 'Notes' : 'Notes'),
-                    payment.notes!,
-                    Icons.note_rounded,
-                    statusColor,
-                  ),
-                const SizedBox(height: 28),
-                // Close button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: statusColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      elevation: 0,
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(24),
                     ),
                     child: Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  // Show delay duration for overdue as info row
+                  if (delayText != null) ...[
+                    const SizedBox(height: 24),
+                    _buildPaymentDetailRow(
+                      l10n.delayLabel,
+                      delayText,
+                      Icons.timer_off_rounded,
+                      statusColor,
+                    ),
+                  ],
+                  if (delayText == null) const SizedBox(height: 24),
+                  // Amount
+                  _buildPaymentDetailRow(
+                    l10n.amountLabel,
+                    '${NumberFormat('#,###', 'fr_FR').format(payment.amount)} $currency',
+                    Icons.attach_money_rounded,
+                    statusColor,
+                  ),
+                  // Due date
+                  if (payment.dueDate != null)
+                    _buildPaymentDetailRow(
+                      l10n.dueDateLabel,
+                      dateFormat.format(payment.dueDate!),
+                      Icons.calendar_today_rounded,
+                      statusColor,
+                    ),
+                  // Paid date
+                  if (payment.paidAt != null || isPaid)
+                    _buildPaymentDetailRow(
+                      l10n.paymentDateLabel,
+                      dateFormat.format(payment.paidAt ?? payment.dueDate ?? DateTime.now()),
+                      Icons.event_available_rounded,
+                      statusColor,
+                    ),
+                  // Payment method
+                  if (payment.method != null)
+                    _buildPaymentDetailRow(
+                      l10n.methodLabel,
+                      payment.displayMethod,
+                      Icons.payment_rounded,
+                      statusColor,
+                    ),
+                  // Reference
+                  _buildPaymentDetailRow(
+                    l10n.locale.languageCode == 'ar'
+                        ? 'المرجع'
+                        : (l10n.locale.languageCode == 'en' ? 'Reference' : 'Référence'),
+                    reference,
+                    Icons.receipt_rounded,
+                    statusColor,
+                  ),
+                  // Notes
+                  if (payment.notes != null && payment.notes!.isNotEmpty)
+                    _buildPaymentDetailRow(
+                      l10n.locale.languageCode == 'ar'
+                          ? 'ملاحظات'
+                          : (l10n.locale.languageCode == 'en' ? 'Notes' : 'Notes'),
+                      payment.notes!,
+                      Icons.note_rounded,
+                      statusColor,
+                    ),
+                  const SizedBox(height: 28),
+                  // Close button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: statusColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
                       l10n.closeLabel,
                       style: (l10n.locale.languageCode == 'ar'
                           ? GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 16)
@@ -2288,8 +2322,9 @@ void _showPaymentDetailsDialog(
             ),
           ),
         ),
-      );
-    },
+      ),
+    );
+  },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       return buildIosBounceZoomTransition(
         context: context,
