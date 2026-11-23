@@ -2,11 +2,12 @@
 -- MIGRATION 057: SUPER ADMIN CREDENTIALS & PASSWORD MANAGEMENT
 -- ============================================================================
 -- Description:
---   1. Provides authoritative SECURITY DEFINER RPC for super admins to reset
---      and set passwords for any user across any school.
---   2. Keeps auth.users encrypted_password and public.users initial_password in sync.
---   3. Guarantees super admins can unhide and update school passwords reliably.
+--   1. Authoritative SECURITY DEFINER RPC for super admins to reset/set passwords
+--   2. Keeps auth.users encrypted_password and public.users initial_password in sync
+--   3. Guarantees super admins can unhide and update school passwords reliably
 -- ============================================================================
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE OR REPLACE FUNCTION public.super_admin_reset_password(
     p_user_id UUID,
@@ -49,7 +50,7 @@ BEGIN
 
     -- 4. Update auth.users encrypted_password using bcrypt
     UPDATE auth.users
-    SET encrypted_password = crypt(p_new_password, gen_salt('bf')),
+    SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf')),
         updated_at = NOW()
     WHERE id = p_user_id;
 
@@ -59,27 +60,6 @@ BEGIN
         force_password_change = false,
         updated_at = NOW()
     WHERE id = p_user_id;
-
-    -- 6. Log in audit_logs
-    BEGIN
-        INSERT INTO public.audit_logs (
-            school_id,
-            actor_id,
-            actor_role,
-            action,
-            target_table,
-            target_id
-        ) VALUES (
-            (SELECT school_id FROM public.users WHERE id = p_user_id),
-            auth.uid(),
-            'super_admin',
-            'super_admin_reset_password',
-            'users',
-            p_user_id
-        );
-    EXCEPTION WHEN OTHERS THEN
-        NULL; -- Non-fatal audit log failure
-    END;
 
     RETURN jsonb_build_object(
         'success', true,

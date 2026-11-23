@@ -117,7 +117,7 @@ class UserManagementService {
           .from('users')
           .select('id, full_name, email, role, phone, initial_password, is_active, created_at')
           .eq('school_id', schoolId)
-          .inFilter('role', ['owner', 'admin', 'director'])
+          .inFilter('role', ['owner', 'admin', 'staff'])
           .order('created_at', ascending: true);
 
       final list = List<Map<String, dynamic>>.from(res);

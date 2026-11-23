@@ -53,6 +53,12 @@ class _ConsoleSchoolCredentialsDialogState
   bool _showNewPassword = false;
   bool _isSaving = false;
 
+  final _createAdminNameCtrl = TextEditingController();
+  final _createAdminEmailCtrl = TextEditingController();
+  final _createAdminPassCtrl = TextEditingController();
+  bool _showCreatePassword = false;
+  bool _isCreatingAdmin = false;
+
   String? _successMessage;
   String? _errorMessage;
 
@@ -65,6 +71,9 @@ class _ConsoleSchoolCredentialsDialogState
   @override
   void dispose() {
     _newPasswordCtrl.dispose();
+    _createAdminNameCtrl.dispose();
+    _createAdminEmailCtrl.dispose();
+    _createAdminPassCtrl.dispose();
     super.dispose();
   }
 
@@ -97,6 +106,26 @@ class _ConsoleSchoolCredentialsDialogState
         _selectedUser = admins.first;
         _currentPassword =
             (_selectedUser?['initial_password'] as String?)?.trim() ?? '';
+      } else {
+        _selectedUser = null;
+        _currentPassword = '';
+        final schoolName = widget.school['name']?.toString() ?? '';
+        final rawCode = (widget.school['code'] ?? 'ecole')
+            .toString()
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]'), '');
+        final schoolEmail = widget.school['email']?.toString() ?? '';
+        if (_createAdminNameCtrl.text.isEmpty) {
+          _createAdminNameCtrl.text =
+              schoolName.isNotEmpty ? 'Directeur $schoolName' : 'Directeur';
+        }
+        if (_createAdminEmailCtrl.text.isEmpty) {
+          _createAdminEmailCtrl.text =
+              schoolEmail.isNotEmpty ? schoolEmail : 'admin@$rawCode.com';
+        }
+        if (_createAdminPassCtrl.text.isEmpty) {
+          _createAdminPassCtrl.text = 'Director2026!';
+        }
       }
       _isLoading = false;
     });
@@ -122,6 +151,69 @@ class _ConsoleSchoolCredentialsDialogState
       _showNewPassword = true;
       _errorMessage = null;
     });
+  }
+
+  void _generateCreateAdminPassword() {
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#\$%*';
+    final rnd = Random.secure();
+    final pass = List.generate(12, (_) => chars[rnd.nextInt(chars.length)]).join();
+    setState(() {
+      _createAdminPassCtrl.text = pass;
+      _showCreatePassword = true;
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _createAdminAccount() async {
+    final name = _createAdminNameCtrl.text.trim();
+    final email = _createAdminEmailCtrl.text.trim();
+    final pass = _createAdminPassCtrl.text.trim();
+    final schoolId = widget.school['id']?.toString() ?? '';
+
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _errorMessage = 'Veuillez saisir un email valide.');
+      return;
+    }
+    if (pass.length < 6) {
+      setState(() => _errorMessage = 'Le mot de passe doit comporter au moins 6 caractères.');
+      return;
+    }
+
+    setState(() {
+      _isCreatingAdmin = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    final res = await UserManagementService.createUser(
+      email: email,
+      password: pass,
+      fullName: name.isNotEmpty ? name : 'Administrateur',
+      role: 'owner',
+      schoolId: schoolId,
+      forcePasswordChange: false,
+    );
+
+    if (!mounted) return;
+
+    if (res['success'] == true) {
+      setState(() {
+        _isCreatingAdmin = false;
+        _successMessage = 'Compte administrateur créé avec succès !';
+      });
+      await _loadCredentials();
+      setState(() {
+        _currentPassword = pass;
+        _showCurrentPassword = true;
+      });
+      widget.onPasswordChanged?.call();
+    } else {
+      setState(() {
+        _isCreatingAdmin = false;
+        _errorMessage = res['error']?.toString() ??
+            'Erreur lors de la création du compte administrateur.';
+      });
+    }
   }
 
   Future<void> _saveNewPassword() async {
@@ -434,16 +526,296 @@ class _ConsoleSchoolCredentialsDialogState
                                 border: Border.all(color: const Color(0xFFFDE68A)),
                               ),
                               child: const Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(Icons.info_outline_rounded,
-                                      color: Color(0xFFD97706), size: 20),
+                                  Icon(Icons.warning_amber_rounded,
+                                      color: Color(0xFFD97706), size: 22),
                                   SizedBox(width: 12),
                                   Expanded(
-                                    child: Text(
-                                      'Aucun compte administrateur trouvé pour cet établissement.',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        color: Color(0xFF92400E),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Aucun compte administrateur associé',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF92400E),
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'Cet établissement n\'a pas encore de compte directeur ou administrateur. Créez-en un ci-dessous pour initialiser son accès et son mot de passe.',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFFB45309),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            Container(
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.person_add_rounded,
+                                          size: 20, color: Color(0xFF6D4CF6)),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Créer le compte Administrateur / Directeur',
+                                        style: TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // Nom complet
+                                  const Text(
+                                    'NOM COMPLET DU DIRECTEUR',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF64748B),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: _createAdminNameCtrl,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: 'ex: Directeur Dupont',
+                                      prefixIcon: const Icon(
+                                          Icons.person_outline_rounded,
+                                          size: 18),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 12),
+                                      border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10)),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        borderSide: const BorderSide(
+                                            color: Color(0xFFCBD5E1)),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        borderSide: const BorderSide(
+                                            color: Color(0xFF6D4CF6),
+                                            width: 1.5),
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Email
+                                  const Text(
+                                    'EMAIL DE CONNEXION',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF64748B),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: _createAdminEmailCtrl,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: 'admin@ecole.com',
+                                      prefixIcon: const Icon(
+                                          Icons.alternate_email_rounded,
+                                          size: 18),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 12),
+                                      border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10)),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        borderSide: const BorderSide(
+                                            color: Color(0xFFCBD5E1)),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        borderSide: const BorderSide(
+                                            color: Color(0xFF6D4CF6),
+                                            width: 1.5),
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Mot de passe initial
+                                  const Text(
+                                    'MOT DE PASSE INITIAL',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF64748B),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _createAdminPassCtrl,
+                                          obscureText: !_showCreatePassword,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            fontFamily: 'monospace',
+                                          ),
+                                          decoration: InputDecoration(
+                                            hintText: 'Mot de passe...',
+                                            prefixIcon: const Icon(
+                                                Icons.lock_outline_rounded,
+                                                size: 18),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 12),
+                                            border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(10)),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              borderSide: const BorderSide(
+                                                  color: Color(0xFFCBD5E1)),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              borderSide: const BorderSide(
+                                                  color: Color(0xFF6D4CF6),
+                                                  width: 1.5),
+                                            ),
+                                            filled: true,
+                                            fillColor: Colors.white,
+                                            suffixIcon: IconButton(
+                                              icon: Icon(
+                                                _showCreatePassword
+                                                    ? Icons
+                                                        .visibility_off_rounded
+                                                    : Icons.visibility_rounded,
+                                                size: 18,
+                                                color: const Color(0xFF94A3B8),
+                                              ),
+                                              onPressed: () => setState(() =>
+                                                  _showCreatePassword =
+                                                      !_showCreatePassword),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      OutlinedButton.icon(
+                                        onPressed: _generateCreateAdminPassword,
+                                        icon: const Icon(
+                                            Icons.auto_awesome_rounded,
+                                            size: 15,
+                                            color: Color(0xFF7C3AED)),
+                                        label: const Text(
+                                          'Générer',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF7C3AED),
+                                          ),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 13),
+                                          side: const BorderSide(
+                                              color: Color(0xFFDDD6FE)),
+                                          backgroundColor:
+                                              const Color(0xFFF5F3FF),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: _isCreatingAdmin
+                                          ? null
+                                          : _createAdminAccount,
+                                      icon: _isCreatingAdmin
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.check_circle_rounded,
+                                              size: 18,
+                                              color: Colors.white),
+                                      label: Text(
+                                        _isCreatingAdmin
+                                            ? 'Création du compte en cours...'
+                                            : 'Créer le compte et définir le mot de passe',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFF6D4CF6),
+                                        disabledBackgroundColor:
+                                            const Color(0xFFC4B5FD),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        elevation: 0,
                                       ),
                                     ),
                                   ),

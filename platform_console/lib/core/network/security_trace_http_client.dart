@@ -64,11 +64,14 @@ class SecurityTraceHttpClient extends http.BaseClient {
     final timestamp = DateTime.now().toUtc().toIso8601String();
     final fingerprint = _cachedFingerprint ?? 'dfp_evaluating';
 
-    // Inject correlated security and observability headers
-    request.headers['x-request-id'] = requestId;
-    request.headers['x-app-surface'] = appSurface;
-    request.headers['x-device-fingerprint'] = fingerprint;
-    request.headers['x-client-timestamp'] = timestamp;
+    // Inject correlated security and observability headers (skip /functions/ to avoid CORS preflight errors)
+    final isEdgeFunction = request.url.path.contains('/functions/');
+    if (!isEdgeFunction) {
+      request.headers['x-request-id'] = requestId;
+      request.headers['x-app-surface'] = appSurface;
+      request.headers['x-device-fingerprint'] = fingerprint;
+      request.headers['x-client-timestamp'] = timestamp;
+    }
 
     final stopwatch = Stopwatch()..start();
     try {
