@@ -92,7 +92,9 @@ class AuthNotifier extends Notifier<AdminAuthState> {
           callback: (payload) {
             final newSchool = payload.newRecord;
             final bool isActive = (newSchool['is_active'] as bool?) ?? true;
-            state = state.copyWith(schoolIsActive: isActive);
+            final String? status = newSchool['status']?.toString();
+            final bool isSuspended = !isActive || status == 'suspended' || status == 'inactive';
+            state = state.copyWith(schoolIsActive: !isSuspended);
           },
         )
         .subscribe();
@@ -185,14 +187,18 @@ class AuthNotifier extends Notifier<AdminAuthState> {
 
       if (schoolRow != null) {
         final isActive = schoolRow['is_active'] as bool? ?? true;
+        final rawSchoolStatus = schoolRow['status']?.toString();
         String? subStatus = 'active';
         final subs = schoolRow['school_subscriptions'] as List?;
         if (subs != null && subs.isNotEmpty) {
           subStatus = (subs.first as Map)['status']?.toString();
         }
-        final isSuspended = !isActive || subStatus == 'suspended';
+        final isSuspended = !isActive ||
+            rawSchoolStatus == 'suspended' ||
+            rawSchoolStatus == 'inactive' ||
+            subStatus == 'suspended';
         state = state.copyWith(
-          schoolIsActive: isActive,
+          schoolIsActive: !isSuspended,
           schoolSubscriptionStatus: subStatus,
         );
         return !isSuspended;
