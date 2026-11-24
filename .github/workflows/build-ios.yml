@@ -6,18 +6,20 @@ on:
       runner_os:
         description: 'macOS Runner OS'
         required: true
-        default: 'macos-15'
+        default: 'macos-14'
         type: choice
         options:
+          - 'macos-14'
           - 'macos-15'
           - 'macos-latest'
+          - 'macos-13'
 
 permissions:
   contents: read
 
 jobs:
   build-ios:
-    runs-on: ${{ inputs.runner_os || 'macos-15' }}
+    runs-on: ${{ inputs.runner_os || 'macos-14' }}
     timeout-minutes: 45
 
     defaults:
